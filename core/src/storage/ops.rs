@@ -122,17 +122,18 @@ impl OpRunner {
             None,
             log,
         )?;
-        // 2. write the new table + partitions
+        // 2. write the new table + partitions. sfdisk asks the kernel to
+        //    re-read the table (no --no-reread here on purpose).
         self.go(
             gate,
             Operation::WritePartitionTable,
             risk,
             "sfdisk",
-            vec!["--no-reread".into(), "--force".into(), device.path.clone()],
+            vec!["--force".into(), device.path.clone()],
             Some(script),
             log,
         )?;
-        // 3. make the kernel see the new table
+        // 3. belt and braces: make the kernel (and udev) see the new table.
         self.go(
             gate,
             Operation::WritePartitionTable,
@@ -146,11 +147,67 @@ impl OpRunner {
             gate,
             Operation::WritePartitionTable,
             risk,
+            "partx",
+            vec!["--update".into(), device.path.clone()],
+            None,
+            log,
+        )?;
+        self.go(
+            gate,
+            Operation::WritePartitionTable,
+            risk,
             "udevadm",
             vec!["settle".into()],
             None,
             log,
+        )?;
+        // 4. fail early and clearly if the kernel still does not see the
+        //    partitions — formatting a missing device would be a silent no-op.
+        //    A dry run wrote nothing, so there is nothing to wait for.
+        if !gate.dry_run {
+            self.wait_for_partitions(device, plan.partitions.len(), log)?;
+        }
+        Ok(())
+    }
+
+    /// Wait until the kernel exposes the planned partition devices.
+    ///
+    /// In a live installer this is what tells us the table really landed —
+    /// without it we would happily run `mkfs` against a device that does not
+    /// exist and report a confusing error later.
+    fn wait_for_partitions(
+        &mut self,
+        device: &StorageDevice,
+        expected: usize,
+        log: &Logger,
+    ) -> Result<()> {
+        use std::time::{Duration, Instant};
+        if expected == 0 {
+            return Ok(());
+        }
+        let deadline = Instant::now() + Duration::from_secs(20);
+        let mut last_missing: Vec<String> = Vec::new();
+        while Instant::now() < deadline {
+            let missing = (1..=expected)
+                .map(|n| super::super::install::partition_path(&device.path, n))
+                .filter(|p| !crate::sys::path_exists(p))
+                .collect::<Vec<String>>();
+            if missing.is_empty() {
+                log.log("storage", "all planned partitions are visible to the kernel");
+                return Ok(());
+            }
+            last_missing = missing;
+            std::thread::sleep(Duration::from_millis(500));
+        }
+        Err(CamarelolError::new(
+            ErrorCode::DeviceBusy,
+            format!(
+                "the kernel did not pick up the new partition table (missing: {})",
+                last_missing.join(", ")
+            ),
         )
+        .with_remediation("retry; if the disk is held open, unmount it first")
+        .with_context(format!("device {}", device.path)))
     }
 
     /// Create the filesystem of one planned partition.
