@@ -1,0 +1,20 @@
+# build / test artifacts
+/target
+**/target
+*.rlib
+*.rmeta
+Cargo.lock.bak
+
+# local test artifacts (VM images, ISOs, logs)
+/.test/*.iso
+/.test/*.vdi
+/.test/*.vmdk
+/.test/*.log
+/.test/*.json
+!/.test/.gitkeep
+
+# local toolchains installed without root
+/tools/
+tools/
+core/camarelol-*.log
+*.log
