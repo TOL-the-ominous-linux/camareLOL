@@ -108,7 +108,7 @@ impl OpRunner {
         let risk = plan.disk_risk;
         gate.authorize(Operation::WritePartitionTable, risk)?;
 
-        let script = sfdisk_script(plan);
+        let script = sfdisk_script(plan, device.size_bytes);
         log.log("storage", &format!("writing partition plan to {}", device.path));
 
         // 1. zap old signatures only when the plan says so (we always zap: the
@@ -260,7 +260,19 @@ impl OpRunner {
 ///
 /// Uses sectors, which is unambiguous across disks, and never interpolates
 /// anything but values we validated ourselves.
-pub fn sfdisk_script(plan: &PartitionPlan) -> String {
+///
+/// `disk_size_bytes` is required: the last partition has to be shrunk so that
+/// the layout — including alignment gaps and the GPT backup header — really
+/// fits on the disk.
+pub fn sfdisk_script(plan: &PartitionPlan, disk_size_bytes: u64) -> String {
+    const ALIGN_SECTORS: u64 = 2048; // 1 MiB
+    let total_sectors = disk_size_bytes / 512;
+    // GPT keeps a backup header at the end of the disk.
+    let tail_reserve: u64 = match plan.table_type {
+        super::device::PartitionTableType::Gpt => 33,
+        _ => 1,
+    };
+
     let mut s = String::new();
     s.push_str("label: ");
     s.push_str(match plan.table_type {
@@ -269,9 +281,20 @@ pub fn sfdisk_script(plan: &PartitionPlan) -> String {
         _ => "gpt",
     });
     s.push('\n');
-    let mut start_sector: u64 = 2048; // 1 MiB alignment
-    for spec in &plan.partitions {
-        let sectors = size_in_sectors(spec);
+
+    let mut start_sector: u64 = ALIGN_SECTORS;
+    let count = plan.partitions.len();
+    for (index, spec) in plan.partitions.iter().enumerate() {
+        let usable = total_sectors.saturating_sub(tail_reserve);
+        let sectors = if index + 1 == count {
+            // The last partition takes whatever is left.
+            usable.saturating_sub(start_sector)
+        } else {
+            size_in_sectors(spec).min(usable.saturating_sub(start_sector))
+        };
+        if sectors <= ALIGN_SECTORS {
+            break;
+        }
         s.push_str(&format!("start={start_sector}, size={sectors}"));
         if let Some(t) = part_type_flag(spec) {
             s.push_str(&format!(", type={t}"));
@@ -279,10 +302,12 @@ pub fn sfdisk_script(plan: &PartitionPlan) -> String {
         if let Some(l) = &spec.label {
             let mut name = l.clone();
             name.retain(|c| c.is_ascii_alphanumeric() || c == '-');
-            s.push_str(&format!(", name={name}"));
+            if !name.is_empty() {
+                s.push_str(&format!(", name={name}"));
+            }
         }
         s.push('\n');
-        start_sector += sectors + 2048; // align next partition
+        start_sector += sectors + ALIGN_SECTORS;
     }
     s
 }
@@ -359,10 +384,61 @@ mod tests {
     #[test]
     fn sfdisk_script_is_valid_and_aligned() {
         let plan = test_plan();
-        let script = sfdisk_script(&plan);
+        let script = sfdisk_script(&plan, 20 * 1024 * 1024 * 1024);
         assert!(script.starts_with("label: gpt"));
         assert!(script.contains("type=U"));
         assert!(script.contains("start=2048"));
+    }
+
+    #[test]
+    fn sfdisk_script_fits_inside_the_disk() {
+        // Regression: the layout must never ask for sectors past the end of
+        // the disk (alignment gaps + GPT backup header).
+        let plan = test_plan();
+        let disk_bytes = 20 * 1024 * 1024 * 1024u64;
+        let total_sectors = disk_bytes / 512;
+        let script = sfdisk_script(&plan, disk_bytes);
+        for line in script.lines().filter(|l| l.contains("start=")) {
+            let field = |key: &str| -> u64 {
+                line.split(',')
+                    .map(|p| p.trim())
+                    .find_map(|p| p.strip_prefix(key).map(|v| v.parse().unwrap()))
+                    .unwrap_or(0)
+            };
+            let start = field("start=");
+            let size = field("size=");
+            assert!(
+                start + size <= total_sectors - 33,
+                "partition `{line}` exceeds the disk ({total_sectors} sectors)"
+            );
+            assert!(
+                start >= 2048 && start % 2048 == 0,
+                "partition `{line}` is not 1 MiB aligned"
+            );
+        }
+    }
+
+    #[test]
+    fn sfdisk_script_handles_a_small_disk_without_overflow() {
+        // 3 GiB with a 1 GiB ESP + root: root must shrink, not overflow.
+        let plan = test_plan();
+        let disk_bytes = 3 * 1024 * 1024 * 1024u64;
+        let script = sfdisk_script(&plan, disk_bytes);
+        let last = script
+            .lines()
+            .filter(|l| l.contains("start="))
+            .next_back()
+            .expect("at least the root partition is written")
+            .to_string();
+        let field = |line: &str, key: &str| -> u64 {
+            line.split(',')
+                .map(|p| p.trim())
+                .find_map(|p| p.strip_prefix(key).map(|v| v.parse().unwrap()))
+                .unwrap()
+        };
+        let start = field(&last, "start=");
+        let size = field(&last, "size=");
+        assert!(start + size <= disk_bytes / 512 - 33);
     }
 
     #[test]

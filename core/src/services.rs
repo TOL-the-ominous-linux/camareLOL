@@ -14,10 +14,14 @@ pub struct ServiceSelection {
     pub zram_size_mb: Option<u32>,
 }
 
+/// Lower-case on the wire so profiles read `audio = "pipewire"`.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
 pub enum AudioStack {
     None,
+    #[serde(rename = "pipewire")]
     PipeWire,
+    #[serde(rename = "pulseaudio")]
     PulseAudio,
 }
 
@@ -143,6 +147,15 @@ mod tests {
         sel.bluetooth = true;
         assert!(validate(&sel, false).is_err());
         assert!(validate(&sel, true).is_ok());
+    }
+
+    #[test]
+    fn audio_stack_uses_lowercase_on_the_wire() {
+        let sel = ServiceSelection::default();
+        let json = serde_json::to_string(&sel).unwrap();
+        assert!(json.contains("\"pipewire\""), "{json}");
+        let back: ServiceSelection = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.audio, AudioStack::PipeWire);
     }
 
     #[test]

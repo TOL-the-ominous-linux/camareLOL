@@ -45,7 +45,6 @@ target_disk = {{ path = "{target['path']}", identity = "{identity}", size_bytes 
 filesystem = "ext4"
 separate_boot = false
 separate_home = false
-swap_bytes = null
 bootloader = "grub"
 desktop = "console"
 display_server = "auto"
@@ -53,6 +52,22 @@ hostname = "camarelol-vm"
 root_login_allowed = true
 users = []
 admin_users = []
+
+[packages]
+core = ["base", "linux", "linux-firmware", "base-devel", "sudo", "networkmanager", "vim", "man-db", "man-pages"]
+utilities = []
+drivers_firmware = []
+user_selected = []
+aur_packages = []
+aur_enabled = false
+
+[services]
+audio = "pipewire"
+network_manager = true
+bluetooth = false
+printing = false
+ssh = false
+zram = true
 """
     profile_path.write_text(profile, encoding="utf-8")
     print(f"wrote {profile_path} targeting {target['path']} ({identity})")
