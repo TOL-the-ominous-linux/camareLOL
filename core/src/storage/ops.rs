@@ -133,41 +133,42 @@ impl OpRunner {
             Some(script),
             log,
         )?;
-        // 3. belt and braces: make the kernel (and udev) see the new table.
-        self.go(
-            gate,
-            Operation::WritePartitionTable,
-            risk,
-            "partprobe",
-            vec![device.path.clone()],
-            None,
-            log,
-        )?;
-        self.go(
-            gate,
-            Operation::WritePartitionTable,
-            risk,
-            "partx",
-            vec!["--update".into(), device.path.clone()],
-            None,
-            log,
-        )?;
-        self.go(
-            gate,
-            Operation::WritePartitionTable,
-            risk,
-            "udevadm",
-            vec!["settle".into()],
-            None,
-            log,
-        )?;
-        // 4. fail early and clearly if the kernel still does not see the
+        // 3. Belt and braces: ask the kernel and udev to notice the new table.
+        //    These helpers legitimately fail on a freshly wiped disk (there is
+        //    nothing to probe yet), so they are best effort — the real gate is
+        //    the verification below.
+        self.try_go(gate, Operation::WritePartitionTable, risk, "partprobe", vec![device.path.clone()], log);
+        self.try_go(gate, Operation::WritePartitionTable, risk, "blockdev", vec!["--rereadpt".into(), device.path.clone()], log);
+        self.try_go(gate, Operation::WritePartitionTable, risk, "udevadm", vec!["settle".into()], log);
+        // 4. Fail early and clearly if the kernel still does not see the
         //    partitions — formatting a missing device would be a silent no-op.
         //    A dry run wrote nothing, so there is nothing to wait for.
         if !gate.dry_run {
             self.wait_for_partitions(device, plan.partitions.len(), log)?;
         }
         Ok(())
+    }
+
+    /// Best-effort variant of [`OpRunner::go`]: failures are logged, not fatal.
+    ///
+    /// Used for kernel/udev nudge commands whose failure is normal (for
+    /// example probing a disk that just lost its partition table). The caller
+    /// is still responsible for verifying the result afterwards.
+    fn try_go(
+        &mut self,
+        gate: &SafetyGate,
+        op: Operation,
+        risk: RiskLevel,
+        program: &str,
+        args: Vec<String>,
+        log: &Logger,
+    ) {
+        let before = self.records.len();
+        if let Err(e) = self.go(gate, op, risk, program, args, None, log) {
+            log.log("storage", &format!("{program} did not need to run: {e}"));
+            // Drop the failed attempt: it is not a step of the plan.
+            self.records.truncate(before);
+        }
     }
 
     /// Wait until the kernel exposes the planned partition devices.
