@@ -94,7 +94,7 @@ cmd_boot() {
     shot "01-boot"
 
     say "mounting the data disk"
-    type_line "mount /dev/sdb1 /mnt"
+    type_line "mount /dev/sdb /mnt"
     sleep 2
     shot "02-mounted"
 
