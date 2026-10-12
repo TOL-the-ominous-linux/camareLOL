@@ -1,0 +1,43 @@
+# ---------------------------------------------------------------------------
+# Python automation layer for camareLOL.
+#
+# The Rust core stays authoritative; Python validates, recommends, diagnoses
+# and tests. See docs/ARCHITECTURE.md.
+# ---------------------------------------------------------------------------
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "camarelol-tools"
+version = "0.1.0"
+description = "camareLOL automation: profile validation, package recommendations, diagnostics, test utilities"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "GPL-3.0-or-later" }
+authors = [{ name = "camareLOL contributors" }]
+keywords = ["arch-linux", "installer", "tui", "automation"]
+classifiers = [
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Rust",
+    "Topic :: System :: Installation/Setup",
+]
+
+[project.scripts]
+camarelol-validate = "camarelol_tools.config_validate:main"
+camarelol-packages = "camarelol_tools.package_recommend:main"
+camarelol-diagnostics = "camarelol_tools.diagnostics:main"
+camarelol-hwinfo = "camarelol_tools.hw_info:main"
+camarelol-ipc = "camarelol_tools.ipc_client:main"
+camarelol-scenarios = "camarelol_tools.testutil:main"
+
+[tool.setuptools]
+packages = ["camarelol_tools"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
