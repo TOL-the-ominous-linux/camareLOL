@@ -414,104 +414,99 @@ pub fn run_install(
     // Path of the n-th partition of the target disk.
     let part = |n: usize| partition_path(&disk.path, n);
 
-    // Iterate once per phase name; `aborted` still short-circuits every phase
-    // (a fixed count avoids an accidental infinite loop).
+    // Each phase runs exactly once, in order. A failed phase (or a failed
+    // precondition) stops the run — nothing unsafe is attempted afterwards.
     let mut aborted = false;
-    for _pass in 0..PHASE_ORDER.len() {
-        run_phase!("preflight", {
-            Ok(format!(
-                "firmware={} bootloader={} fs={} partitions={}",
-                firmware.as_str(),
-                cfg.bootloader().map(|b| b.as_str().to_string()).unwrap_or_default(),
-                cfg.filesystem,
-                plan.partitions.len()
-            ))
-        }, aborted);
-
-        run_phase!("partition", {
-            runner.apply_partition_table(disk, plan)?;
-            Ok(format!("wrote {} layout to {}", plan.table_type, disk.path))
-        }, aborted);
-
-        run_phase!("format", {
-            for (i, spec) in plan.partitions.iter().enumerate() {
-                let target = part(i + 1);
-                runner.format_partition(spec, &target)?;
-            }
-            Ok("filesystems created".into())
-        }, aborted);
-
-        run_phase!("mount", {
-            for (i, spec) in plan.partitions.iter().enumerate() {
-                let target = part(i + 1);
-                match spec.purpose {
-                    PartitionPurpose::BiosBoot => continue,
-                    _ => match spec.mount_point.as_deref() {
-                        Some(mp) => {
-                            let mnt = format!("{TARGET_ROOT}{mp}");
-                            runner.mount(&target, &mnt)?;
+    let mut phase_idx = 0usize;
+    while !aborted && phase_idx < PHASE_ORDER.len() {
+        let phase = PHASE_ORDER[phase_idx];
+        phase_idx += 1;
+        run_phase!(phase, {
+            match phase {
+                "preflight" => Ok(format!(
+                    "firmware={} bootloader={} fs={} partitions={}",
+                    firmware.as_str(),
+                    cfg.bootloader().map(|b| b.as_str().to_string()).unwrap_or_default(),
+                    cfg.filesystem,
+                    plan.partitions.len()
+                )),
+                "partition" => {
+                    runner.apply_partition_table(disk, plan)?;
+                    Ok(format!("wrote {} layout to {}", plan.table_type, disk.path))
+                }
+                "format" => {
+                    for (i, spec) in plan.partitions.iter().enumerate() {
+                        let target = part(i + 1);
+                        runner.format_partition(spec, &target)?;
+                    }
+                    Ok("filesystems created".into())
+                }
+                "mount" => {
+                    for (i, spec) in plan.partitions.iter().enumerate() {
+                        let target = part(i + 1);
+                        match spec.purpose {
+                            PartitionPurpose::BiosBoot => continue,
+                            _ => match spec.mount_point.as_deref() {
+                                Some(mp) => {
+                                    let mnt = format!("{TARGET_ROOT}{mp}");
+                                    runner.mount(&target, &mnt)?;
+                                }
+                                None => {}
+                            },
                         }
-                        None => {}
-                    },
+                    }
+                    Ok("target mounted".into())
                 }
-            }
-            Ok("target mounted".into())
-        }, aborted);
-
-        run_phase!("pacstrap", {
-            let mut pkgs = cfg.packages.pacstrap_list();
-            pkgs.extend(crate::desktop::packages_for(cfg.desktop_profile().unwrap_or(
-                crate::desktop::DesktopProfile::ConsoleOnly,
-            )));
-            pkgs.extend(cfg.services.packages());
-            runner.pacstrap(&pkgs)?;
-            Ok(format!("installed {} packages", pkgs.len()))
-        }, aborted);
-
-        run_phase!("fstab", {
-            runner.genfstab()?;
-            Ok("fstab generated".into())
-        }, aborted);
-
-        run_phase!("bootloader", {
-            runner.install_bootloader(cfg.bootloader()?, disk)?;
-            Ok(format!("{} installed", cfg.bootloader()?.as_str()))
-        }, aborted);
-
-        run_phase!("system-config", {
-            let script = system_config_script(cfg);
-            runner.chroot_script(&script)?;
-            Ok("locale, keymap, timezone and hostname written".into())
-        }, aborted);
-
-        run_phase!("accounts", {
-            let script = account_script(cfg);
-            runner.chroot_script(&script)?;
-            Ok(format!("{} user(s) configured", cfg.users.len()))
-        }, aborted);
-
-        run_phase!("services", {
-            runner.enable_services(&cfg.services.services())?;
-            Ok("services enabled".into())
-        }, aborted);
-
-        run_phase!("initramfs", {
-            runner.mkinitcpio()?;
-            Ok("initramfs generated".into())
-        }, aborted);
-
-        run_phase!("post-check", {
-            if !runner.target_mounted() {
-                // Nothing to verify against; we say so instead of pretending.
-                Ok("target not mounted here; verification deferred".into())
-            } else {
-                let w = post_check(cfg, plan, TARGET_ROOT);
-                if w.is_empty() {
-                    Ok("all post-install checks passed".into())
-                } else {
-                    warnings.extend(w.clone());
-                    Ok(format!("{} warning(s)", w.len()))
+                "pacstrap" => {
+                    let mut pkgs = cfg.packages.pacstrap_list();
+                    pkgs.extend(crate::desktop::packages_for(cfg.desktop_profile().unwrap_or(
+                        crate::desktop::DesktopProfile::ConsoleOnly,
+                    )));
+                    pkgs.extend(cfg.services.packages());
+                    runner.pacstrap(&pkgs)?;
+                    Ok(format!("installed {} packages", pkgs.len()))
                 }
+                "fstab" => {
+                    runner.genfstab()?;
+                    Ok("fstab generated".into())
+                }
+                "bootloader" => {
+                    runner.install_bootloader(cfg.bootloader()?, disk)?;
+                    Ok(format!("{} installed", cfg.bootloader()?.as_str()))
+                }
+                "system-config" => {
+                    let script = system_config_script(cfg);
+                    runner.chroot_script(&script)?;
+                    Ok("locale, keymap, timezone and hostname written".into())
+                }
+                "accounts" => {
+                    let script = account_script(cfg);
+                    runner.chroot_script(&script)?;
+                    Ok(format!("{} user(s) configured", cfg.users.len()))
+                }
+                "services" => {
+                    runner.enable_services(&cfg.services.services())?;
+                    Ok("services enabled".into())
+                }
+                "initramfs" => {
+                    runner.mkinitcpio()?;
+                    Ok("initramfs generated".into())
+                }
+                "post-check" => {
+                    if !runner.target_mounted() {
+                        // Nothing to verify against; we say so instead of pretending.
+                        Ok("target not mounted here; verification deferred".into())
+                    } else {
+                        let w = post_check(cfg, plan, TARGET_ROOT);
+                        if w.is_empty() {
+                            Ok("all post-install checks passed".into())
+                        } else {
+                            warnings.extend(w.clone());
+                            Ok(format!("{} warning(s)", w.len()))
+                        }
+                    }
+                }
+                other => Ok(format!("phase {other} skipped")),
             }
         }, aborted);
     }
@@ -632,6 +627,8 @@ mod tests {
         let report = run_install(&cfg, &disk(), &plan(), &gate, &log, &mut runner, &mut sink);
         assert!(report.all_completed(), "{}", report.render());
         assert_eq!(report.outcome, Outcome::Completed);
+        // Exactly one entry per phase — no phase may run twice.
+        assert_eq!(report.phases.len(), PHASE_ORDER.len());
         assert!(runner.calls.iter().any(|c| c.starts_with("partition")));
         assert!(runner.calls.iter().any(|c| c.starts_with("pacstrap")));
         assert!(runner.calls.iter().any(|c| c.contains("bootloader")));
@@ -648,6 +645,7 @@ mod tests {
         let report = run_install(&cfg, &disk(), &plan(), &gate, &log, &mut runner, &mut sink);
         assert_eq!(report.outcome, Outcome::Incomplete);
         assert!(!report.all_completed());
+        assert!(report.phases.len() <= PHASE_ORDER.len());
         // nothing after pacstrap may have run
         assert!(!runner.calls.iter().any(|c| c.starts_with("bootloader")));
         // and the failure is reported as retryable for pacstrap

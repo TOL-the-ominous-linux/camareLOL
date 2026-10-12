@@ -3,6 +3,8 @@
 pub mod phases;
 pub mod execute;
 
+pub use execute::run_install;
+
 use crate::boot::Bootloader;
 use crate::config::InstallationConfig;
 use crate::hardware::Firmware;

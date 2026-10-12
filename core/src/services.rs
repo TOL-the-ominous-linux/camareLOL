@@ -100,6 +100,11 @@ impl ServiceSelection {
         let rounded = target.next_multiple_of(128).max(256);
         rounded as u32
     }
+
+    /// Same, in bytes.
+    pub fn suggest_zram_bytes(ram_bytes: u64) -> u64 {
+        ServiceSelection::suggest_zram_mb(ram_bytes) as u64 * 1024 * 1024
+    }
 }
 
 /// Validation: enabling a hardware service without hardware is confusing but not

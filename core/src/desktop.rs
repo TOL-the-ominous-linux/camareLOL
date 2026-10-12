@@ -15,6 +15,9 @@ pub enum DisplayServer {
 }
 
 impl DisplayServer {
+    /// All options, in display order.
+    pub const ALL: [DisplayServer; 3] = [DisplayServer::Auto, DisplayServer::Wayland, DisplayServer::X11];
+
     pub fn as_str(&self) -> &'static str {
         match self {
             DisplayServer::Wayland => "Wayland",
@@ -37,6 +40,18 @@ pub enum DesktopProfile {
 }
 
 impl DesktopProfile {
+    /// All profiles, in display order.
+    pub const ALL: [DesktopProfile; 8] = [
+        DesktopProfile::Plasma,
+        DesktopProfile::Gnome,
+        DesktopProfile::Xfce,
+        DesktopProfile::Cinnamon,
+        DesktopProfile::Lxqt,
+        DesktopProfile::Hyprland,
+        DesktopProfile::Sway,
+        DesktopProfile::ConsoleOnly,
+    ];
+
     pub fn as_str(&self) -> &'static str {
         match self {
             DesktopProfile::Plasma => "KDE Plasma",

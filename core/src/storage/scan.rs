@@ -21,7 +21,7 @@ pub fn scan_devices() -> Result<Vec<StorageDevice>> {
         &[
             "-J", "-b", "-e", "7", // skip loop devices
             "-o",
-            "NAME,KNAME,PKNAME,PATH,TYPE,SIZE,FSTYPE,FSVER,LABEL,UUID,PARTUUID,PTTYPE,MOUNTPOINT,MOUNTPOINTS,ROTA,RM,TRAN,SERIAL,WWN,MODEL,VENDOR,LOG-SEC,PHY-SEC",
+            "NAME,KNAME,PKNAME,PATH,TYPE,SIZE,FSTYPE,FSVER,LABEL,UUID,PARTUUID,PARTTYPE,PARTTYPENAME,PARTLABEL,PTTYPE,MOUNTPOINT,MOUNTPOINTS,ROTA,RM,TRAN,SERIAL,WWN,MODEL,VENDOR,LOG-SEC,PHY-SEC",
         ],
     )
     .map_err(|_| {
@@ -111,7 +111,11 @@ fn normalize_lists(value: &mut Value) {
 fn str_field(v: &Value, key: &str) -> Option<String> {
     match v.get(key) {
         Some(Value::String(s)) if !s.is_empty() => Some(s.clone()),
-        Some(Value::Array(arr)) => arr.first().and_then(|x| x.as_str()).map(|s| s.to_string()),
+        // lsblk emits numeric fields as JSON numbers (e.g. `log-sec`).
+        Some(Value::Number(n)) => Some(n.to_string()),
+        Some(Value::Array(arr)) => arr
+            .first()
+            .and_then(|x| x.as_str().map(|s| s.to_string()).or_else(|| x.as_u64().map(|n| n.to_string()))),
         _ => None,
     }
 }
@@ -201,7 +205,7 @@ fn parse_partition(v: &Value) -> Partition {
         size_bytes: u64_field(v, "size"),
         filesystem: str_field(v, "fstype").map(|s| Filesystem::from_str_loose(&s)),
         partition_type: str_field(v, "parttype"),
-        partition_type_name: None,
+        partition_type_name: str_field(v, "parttypename"),
         mount_state: MountState::NotMounted,
         os_hints: Vec::new(),
         part_label: str_field(v, "partlabel"),
@@ -335,6 +339,50 @@ pub fn enrich_mounts(devices: &mut [StorageDevice]) -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// Verify a disk reference against a known set of devices.
+///
+/// Matches by identity first (WWN/serial) and only falls back to the device
+/// path when the identity cannot be compared at all. Any mismatch is a hard
+/// error — camareLOL never writes to a disk it cannot positively identify.
+pub fn verify_against(
+    path_hint: &str,
+    expected_identity: &str,
+    expected_size: u64,
+    devices: &[StorageDevice],
+) -> Result<StorageDevice> {
+    let by_identity = devices
+        .iter()
+        .find(|d| d.identity() == expected_identity)
+        .cloned();
+    let chosen = match by_identity {
+        Some(d) => d,
+        None => {
+            // Only accept the path when every device lacks an identity.
+            let any_identity = devices.iter().any(|d| d.identity_strength() > IdentityStrength::KernelNameOnly);
+            if any_identity {
+                return Err(CamarelolError::new(
+                    ErrorCode::DeviceIdentityChanged,
+                    format!("no device with identity `{expected_identity}` is present"),
+                )
+                .with_remediation("the disk order changed since the plan was created; redo the plan"));
+            }
+            devices.iter().find(|d| d.path == path_hint).cloned().ok_or_else(|| {
+                CamarelolError::new(
+                    ErrorCode::DeviceGone,
+                    format!("device {path_hint} is not present"),
+                )
+            })?
+        }
+    };
+    if chosen.size_bytes != expected_size {
+        return Err(CamarelolError::new(
+            ErrorCode::DeviceIdentityChanged,
+            format!("size of {} changed", chosen.path),
+        ));
+    }
+    Ok(chosen)
 }
 
 /// Re-scan just one device and confirm it still matches the recorded identity.
