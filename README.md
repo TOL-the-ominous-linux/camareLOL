@@ -50,7 +50,8 @@ $ makepkg -si
 ```
 
 The full VirtualBox acceptance test is documented in
-[docs/TESTING.md](docs/TESTING.md).
+[docs/TESTING.md](docs/TESTING.md), and a hands-on guide for running it
+yourself is in [docs/VM-TESTING.md](docs/VM-TESTING.md).
 
 ## What it does today
 
