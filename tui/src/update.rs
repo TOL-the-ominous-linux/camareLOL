@@ -57,9 +57,15 @@ impl App {
                 self.quit = true;
                 return;
             }
+            // F1 toggles the help overlay, so it can be closed with the same
+            // key that opened it.
             KeyCode::F(1) => {
-                self.previous = Some(self.screen);
-                self.screen = Screen::Help;
+                if self.screen == Screen::Help {
+                    self.screen = self.previous.unwrap_or(Screen::Welcome);
+                } else {
+                    self.previous = Some(self.screen);
+                    self.screen = Screen::Help;
+                }
                 return;
             }
             KeyCode::F(10) => {
@@ -163,8 +169,9 @@ impl App {
             Screen::Layout => match key.code {
                 KeyCode::Up => self.layout_index = self.layout_index.saturating_sub(1),
                 KeyCode::Down => self.layout_index = (self.layout_index + 1).min(3),
-                KeyCode::Enter => self.rebuild_plan(),
-                KeyCode::Right => {
+                // Enter accepts the shown layout and moves on. Previously it
+                // only rebuilt the plan, which left users stuck on this screen.
+                KeyCode::Enter | KeyCode::Right => {
                     self.rebuild_plan();
                     self.go_next();
                 }
@@ -213,7 +220,13 @@ impl App {
                         _ => Field::CustomPackage,
                     };
                 }
+                // Outside the "add package" field, Enter means "I'm done here"
+                // — otherwise this screen was a dead end.
                 KeyCode::Right => self.go_next(),
+                KeyCode::Enter => {
+                    self.field = Field::None;
+                    self.go_next();
+                }
                 _ => {}
             },
             Screen::Accounts => self.handle_accounts_key(key),
@@ -564,5 +577,85 @@ impl App {
                 .to_string(),
             None => String::new(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::App;
+
+    fn app() -> App {
+        let mut app = App::new(None);
+        app.armed = true;
+        app
+    }
+
+    #[test]
+    fn enter_advances_on_every_step_that_collects_choices() {
+        // A user pressing Enter repeatedly must never get stuck.
+        let mut app = app();
+
+        app.screen = Screen::Layout;
+        app.handle_key(KeyEvent::from(KeyCode::Enter));
+        assert_eq!(
+            app.screen,
+            Screen::Filesystem,
+            "Enter must leave the layout step"
+        );
+
+        app.screen = Screen::Packages;
+        app.handle_key(KeyEvent::from(KeyCode::Enter));
+        assert_eq!(
+            app.screen,
+            Screen::Review,
+            "Enter must leave the packages step"
+        );
+    }
+
+    #[test]
+    fn f1_toggles_the_help_overlay() {
+        let mut app = app();
+        app.screen = Screen::Timezone;
+
+        app.handle_key(KeyEvent::from(KeyCode::F(1)));
+        assert_eq!(app.screen, Screen::Help);
+
+        // The same key must close it again, not just Esc.
+        app.handle_key(KeyEvent::from(KeyCode::F(1)));
+        assert_eq!(
+            app.screen,
+            Screen::Timezone,
+            "F1 must close the help overlay"
+        );
+    }
+
+    #[test]
+    fn esc_leaves_the_help_overlay() {
+        let mut app = app();
+        app.screen = Screen::Timezone;
+        app.handle_key(KeyEvent::from(KeyCode::F(1)));
+        app.handle_key(KeyEvent::from(KeyCode::Esc));
+        assert_eq!(app.screen, Screen::Timezone);
+    }
+
+    #[test]
+    fn no_step_is_a_dead_end_for_enter() {
+        // Walk the whole wizard with Enter only and make sure it terminates.
+        let mut app = app();
+        app.screen = Screen::Welcome;
+        for _ in 0..40 {
+            if matches!(app.screen, Screen::Review | Screen::Progress | Screen::Done) {
+                break;
+            }
+            let before = app.screen;
+            app.handle_key(KeyEvent::from(KeyCode::Enter));
+            assert_ne!(before, app.screen, "Enter does nothing on {before:?}");
+        }
+        assert!(
+            matches!(app.screen, Screen::Review | Screen::Progress | Screen::Done),
+            "wizard did not reach the review screen, stuck at {:?}",
+            app.screen
+        );
     }
 }

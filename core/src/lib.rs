@@ -72,6 +72,11 @@ impl Core {
     }
 
     /// Create a core with a mock device survey (used by tests and `--mock`).
+    /// Create a core with a known set of devices.
+    ///
+    /// The firmware is *detected*, never assumed: hard-coding UEFI here made
+    /// `camarelol --self-test` fail on BIOS machines, because the plan was
+    /// built for UEFI while the install resolved the real (BIOS) mode.
     pub fn with_devices(devices: Vec<storage::StorageDevice>) -> Self {
         Core {
             config: config::InstallationConfig::default(),
@@ -79,7 +84,7 @@ impl Core {
             devices,
             log: logging::Logger::default(),
             boot: boot::Bootloader::Grub,
-            firmware: hardware::Firmware::Uefi,
+            firmware: hardware::detect_firmware(),
         }
     }
 

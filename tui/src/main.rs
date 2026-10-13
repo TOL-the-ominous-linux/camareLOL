@@ -165,30 +165,45 @@ fn cmd_self_test(mock: Option<PathBuf>) -> Result<bool, CamarelolError> {
         assert_eq!(d.risk, d.assess_risk());
     }
 
-    // A. empty disk planning
+    // A. empty disk planning. Both firmware modes are checked so the result
+    //    does not depend on whether this machine booted UEFI or BIOS.
+    let detected = core.firmware();
     match empty {
         Some(d) => {
-            let plan = core.plan_for(&d.path)?;
-            core.validate_plan(&plan)?;
-            let has_root = plan
-                .partitions
-                .iter()
-                .any(|p| p.purpose == camarelol_core::storage::PartitionPurpose::Root);
-            let has_esp = plan
-                .partitions
-                .iter()
-                .any(|p| p.purpose == camarelol_core::storage::PartitionPurpose::EfiSystem);
-            let firmware = core.firmware();
-            println!(
-                "2. empty disk -> {} partitions (root: {has_root}, esp: {has_esp}, firmware {})",
-                plan.partitions.len(),
-                firmware.as_str()
-            );
-            if !matches!(firmware, Firmware::Uefi) || has_esp {
-                ok = ok && has_root;
-            } else {
-                ok = false;
+            for mode in [Firmware::Uefi, Firmware::Bios] {
+                let mut probe = camarelol_core::Core::with_devices(core.devices.clone());
+                probe.set_firmware(mode);
+                let plan = match probe.plan_for(&d.path) {
+                    Ok(p) => p,
+                    Err(e) => {
+                        println!("2. plan for {} failed: {e}", mode.as_str());
+                        ok = false;
+                        continue;
+                    }
+                };
+                let has_root = plan
+                    .partitions
+                    .iter()
+                    .any(|p| p.purpose == camarelol_core::storage::PartitionPurpose::Root);
+                let has_esp = plan
+                    .partitions
+                    .iter()
+                    .any(|p| p.purpose == camarelol_core::storage::PartitionPurpose::EfiSystem);
+                // UEFI needs an ESP, BIOS must not have one.
+                let correct = has_root && (matches!(mode, Firmware::Uefi) == has_esp);
+                println!(
+                    "2. {} -> {} partitions (root: {has_root}, esp: {has_esp}, table: {}) {}",
+                    mode.as_str(),
+                    plan.partitions.len(),
+                    plan.table_type,
+                    if correct { "ok" } else { "WRONG" },
+                );
+                ok = ok && correct;
             }
+            println!(
+                "   detected firmware on this machine: {}",
+                detected.as_str()
+            );
         }
         None => println!("2. no empty disk to plan for (skipped)"),
     }
@@ -223,6 +238,18 @@ fn cmd_self_test(mock: Option<PathBuf>) -> Result<bool, CamarelolError> {
     // E. full simulated install
     if let Some(d) = core.devices.first() {
         let plan = core.plan_for(&d.path)?;
+        // run_install() resolves the firmware from the profile; pin it to the
+        // mode the plan was actually built for, otherwise the preflight would
+        // reject a UEFI plan on a BIOS host (and vice versa).
+        let cfg = InstallationConfig {
+            firmware: match core.firmware() {
+                Firmware::Uefi => "uefi",
+                Firmware::Bios => "bios",
+                Firmware::Unknown => "auto",
+            }
+            .to_string(),
+            ..Default::default()
+        };
         let mut runner = SimulatedRunner::new();
         let mut sink = NullSink;
         let log = Logger::default();
