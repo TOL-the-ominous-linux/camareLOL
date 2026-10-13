@@ -350,7 +350,9 @@ pub fn sfdisk_script(plan: &PartitionPlan, disk_size_bytes: u64) -> String {
         } else {
             size_in_sectors(spec).min(usable.saturating_sub(start_sector))
         };
-        if sectors <= ALIGN_SECTORS {
+        // Only stop when the disk is genuinely full. A 1 MiB BIOS boot
+        // partition is exactly ALIGN_SECTORS long and must still be written.
+        if sectors == 0 {
             break;
         }
         s.push_str(&format!("start={start_sector}, size={sectors}"));
@@ -515,6 +517,33 @@ mod tests {
             .format_partition(&spec, "/dev/vdb1", &gate, &Logger::default())
             .unwrap(); // format=false is a no-op
         assert!(runner.records.is_empty());
+    }
+
+    #[test]
+    fn sfdisk_script_writes_every_planned_partition() {
+        // Regression: the BIOS boot partition is exactly 1 MiB, which equals
+        // the alignment step. The generator must not stop before writing it.
+        let devices = scan_devices_from_survey(
+            r#"[{"kernel_name":"vdb","path":"/dev/vdb","size_bytes":21474836480,"rotational":false,"removable":false,"kind":"Virtual","partition_table":"None","partitions":[],"mount_state":"NotMounted","os_hints":[],"encrypted":null,"risk":"Low"}]"#,
+        )
+        .unwrap();
+        let req = crate::storage::layout::LayoutRequest {
+            firmware: crate::hardware::Firmware::Bios,
+            bootloader: crate::boot::Bootloader::Grub,
+            ..Default::default()
+        };
+        let plan = plan_auto_layout(&devices[0], &req).unwrap();
+        let script = sfdisk_script(&plan, 20 * 1024 * 1024 * 1024);
+        let written = script.lines().filter(|l| l.contains("start=")).count();
+        assert_eq!(
+            written,
+            plan.partitions.len(),
+            "script is missing partitions:\n{script}"
+        );
+        assert!(
+            script.contains("21686148-6449-6E6F-744E-656564454649"),
+            "BIOS boot partition type missing:\n{script}"
+        );
     }
 
     #[test]

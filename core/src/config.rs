@@ -397,7 +397,9 @@ mod tests {
 
     #[test]
     fn loading_a_broken_file_reports_line() {
-        let p = std::env::temp_dir().join("camarelol-config-test/broken.toml");
+        let dir = std::env::temp_dir().join("camarelol-config-test");
+        std::fs::create_dir_all(&dir).unwrap();
+        let p = dir.join("broken.toml");
         std::fs::write(&p, "this is not toml =").unwrap();
         let err = InstallationConfig::load(p.to_str().unwrap()).unwrap_err();
         assert_eq!(err.code, ErrorCode::InvalidConfig);
