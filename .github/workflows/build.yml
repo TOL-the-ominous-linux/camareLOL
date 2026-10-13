@@ -137,6 +137,8 @@ jobs:
               srcdir="$(find /build -maxdepth 1 -type d -name "camarelol-*" | head -1)"
               echo "source dir: $srcdir"
               test -f "$srcdir/PKGBUILD"
+              # makepkg looks for the source tarball next to the PKGBUILD.
+              cp /build/camarelol-*.tar.gz "$srcdir/"
               # Run as a normal user, the way makepkg is meant to be used.
               useradd -m builder
               chown -R builder /build
