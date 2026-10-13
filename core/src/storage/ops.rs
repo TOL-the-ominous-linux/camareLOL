@@ -277,7 +277,7 @@ impl OpRunner {
     ) -> Result<()> {
         self.go(
             gate,
-            Operation::Pacstrap,
+            Operation::Mount,
             RiskLevel::Low,
             "mkdir",
             vec!["-p".into(), target.into()],
@@ -286,7 +286,7 @@ impl OpRunner {
         )?;
         self.go(
             gate,
-            Operation::Pacstrap,
+            Operation::Mount,
             RiskLevel::Low,
             "mount",
             vec![source.into(), target.into()],

@@ -105,16 +105,23 @@ pub fn run_scripted(
         plan.disk_risk,
         required_phrase(plan.disk_risk),
     )?;
+    // Record the confirmation for every operation the install performs, at every
+    // risk level it can use. Confirmations are keyed by (operation, risk), so
+    // a partial list would stop the run later with a confusing error.
     for op in [
+        camarelol_core::safety::Operation::WritePartitionTable,
         camarelol_core::safety::Operation::FormatPartition,
-        camarelol_core::safety::Operation::Pacstrap,
         camarelol_core::safety::Operation::InstallBootloader,
+        camarelol_core::safety::Operation::Pacstrap,
+        camarelol_core::safety::Operation::Mount,
     ] {
-        gate.confirm(
-            op,
+        for risk in [
+            camarelol_core::storage::RiskLevel::Low,
             camarelol_core::storage::RiskLevel::Medium,
-            required_phrase(camarelol_core::storage::RiskLevel::Medium),
-        )?;
+            camarelol_core::storage::RiskLevel::High,
+        ] {
+            gate.confirm(op, risk, required_phrase(risk))?;
+        }
     }
 
     let log = Logger::new(std::path::Path::new("/var/log/camarelol"));

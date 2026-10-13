@@ -26,6 +26,8 @@ pub enum Operation {
     InstallBootloader,
     /// Run pacstrap (installs packages into the target system).
     Pacstrap,
+    /// Mount a partition under the target root (undoable with umount).
+    Mount,
 }
 
 impl Operation {
@@ -37,6 +39,7 @@ impl Operation {
             Operation::ResizePartition => "resize partition",
             Operation::InstallBootloader => "install bootloader",
             Operation::Pacstrap => "install packages into the target system",
+            Operation::Mount => "mount a partition into the target system",
         }
     }
 }

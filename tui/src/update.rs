@@ -4,7 +4,7 @@ use super::app::{App, Field, Screen};
 use camarelol_core::error::ErrorCode;
 use camarelol_core::install::execute::{RealSystemRunner, SystemRunner};
 use camarelol_core::install::{run_install, Outcome, PhaseState, ProgressEvent, ProgressSink};
-use camarelol_core::safety::Operation;
+use camarelol_core::safety::{required_phrase, Operation};
 use camarelol_core::storage::RiskLevel;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
@@ -476,8 +476,17 @@ impl App {
                 return;
             }
         }
-        for op in [Operation::FormatPartition, Operation::InstallBootloader, Operation::Pacstrap] {
-            let _ = gate.confirm(op, RiskLevel::Medium, &camarelol_core::safety::required_phrase(RiskLevel::Medium));
+        // Record confirmations for every operation the install performs, at every
+        // risk level: confirmations are keyed by (operation, risk).
+        for op in [
+            Operation::FormatPartition,
+            Operation::InstallBootloader,
+            Operation::Pacstrap,
+            Operation::Mount,
+        ] {
+            for risk in [RiskLevel::Low, RiskLevel::Medium, RiskLevel::High] {
+                let _ = gate.confirm(op, risk, required_phrase(risk));
+            }
         }
 
         self.core.gate = gate.clone();
