@@ -1,5 +1,8 @@
 # Maintainer: camareLOL contributors
 # A modern, safety-first TUI installer for Arch Linux.
+#
+# This PKGBUILD builds from the GitHub release tarball so that `makepkg` never
+# needs network access to a VCS host.
 pkgname=camarelol
 pkgver=0.1.0
 pkgrel=1
@@ -8,36 +11,57 @@ arch=('x86_64')
 url="https://github.com/tamkogay9876-code/camareLOL"
 license=('GPL3')
 depends=(
-    'util-linux'      # lsblk, findmnt, blkid
-    'parted'
-    'gptfdisk'        # sgdisk
+    'util-linux'            # lsblk, findmnt, blkid
+    'gptfdisk'              # sgdisk
     'arch-install-scripts'  # pacstrap, genfstab, arch-chroot
-    'python'
 )
 makedepends=(
     'rust'
     'cargo'
 )
 optdepends=(
-    'iwd: Wi-Fi support'
-    'grub: bootloader'
-    'systemd-boot: bootloader'
-    'squashfs-tools: for rebuilding the ISO'
+    'grub: GRUB bootloader support'
+    'iwd: Wi-Fi support in the live environment'
 )
-conflicts=()
-provides=()
-options=(!strip)
+# The binary must keep its panic messages and debug info useful, and we ship a
+# reproducible build via the release profile.
+options=('!strip' '!debug')
+source=("$pkgname-$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+_pkgdir() {
+    # The release tarball is created from the repository root, so the directory
+    # name depends on the tag layout. Accept both and fail loudly otherwise.
+    local d
+    for d in "$srcdir/$pkgname-$pkgver" "$srcdir/$pkgname" "$srcdir/camarelOL"; do
+        if [ -f "$d/Cargo.toml" ] && [ -f "$d/tui/Cargo.toml" ]; then
+            printf '%s' "$d"
+            return 0
+        fi
+    done
+    error "cannot find the workspace root (Cargo.toml + tui/Cargo.toml) in $srcdir"
+    return 1
+}
 
 build() {
-    cd "$srcdir/$pkgname"
+    cd "$(_pkgdir)"
+    # Build only the user-facing binary; the core is a library dependency.
     cargo build --release --locked --manifest-path tui/Cargo.toml
 }
 
+check() {
+    cd "$(_pkgdir)"
+    cargo test --release --locked -p camarelol-core
+}
+
 package() {
-    cd "$srcdir/$pkgname"
+    cd "$(_pkgdir)"
     install -Dm755 "target/release/camarelol" "$pkgdir/usr/bin/camarelol"
-    install -Dm644 "README.md" "$pkgdir/usr/share/doc/camarelol/README.md"
-    install -Dm644 "docs/ARCHITECTURE.md" "$pkgdir/usr/share/doc/camarelol/ARCHITECTURE.md"
-    install -Dm644 "docs/ROADMAP.md" "$pkgdir/usr/share/doc/camarelol/ROADMAP.md"
-    install -Dm644 "LICENSE" "$pkgdir/usr/share/licenses/camarelol/LICENSE"
+
+    install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+    install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+    install -Dm644 docs/ARCHITECTURE.md "$pkgdir/usr/share/doc/$pkgname/ARCHITECTURE.md"
+    install -Dm644 docs/IPC-PROTOCOL.md "$pkgdir/usr/share/doc/$pkgname/IPC-PROTOCOL.md"
+    install -Dm644 docs/ROADMAP.md "$pkgdir/usr/share/doc/$pkgname/ROADMAP.md"
+    install -Dm644 docs/TESTING.md "$pkgdir/usr/share/doc/$pkgname/TESTING.md"
 }

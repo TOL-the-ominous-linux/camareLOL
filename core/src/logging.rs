@@ -19,9 +19,11 @@ pub fn redact(input: &str) -> String {
         let trimmed = word.trim_end();
         let ws = &word[trimmed.len()..];
         let lower = trimmed.to_ascii_lowercase();
-        let sensitive = ["password", "passwd", "secret", "token", "key", "luks", "apikey"]
-            .iter()
-            .any(|k| lower.contains(k));
+        let sensitive = [
+            "password", "passwd", "secret", "token", "key", "luks", "apikey",
+        ]
+        .iter()
+        .any(|k| lower.contains(k));
         if sensitive {
             // Keep only the key part, drop the value entirely.
             match trimmed.split_once('=') {
@@ -53,10 +55,17 @@ impl Logger {
             .map(|d| d.as_secs())
             .unwrap_or(0);
         let path = dir.join(format!("camarelol-{stamp}.log"));
-        let file = create_dir_all(dir)
-            .ok()
-            .and_then(|_| OpenOptions::new().create(true).append(true).open(&path).ok());
-        Self { file: Mutex::new(file), path }
+        let file = create_dir_all(dir).ok().and_then(|_| {
+            OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&path)
+                .ok()
+        });
+        Self {
+            file: Mutex::new(file),
+            path,
+        }
     }
 
     pub fn path(&self) -> &Path {

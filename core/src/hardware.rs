@@ -27,7 +27,9 @@ impl Firmware {
 pub fn detect_firmware() -> Firmware {
     if sys::path_exists("/sys/firmware/efi/efivars") {
         Firmware::Uefi
-    } else if sys::path_exists("/sys/firmware/acpi/tables") || sys::path_exists("/sys/firmware/devicetree") {
+    } else if sys::path_exists("/sys/firmware/acpi/tables")
+        || sys::path_exists("/sys/firmware/devicetree")
+    {
         Firmware::Bios
     } else {
         Firmware::Unknown
@@ -95,7 +97,13 @@ pub fn detect_cpu() -> CpuInfo {
     } else {
         MicrocodeHint::Unknown
     };
-    CpuInfo { model, cores, threads, vendor, microcode_hint }
+    CpuInfo {
+        model,
+        cores,
+        threads,
+        vendor,
+        microcode_hint,
+    }
 }
 
 pub fn detect_ram_bytes() -> u64 {
@@ -151,7 +159,10 @@ pub fn detect_gpus() -> Vec<GpuInfo> {
                     } else {
                         GpuVendor::Other
                     };
-                    gpus.push(GpuInfo { description: line.trim().to_string(), vendor });
+                    gpus.push(GpuInfo {
+                        description: line.trim().to_string(),
+                        vendor,
+                    });
                 }
             }
         }

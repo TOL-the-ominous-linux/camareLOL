@@ -79,6 +79,7 @@ mod tests {
         sel.core.push("git".into());
         sel.utilities.push("git".into());
         sel.user_selected.push("htop".into());
+
         let list = sel.pacstrap_list();
         assert_eq!(list.iter().filter(|p| *p == "git").count(), 1);
         assert!(list.contains(&"htop".to_string()));
@@ -86,8 +87,10 @@ mod tests {
 
     #[test]
     fn aur_is_ignored_when_disabled() {
-        let mut sel = PackageSelection::default();
-        sel.aur_enabled = true;
+        let mut sel = PackageSelection {
+            aur_enabled: true,
+            ..Default::default()
+        };
         sel.aur_packages.push("some-helper".into());
         assert_eq!(sel.aur_list(), vec!["some-helper".to_string()]);
         sel.aur_enabled = false;

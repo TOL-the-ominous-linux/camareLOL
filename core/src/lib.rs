@@ -29,7 +29,7 @@ pub mod storage;
 pub mod sys;
 
 use crate::error::{CamarelolError, ErrorCode, Result};
-use crate::install::execute::{RealSystemRunner, SystemRunner};
+use crate::install::execute::SystemRunner;
 use crate::protocol::{Method, Request, Response, PROTOCOL_VERSION};
 use crate::safety::SafetyGate;
 use serde_json::{json, Value};
@@ -51,8 +51,14 @@ pub struct Core {
 impl Core {
     /// Create a core instance. `detect` performs a fresh hardware/disk survey.
     pub fn new(detected_firmware: hardware::Firmware) -> Self {
-        let mut log = logging::Logger::new(std::path::Path::new("/var/log/camarelol"));
-        log.log("core", &format!("camareLOL {} starting (protocol v{CORE_VERSION})", CORE_VERSION));
+        let log = logging::Logger::new(std::path::Path::new("/var/log/camarelol"));
+        log.log(
+            "core",
+            &format!(
+                "camareLOL {} starting (protocol v{CORE_VERSION})",
+                CORE_VERSION
+            ),
+        );
         let devices = storage::scan::scan_devices().unwrap_or_default();
         let cfg = config::InstallationConfig::default();
         Core {
@@ -78,7 +84,7 @@ impl Core {
     }
 
     pub fn firmware(&self) -> hardware::Firmware {
-        self.firmware.clone()
+        self.firmware
     }
 
     pub fn set_firmware(&mut self, f: hardware::Firmware) {
@@ -117,9 +123,12 @@ impl Core {
 
     fn layout_request(&self) -> storage::layout::LayoutRequest {
         storage::layout::LayoutRequest {
-            firmware: self.firmware.clone(),
+            firmware: self.firmware,
             bootloader: self.boot,
-            root_filesystem: self.config.filesystem_type().unwrap_or(storage::Filesystem::Ext4),
+            root_filesystem: self
+                .config
+                .filesystem_type()
+                .unwrap_or(storage::Filesystem::Ext4),
             separate_home: self.config.separate_home,
             separate_boot: self.config.separate_boot,
             swap_bytes: self.config.swap_bytes,
@@ -130,7 +139,7 @@ impl Core {
     pub fn validate_plan(&self, plan: &storage::PartitionPlan) -> Result<()> {
         let req = self.layout_request();
         storage::layout::validate_plan(plan, &req)?;
-        boot::validate_boot_config(plan, self.firmware.clone(), self.boot)?;
+        boot::validate_boot_config(plan, self.firmware, self.boot)?;
         Ok(())
     }
 
@@ -157,7 +166,8 @@ impl Core {
                     .and_then(|v| v.as_str())
                     .unwrap_or_default()
                     .to_string();
-                self.plan_for(&path).map(|p| serde_json::to_value(p).unwrap())
+                self.plan_for(&path)
+                    .map(|p| serde_json::to_value(p).unwrap())
             }
             Method::ValidatePlan => {
                 let path = req
@@ -166,11 +176,10 @@ impl Core {
                     .and_then(|v| v.as_str())
                     .unwrap_or_default()
                     .to_string();
-                self.plan_for(&path)
-                    .and_then(|p| {
-                        self.validate_plan(&p)?;
-                        Ok(json!({"valid": true}))
-                    })
+                self.plan_for(&path).and_then(|p| {
+                    self.validate_plan(&p)?;
+                    Ok(json!({"valid": true}))
+                })
             }
             Method::ApplyPlan => {
                 // Requires an armed gate and confirmation; validation happens
@@ -188,11 +197,13 @@ impl Core {
                     })?;
                     let mut runner = install::execute::RealSystemRunner::new(self.gate.clone());
                     let log = logging::Logger::default();
-                    runner.apply_partition_table(&device, &p).map(|_| json!({"applied": true, "records": runner.records().len() }))
-                    .or_else(|e| {
-                        log.log("ipc", &format!("ApplyPlan refused: {e}"));
-                        Err(e)
-                    })
+                    runner
+                        .apply_partition_table(&device, &p)
+                        .map(|_| json!({"applied": true, "records": runner.records().len() }))
+                        .map_err(|e| {
+                            log.log("ipc", &format!("ApplyPlan refused: {e}"));
+                            e
+                        })
                 })
             }
             Method::FormatPartitions => Err(CamarelolError::new(
@@ -268,7 +279,11 @@ mod tests {
     #[test]
     fn apply_plan_is_refused_by_the_locked_gate() {
         let mut c = core();
-        let r = c.dispatch(Request::new(3, Method::ApplyPlan, json!({"disk": "/dev/vdb"})));
+        let r = c.dispatch(Request::new(
+            3,
+            Method::ApplyPlan,
+            json!({"disk": "/dev/vdb"}),
+        ));
         assert_eq!(r.status, ResponseStatus::Error);
         assert_eq!(r.error.unwrap().code, ErrorCode::SafetyGateClosed);
     }

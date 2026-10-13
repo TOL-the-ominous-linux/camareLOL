@@ -24,7 +24,10 @@ pub fn preconditions(phase: &str, pf: &Preflight) -> Result<()> {
         }
         "partition" => {
             if pf.plan.partitions.is_empty() {
-                return Err(CamarelolError::new(ErrorCode::InvalidPlan, "no partitions planned"));
+                return Err(CamarelolError::new(
+                    ErrorCode::InvalidPlan,
+                    "no partitions planned",
+                ));
             }
             Ok(())
         }
@@ -83,7 +86,13 @@ pub fn preconditions(phase: &str, pf: &Preflight) -> Result<()> {
 pub fn retryable(phase: &str) -> bool {
     matches!(
         phase,
-        "pacstrap" | "fstab" | "bootloader" | "system-config" | "accounts" | "services" | "initramfs"
+        "pacstrap"
+            | "fstab"
+            | "bootloader"
+            | "system-config"
+            | "accounts"
+            | "services"
+            | "initramfs"
     )
 }
 
@@ -92,7 +101,10 @@ impl Preflight {
     pub fn plan_request(&self) -> crate::storage::layout::LayoutRequest {
         crate::storage::layout::LayoutRequest {
             firmware: self.firmware,
-            bootloader: self.config.bootloader().unwrap_or(crate::boot::Bootloader::Grub),
+            bootloader: self
+                .config
+                .bootloader()
+                .unwrap_or(crate::boot::Bootloader::Grub),
             root_filesystem: self
                 .config
                 .filesystem_type()
@@ -128,7 +140,11 @@ mod tests {
             swap_bytes: None,
         };
         let plan = plan_auto_layout(&devices[0], &req).unwrap();
-        Preflight { firmware: Firmware::Uefi, plan, config: cfg }
+        Preflight {
+            firmware: Firmware::Uefi,
+            plan,
+            config: cfg,
+        }
     }
 
     #[test]

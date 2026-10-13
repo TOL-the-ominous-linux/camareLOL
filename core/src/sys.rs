@@ -6,7 +6,7 @@
 
 use crate::error::{CamarelolError, ErrorCode, Result};
 use std::io::Read;
-use std::process::{Command, Output, Stdio};
+use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 /// Result of running an external tool.
@@ -29,7 +29,12 @@ impl CommandOutput {
     /// callers must only pass validated system paths; still, args are never
     /// re-parsed by a shell.
     pub fn describe(&self) -> String {
-        format!("{} {} -> {}", self.program, self.args.join(" "), self.status)
+        format!(
+            "{} {} -> {}",
+            self.program,
+            self.args.join(" "),
+            self.status
+        )
     }
 }
 
@@ -63,7 +68,9 @@ pub fn run_with_timeout(program: &str, args: &[&str], timeout: Duration) -> Resu
             format!("could not start `{program}`"),
         )
         .with_context(e.to_string())
-        .with_remediation("install the required package (util-linux / parted / arch-install-scripts)")
+        .with_remediation(
+            "install the required package (util-linux / parted / arch-install-scripts)",
+        )
     })?;
 
     // Read pipes while waiting so that a chatty child cannot deadlock us.
@@ -112,7 +119,12 @@ pub fn run_with_timeout(program: &str, args: &[&str], timeout: Duration) -> Resu
 }
 
 /// Run a command feeding it `input` on stdin (no shell involved).
-pub fn run_with_input(program: &str, args: &[&str], input: &str, timeout: Duration) -> Result<CommandOutput> {
+pub fn run_with_input(
+    program: &str,
+    args: &[&str],
+    input: &str,
+    timeout: Duration,
+) -> Result<CommandOutput> {
     use std::io::Write;
     let start = Instant::now();
     let mut cmd = Command::new(program);
@@ -127,8 +139,11 @@ pub fn run_with_input(program: &str, args: &[&str], input: &str, timeout: Durati
         }
     }
     let mut child = cmd.spawn().map_err(|e| {
-        CamarelolError::new(ErrorCode::SpawnFailed, format!("could not start `{program}`"))
-            .with_context(e.to_string())
+        CamarelolError::new(
+            ErrorCode::SpawnFailed,
+            format!("could not start `{program}`"),
+        )
+        .with_context(e.to_string())
     })?;
     if let Some(mut si) = child.stdin.take() {
         let _ = si.write_all(input.as_bytes());
@@ -156,9 +171,7 @@ pub fn run_with_input(program: &str, args: &[&str], input: &str, timeout: Durati
                 }
                 std::thread::sleep(Duration::from_millis(25));
             }
-            Err(e) => {
-                return Err(CamarelolError::new(ErrorCode::Internal, e.to_string()))
-            }
+            Err(e) => return Err(CamarelolError::new(ErrorCode::Internal, e.to_string())),
         }
     };
     Ok(CommandOutput {

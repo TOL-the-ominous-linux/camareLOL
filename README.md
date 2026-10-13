@@ -10,20 +10,47 @@ exactly what it is about to do, and only writes to a disk after you confirm it.
 plan → review → confirm → execute → verify, with a safety gate in front of every
 destructive operation.
 
-## Quick start
+## Install
 
-```bash
-# Build everything (needs cargo + rustup, python3, javac)
-./build.sh build
+### From a release (fastest)
 
-# Non-destructive checks on this machine
-./target/release/camarelol --self-test
+Download the binary from
+[Releases](https://github.com/tamkogay9876-code/camareLOL/releases) and run it
+from the Arch live ISO:
 
-# Real install (TUI)
-sudo ./target/release/camarelol
+```console
+$ chmod +x camarelol
+$ ./camarelol --self-test      # non-destructive checks
+$ sudo ./camarelol             # the TUI
 ```
 
-For the full VirtualBox acceptance test see [docs/TESTING.md](docs/TESTING.md).
+Or let the helper fetch it for you:
+
+```console
+$ git clone https://github.com/tamkogay9876-code/camareLOL
+$ cd camareLOL && sudo ./install.sh --binary
+```
+
+### From source
+
+```console
+$ ./install.sh                # builds and installs to /usr/local/bin
+$ ./build.sh build            # compile everything, no install
+$ ./build.sh test             # unit tests + acceptance scenarios
+$ ./build.sh lint             # clippy + rustfmt
+```
+
+### From the tarball (`makepkg`)
+
+Each release ships a `PKGBUILD`:
+
+```console
+$ tar xf camarelol-0.1.0.tar.gz && cd camarelol-0.1.0
+$ makepkg -si
+```
+
+The full VirtualBox acceptance test is documented in
+[docs/TESTING.md](docs/TESTING.md).
 
 ## What it does today
 
@@ -77,11 +104,14 @@ Keyboard only: `↑↓` move, `Enter` select, `Space` toggle, `Tab` next field,
 ## Testing
 
 ```bash
-./build.sh test                              # everything
-python -m unittest discover -s tests -v       # Python only
-cd java && ./build.sh                         # Java only
-python -m camarelol_tools.testutil            # acceptance scenarios vs the binary
+./build.sh test                                # everything (Rust + Python + Java)
+cd python && python3 -m unittest discover -s tests -v
+cd java && ./build.sh
+cargo clippy --workspace --all-targets -- -D warnings
 ```
+
+Current status: 92 Rust tests, 19 Python tests, 22 Java tests, plus a full
+install verified in a VirtualBox VM (see [docs/TESTING.md](docs/TESTING.md)).
 
 ## License
 

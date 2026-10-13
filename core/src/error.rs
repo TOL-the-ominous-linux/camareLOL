@@ -86,7 +86,12 @@ pub struct CamarelolError {
 
 impl CamarelolError {
     pub fn new(code: ErrorCode, message: impl Into<String>) -> Self {
-        Self { code, message: message.into(), remediation: None, context: None }
+        Self {
+            code,
+            message: message.into(),
+            remediation: None,
+            context: None,
+        }
     }
 
     pub fn with_remediation(mut self, r: impl Into<String>) -> Self {

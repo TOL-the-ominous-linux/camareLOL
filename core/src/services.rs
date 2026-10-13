@@ -144,8 +144,10 @@ mod tests {
 
     #[test]
     fn bluetooth_without_hardware_is_rejected() {
-        let mut sel = ServiceSelection::default();
-        sel.bluetooth = true;
+        let sel = ServiceSelection {
+            bluetooth: true,
+            ..Default::default()
+        };
         assert!(validate(&sel, false).is_err());
         assert!(validate(&sel, true).is_ok());
     }

@@ -71,11 +71,7 @@ pub struct PartitionSpec {
 
 impl PartitionSpec {
     pub fn describe(&self) -> String {
-        let fs = self
-            .filesystem
-            .as_ref()
-            .map(|f| f.as_str())
-            .unwrap_or("—");
+        let fs = self.filesystem.as_ref().map(|f| f.as_str()).unwrap_or("—");
         let mp = self.mount_point.clone().unwrap_or_else(|| "—".into());
         let fmt = if self.format { "format" } else { "keep" };
         format!(
@@ -103,10 +99,13 @@ impl PartitionPlan {
     /// Human readable diagram used by the Review screen.
     pub fn render(&self) -> String {
         let mut out = String::new();
-        out.push_str(&format!("Disk:      {} ({})\n", self.disk_path, self.disk_identity));
+        out.push_str(&format!(
+            "Disk:      {} ({})\n",
+            self.disk_path, self.disk_identity
+        ));
         out.push_str(&format!("Table:     {}\n", self.table_type));
         out.push_str(&format!("Risk:      {}\n", self.disk_risk.as_str()));
-        out.push_str("\n");
+        out.push('\n');
         out.push_str(&format!(
             "{:<24} {:<8} {:<10} {:<12} {}\n",
             "PURPOSE", "FS", "SIZE", "MOUNTPOINT", "ACTION"
@@ -124,7 +123,10 @@ impl PartitionPlan {
     pub fn destructive_operations(&self) -> Vec<String> {
         let mut ops = Vec::new();
         if self.table_type != PartitionTableType::None {
-            ops.push(format!("write {} partition table on {}", self.table_type, self.disk_path));
+            ops.push(format!(
+                "write {} partition table on {}",
+                self.table_type, self.disk_path
+            ));
         }
         for p in &self.partitions {
             if p.format {
@@ -169,8 +171,8 @@ const MIB: u64 = 1024 * 1024;
 /// Minimum sensible sizes, in bytes.
 pub const MIN_ESP_BYTES: u64 = 512 * MIB;
 pub const MIN_ROOT_BYTES: u64 = 8 * GIB;
-pub const MIN_BIOS_BOOT_BYTES: u64 = 1 * MIB;
-pub const MIN_BOOT_BYTES: u64 = 1 * GIB;
+pub const MIN_BIOS_BOOT_BYTES: u64 = MIB;
+pub const MIN_BOOT_BYTES: u64 = GIB;
 
 /// Build the automatic plan for a disk.
 ///
@@ -191,20 +193,21 @@ pub fn plan_auto_layout(device: &StorageDevice, req: &LayoutRequest) -> Result<P
         && matches!(req.bootloader, Bootloader::Grub)
         && device.partition_table != PartitionTableType::Mbr;
 
-    let esp_size = if efi { 1 * GIB } else { 0 };
+    let esp_size = if efi { GIB } else { 0 };
     let bios_boot_size = if bios_boot { MIN_BIOS_BOOT_BYTES } else { 0 };
     let boot_size = if req.separate_boot { MIN_BOOT_BYTES } else { 0 };
-    let home_size = if req.separate_home { (total / 10).max(1 * GIB) } else { 0 };
+    let home_size = if req.separate_home {
+        (total / 10).max(GIB)
+    } else {
+        0
+    };
     let swap_size = req.swap_bytes.unwrap_or(0);
 
     let fixed = esp_size + bios_boot_size + boot_size + home_size + swap_size;
     if fixed >= total {
         return Err(CamarelolError::new(
             ErrorCode::InvalidPlan,
-            format!(
-                "disk {} is too small for the requested layout",
-                device.path
-            ),
+            format!("disk {} is too small for the requested layout", device.path),
         )
         .with_remediation("remove /home /boot/swap or pick a larger disk"));
     }
@@ -309,7 +312,10 @@ pub fn plan_auto_layout(device: &StorageDevice, req: &LayoutRequest) -> Result<P
 /// Validate a plan against firmware/bootloader/filesystem rules.
 pub fn validate_plan(plan: &PartitionPlan, req: &LayoutRequest) -> Result<()> {
     if plan.partitions.is_empty() {
-        return Err(CamarelolError::new(ErrorCode::InvalidPlan, "plan has no partitions"));
+        return Err(CamarelolError::new(
+            ErrorCode::InvalidPlan,
+            "plan has no partitions",
+        ));
     }
 
     let root_count = plan
@@ -375,14 +381,11 @@ pub fn validate_plan(plan: &PartitionPlan, req: &LayoutRequest) -> Result<()> {
     }
 
     // Bootloader must be supported by the table type.
-    match (req.bootloader, &plan.table_type) {
-        (Bootloader::SystemdBoot, PartitionTableType::Mbr) => {
-            return Err(CamarelolError::new(
-                ErrorCode::InvalidBootConfig,
-                "systemd-boot cannot boot from an MBR system",
-            ));
-        }
-        _ => {}
+    if let (Bootloader::SystemdBoot, PartitionTableType::Mbr) = (req.bootloader, &plan.table_type) {
+        return Err(CamarelolError::new(
+            ErrorCode::InvalidBootConfig,
+            "systemd-boot cannot boot from an MBR system",
+        ));
     }
 
     // XFS + GRUB without a dedicated /boot: GRUB support for XFS is limited.
@@ -456,7 +459,11 @@ mod tests {
 
     #[test]
     fn bios_grub_gpt_gets_bios_boot_partition() {
-        let req = LayoutRequest { firmware: Firmware::Bios, bootloader: Bootloader::Grub, ..Default::default() };
+        let req = LayoutRequest {
+            firmware: Firmware::Bios,
+            bootloader: Bootloader::Grub,
+            ..Default::default()
+        };
         let plan = plan_auto_layout(&empty_disk(), &req).unwrap();
         assert!(plan
             .partitions
@@ -467,7 +474,11 @@ mod tests {
 
     #[test]
     fn bios_systemd_boot_is_rejected() {
-        let req = LayoutRequest { firmware: Firmware::Bios, bootloader: Bootloader::SystemdBoot, ..Default::default() };
+        let req = LayoutRequest {
+            firmware: Firmware::Bios,
+            bootloader: Bootloader::SystemdBoot,
+            ..Default::default()
+        };
         let plan = plan_auto_layout(&empty_disk(), &req).unwrap();
         let err = validate_plan(&plan, &req).unwrap_err();
         // systemd-boot cannot be installed on an MBR/BIOS system.
@@ -485,7 +496,10 @@ mod tests {
         let plan = plan_auto_layout(&empty_disk(), &req).unwrap();
         assert!(validate_plan(&plan, &req).is_err());
 
-        let req2 = LayoutRequest { separate_boot: true, ..req.clone() };
+        let req2 = LayoutRequest {
+            separate_boot: true,
+            ..req.clone()
+        };
         let plan2 = plan_auto_layout(&empty_disk(), &req2).unwrap();
         validate_plan(&plan2, &req2).unwrap();
     }
@@ -493,7 +507,7 @@ mod tests {
     #[test]
     fn tiny_disk_is_rejected_with_explanation() {
         let mut tiny = empty_disk();
-        tiny.size_bytes = 1 * GIB;
+        tiny.size_bytes = GIB;
         let err = plan_auto_layout(&tiny, &req_uefi()).unwrap_err();
         assert!(err.remediation.is_some() || !err.message.is_empty());
     }

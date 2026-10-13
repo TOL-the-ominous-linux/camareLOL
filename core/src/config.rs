@@ -218,7 +218,8 @@ impl InstallationConfig {
             .map(|u| {
                 let mut acc = crate::accounts::UserAccount::new(u);
                 acc.has_admin = self.admin_users.contains(u);
-                acc.password = if u.is_empty() { None } else { None };
+                // Passwords live only in the in-memory map, never in a file.
+                acc.password = self.user_password(u).map(|p| p.to_string());
                 acc
             })
             .collect();
@@ -259,8 +260,12 @@ impl InstallationConfig {
 
     /// Serialize to TOML text.
     pub fn to_toml(&self) -> Result<String> {
-        toml::to_string_pretty(self)
-            .map_err(|e| CamarelolError::new(ErrorCode::InvalidConfig, format!("cannot serialize config: {e}")))
+        toml::to_string_pretty(self).map_err(|e| {
+            CamarelolError::new(
+                ErrorCode::InvalidConfig,
+                format!("cannot serialize config: {e}"),
+            )
+        })
     }
 
     /// Save to a file. Passwords are simply not part of the struct.
@@ -326,13 +331,14 @@ mod tests {
     use super::*;
 
     fn sample() -> InstallationConfig {
-        let mut c = InstallationConfig::default();
-        c.language = "vi".into();
-        c.system_locale = "vi_VN.UTF-8".into();
-        c.timezone = "Asia/Ho_Chi_Minh".into();
-        c.filesystem = "ext4".into();
-        c.desktop = "plasma".into();
-        c
+        InstallationConfig {
+            language: "vi".into(),
+            system_locale: "vi_VN.UTF-8".into(),
+            timezone: "Asia/Ho_Chi_Minh".into(),
+            filesystem: "ext4".into(),
+            desktop: "plasma".into(),
+            ..Default::default()
+        }
     }
 
     #[test]

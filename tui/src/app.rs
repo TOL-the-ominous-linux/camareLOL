@@ -1,24 +1,19 @@
 //! Application state and key handling for the camareLOL TUI.
 
-use crate::draw;
-use camarelol_core::accounts::UserAccount;
 use camarelol_core::boot::Bootloader;
 use camarelol_core::config::InstallationConfig;
 use camarelol_core::desktop::{DesktopProfile, DisplayServer};
 use camarelol_core::error::{CamarelolError, ErrorCode};
 use camarelol_core::hardware::Firmware;
-use camarelol_core::install::execute::{RealSystemRunner, SystemRunner};
-use camarelol_core::install::{run_install, Outcome, PhaseState, ProgressEvent, ProgressSink};
-use camarelol_core::locale::{suggest, UiLanguage, KEYMAPS, SYSTEM_LOCALES, TIMEZONES};
+use camarelol_core::install::{Outcome, ProgressEvent};
+use camarelol_core::locale::{suggest, UiLanguage};
 use camarelol_core::logging::Logger;
 use camarelol_core::network::{self, Connectivity};
 use camarelol_core::packages::PackageSelection;
-use camarelol_core::safety::{GateMode, Operation, SafetyGate};
-use camarelol_core::services::{AudioStack, ServiceSelection};
-use camarelol_core::storage::device::MountState;
+use camarelol_core::safety::SafetyGate;
+use camarelol_core::services::ServiceSelection;
 use camarelol_core::storage::layout::{PartitionPlan, PartitionPurpose};
 use camarelol_core::storage::{self, StorageDevice};
-use crossterm::event::{KeyCode, KeyEvent};
 use std::path::PathBuf;
 
 /// The steps of the installer, in order.
@@ -106,8 +101,6 @@ pub enum Field {
     Username,
     UserPassword,
     UserPasswordConfirm,
-    ConfirmPhrase,
-    ZramSize,
     CustomPackage,
 }
 
@@ -132,7 +125,6 @@ pub struct App {
     pub layout_index: usize,
     pub services_cached_index: usize,
     pub package_index: usize,
-    pub packages: PackageSelection,
     pub services: ServiceSelection,
     pub custom_packages: Vec<String>,
     pub custom_package_input: String,
@@ -160,7 +152,6 @@ pub struct App {
     pub report: Option<camarelol_core::install::execute::InstallReport>,
     pub outcome: Option<Outcome>,
     pub logger: Logger,
-    pub config_path: Option<PathBuf>,
     pub save_config_path: Option<PathBuf>,
     pub log_path: String,
     pub armed: bool,
@@ -173,8 +164,8 @@ impl App {
         let logger = Logger::new(std::path::Path::new("/var/log/camarelol"));
         let core = match mock {
             Some(p) => {
-                let devices = storage::load_survey(p.to_str().unwrap_or_default())
-                    .unwrap_or_default();
+                let devices =
+                    storage::load_survey(p.to_str().unwrap_or_default()).unwrap_or_default();
                 camarelol_core::Core::with_devices(devices)
             }
             None => camarelol_core::Core::new(camarelol_core::hardware::detect_firmware()),
@@ -200,7 +191,6 @@ impl App {
             layout_index: 0,
             services_cached_index: 0,
             package_index: 0,
-            packages: PackageSelection::default(),
             services: ServiceSelection::default(),
             custom_packages: Vec::new(),
             custom_package_input: String::new(),
@@ -222,7 +212,6 @@ impl App {
             report: None,
             outcome: None,
             logger,
-            config_path: None,
             save_config_path: None,
             log_path: String::new(),
             armed: false,
@@ -319,7 +308,7 @@ impl App {
             return;
         };
         let req = camarelol_core::storage::layout::LayoutRequest {
-            firmware: self.firmware.clone(),
+            firmware: self.firmware,
             bootloader: self.bootloader(),
             root_filesystem: self.filesystem(),
             separate_home: self.layout_choice(PartitionPurpose::Home),
@@ -372,9 +361,8 @@ impl App {
     }
 
     pub fn bootloader(&self) -> Bootloader {
-        if self.bootloader_index == 0 && self.firmware == Firmware::Bios {
-            Bootloader::Grub
-        } else if self.bootloader_index == 0 {
+        // systemd-boot is UEFI only, so a BIOS machine always gets GRUB.
+        if self.bootloader_index == 0 || self.firmware == Firmware::Bios {
             Bootloader::Grub
         } else {
             Bootloader::SystemdBoot
@@ -405,8 +393,10 @@ impl App {
 
     /// Compile the TUI state into a validated configuration.
     pub fn build_config(&self) -> Result<InstallationConfig, CamarelolError> {
-        let mut cfg = InstallationConfig::default();
-        cfg.language = self.current_language().code().to_string();
+        let mut cfg = InstallationConfig {
+            language: self.current_language().code().to_string(),
+            ..Default::default()
+        };
         cfg.system_locale = self.core.config.system_locale.clone();
         cfg.keymap = self.core.config.keymap.clone();
         cfg.timezone = self.core.config.timezone.clone();
@@ -464,21 +454,21 @@ impl App {
                 cfg.admin_users = vec![self.username.trim().to_string()];
             }
         }
-        let mut pkgs = PackageSelection::default();
-        pkgs.utilities = self.core_utility_packages();
-        pkgs.drivers_firmware = self.driver_packages();
-        pkgs.aur_enabled = false;
+        let mut pkgs = PackageSelection {
+            utilities: self.core_utility_packages(),
+            drivers_firmware: self.driver_packages(),
+            user_selected: self.custom_packages.clone(),
+            // AUR stays off until the user explicitly turns it on.
+            aur_enabled: false,
+            ..PackageSelection::default()
+        };
+        pkgs.user_selected.sort();
+        pkgs.user_selected.dedup();
         cfg.packages = pkgs;
         cfg.services = self.services.clone();
-        if !self.custom_packages.is_empty() {
-            cfg.packages.user_selected = self.custom_packages.clone();
-        }
         cfg.set_passwords(
             Some(self.root_password.as_str()),
-            &[(
-                self.username.trim(),
-                self.user_password.as_str(),
-            )],
+            &[(self.username.trim(), self.user_password.as_str())],
         );
         cfg.validate()?;
         Ok(cfg)

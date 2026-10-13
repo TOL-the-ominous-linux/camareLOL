@@ -2,7 +2,7 @@
 
 use crate::error::{CamarelolError, ErrorCode, Result};
 use crate::hardware::Firmware;
-use crate::storage::layout::{PartitionPurpose, PartitionPlan};
+use crate::storage::layout::{PartitionPlan, PartitionPurpose};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -48,7 +48,11 @@ impl Bootloader {
 }
 
 /// Validate that the chosen bootloader really can be installed for this plan.
-pub fn validate_boot_config(plan: &PartitionPlan, firmware: Firmware, bootloader: Bootloader) -> Result<()> {
+pub fn validate_boot_config(
+    plan: &PartitionPlan,
+    firmware: Firmware,
+    bootloader: Bootloader,
+) -> Result<()> {
     let has_root = plan
         .partitions
         .iter()
@@ -157,7 +161,8 @@ mod tests {
 
         let mut broken = plan_with(PartitionPurpose::Root, "/");
         broken.partitions.remove(0);
-        let err = validate_boot_config(&broken, Firmware::Uefi, Bootloader::SystemdBoot).unwrap_err();
+        let err =
+            validate_boot_config(&broken, Firmware::Uefi, Bootloader::SystemdBoot).unwrap_err();
         assert_eq!(err.code, ErrorCode::InvalidBootConfig);
     }
 

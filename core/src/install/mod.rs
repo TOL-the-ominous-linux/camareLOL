@@ -1,11 +1,10 @@
 //! Installation orchestration: phase states, preconditions and reporting.
 
-pub mod phases;
 pub mod execute;
+pub mod phases;
 
 pub use execute::run_install;
 
-use crate::boot::Bootloader;
 use crate::config::InstallationConfig;
 use crate::hardware::Firmware;
 use crate::storage::layout::PartitionPlan;

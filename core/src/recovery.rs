@@ -122,12 +122,20 @@ mod tests {
     use super::*;
 
     fn report(name: &str, state: &str, retryable: bool) -> PhaseReport {
-        PhaseReport { name: name.into(), state: state.into(), retryable, details: String::new() }
+        PhaseReport {
+            name: name.into(),
+            state: state.into(),
+            retryable,
+            details: String::new(),
+        }
     }
 
     #[test]
     fn completed_phases_are_not_resumed() {
-        let phases = vec![report("partition", "completed", true), report("pacstrap", "failed", true)];
+        let phases = vec![
+            report("partition", "completed", true),
+            report("pacstrap", "failed", true),
+        ];
         let resume = resume_plan(&phases);
         assert_eq!(resume, vec!["pacstrap".to_string()]);
     }

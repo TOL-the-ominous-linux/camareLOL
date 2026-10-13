@@ -5,7 +5,7 @@
 use camarelol_core::config::InstallationConfig;
 use camarelol_core::error::{CamarelolError, ErrorCode};
 use camarelol_core::hardware::detect_firmware;
-use camarelol_core::install::execute::{InstallReport, RealSystemRunner, SystemRunner};
+use camarelol_core::install::execute::{InstallReport, RealSystemRunner};
 use camarelol_core::install::{run_install, Outcome, ProgressEvent, ProgressSink};
 use camarelol_core::logging::Logger;
 use camarelol_core::safety::{required_phrase, SafetyGate};
@@ -18,9 +18,14 @@ impl ProgressSink for TextSink {
     fn emit(&mut self, event: ProgressEvent) {
         match event {
             ProgressEvent::PhaseStarted { name } => {
-                println!("▶ {name} — {}", camarelol_core::install::describe_phase(&name))
+                println!(
+                    "▶ {name} — {}",
+                    camarelol_core::install::describe_phase(&name)
+                )
             }
-            ProgressEvent::PhaseFinished { name, state } => println!("■ {name} — {}", state.as_str()),
+            ProgressEvent::PhaseFinished { name, state } => {
+                println!("■ {name} — {}", state.as_str())
+            }
             ProgressEvent::CommandPreview { command } => println!("  $ {command}"),
             ProgressEvent::Info { message } => println!("  · {message}"),
         }
@@ -36,28 +41,26 @@ pub fn run_scripted(
     mock: Option<&Path>,
     allow_execute: bool,
 ) -> Result<InstallReport, CamarelolError> {
-    let mut cfg = InstallationConfig::load(config_path.to_str().unwrap_or_default())?;
+    let cfg = InstallationConfig::load(config_path.to_str().unwrap_or_default())?;
     cfg.validate()?;
 
     let devices = match mock {
-        Some(p) => scan_devices_from_survey(
-            &std::fs::read_to_string(p).map_err(|e| {
-                CamarelolError::new(ErrorCode::ParseFailed, format!("cannot read mock survey: {e}"))
-            })?,
-        )?,
+        Some(p) => scan_devices_from_survey(&std::fs::read_to_string(p).map_err(|e| {
+            CamarelolError::new(
+                ErrorCode::ParseFailed,
+                format!("cannot read mock survey: {e}"),
+            )
+        })?)?,
         None => scan_devices()?,
     };
 
-    let target = cfg
-        .target_disk
-        .clone()
-        .ok_or_else(|| {
-            CamarelolError::new(
-                ErrorCode::NoTargetDisk,
-                "the configuration has no target_disk; run the TUI to choose one",
-            )
-            .with_remediation("set target_disk = { path, identity, size_bytes } in the config")
-        })?;
+    let target = cfg.target_disk.clone().ok_or_else(|| {
+        CamarelolError::new(
+            ErrorCode::NoTargetDisk,
+            "the configuration has no target_disk; run the TUI to choose one",
+        )
+        .with_remediation("set target_disk = { path, identity, size_bytes } in the config")
+    })?;
 
     // Verify the disk identity strictly — a config from another machine is
     // never trusted.

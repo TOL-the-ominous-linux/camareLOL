@@ -2,7 +2,7 @@
 
 use super::app::{App, Field, Screen};
 use camarelol_core::desktop::{DesktopProfile, DisplayServer};
-use camarelol_core::locale::{KEYMAPS, SYSTEM_LOCALES, TIMEZONES};
+use camarelol_core::locale::{KEYMAPS, TIMEZONES};
 use camarelol_core::network;
 use camarelol_core::safety::{required_phrase, GateMode};
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
@@ -40,9 +40,11 @@ pub fn draw(f: &mut Frame, app: &mut App) {
         Screen::Logs => draw_logs(f, app, chunks[1]),
         other => match other {
             Screen::Welcome => draw_welcome(f, app, chunks[1]),
-            Screen::Language | Screen::Keyboard | Screen::Timezone | Screen::Filesystem | Screen::Bootloader => {
-                draw_choice(f, app, chunks[1])
-            }
+            Screen::Language
+            | Screen::Keyboard
+            | Screen::Timezone
+            | Screen::Filesystem
+            | Screen::Bootloader => draw_choice(f, app, chunks[1]),
             Screen::Storage => draw_storage(f, app, chunks[1]),
             Screen::DiskMode => draw_disk_mode(f, app, chunks[1]),
             Screen::Layout => draw_layout(f, app, chunks[1]),
@@ -91,7 +93,12 @@ fn centered_rect(percent_x: u16, height: u16, area: Rect) -> Rect {
     let w = area.width * percent_x / 100;
     let x = (area.width - w) / 2;
     let y = (area.height - height.min(area.height)) / 2;
-    Rect { x: area.x + x, y: area.y + y, width: w, height: height.min(area.height) }
+    Rect {
+        x: area.x + x,
+        y: area.y + y,
+        width: w,
+        height: height.min(area.height),
+    }
 }
 
 fn draw_header(f: &mut Frame, app: &App, area: Rect) {
@@ -108,13 +115,20 @@ fn draw_header(f: &mut Frame, app: &App, area: Rect) {
         step.min(total),
         total
     );
-    let block = Block::default().borders(Borders::ALL).border_style(Style::default().fg(ACCENT));
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(ACCENT));
     let inner = block.inner(area);
     f.render_widget(block, area);
     let gauge = Gauge::default()
         .gauge_style(Style::default().fg(ACCENT).bg(Color::DarkGray))
         .ratio((step as f64 / total as f64).min(1.0))
-        .label(Span::styled(title, Style::default().fg(Color::White).add_modifier(Modifier::BOLD)));
+        .label(Span::styled(
+            title,
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD),
+        ));
     f.render_widget(gauge, inner);
 }
 
@@ -139,24 +153,6 @@ fn draw_footer(f: &mut Frame, app: &App, area: Rect) {
         Style::default().fg(Color::DarkGray)
     };
     f.render_widget(Paragraph::new(text).style(style), area);
-}
-
-fn bullet_list<'a>(items: &'a [String], selected: usize) -> (List<'a>, ListState) {
-    let list_items: Vec<ListItem> = items
-        .iter()
-        .enumerate()
-        .map(|(i, s)| {
-            let style = if i == selected {
-                Style::default().fg(Color::Black).bg(ACCENT)
-            } else {
-                Style::default()
-            };
-            ListItem::new(Line::from(vec![Span::styled(format!(" {s}"), style)]))
-        })
-        .collect();
-    let mut state = ListState::default();
-    state.select(Some(selected));
-    (List::new(list_items), state)
 }
 
 fn screen_block(title: impl Into<String>) -> Block<'static> {
@@ -202,7 +198,9 @@ fn draw_welcome(f: &mut Frame, app: &App, area: Rect) {
         )),
     ];
     f.render_widget(
-        Paragraph::new(text).block(screen_block("Welcome")).wrap(Wrap { trim: false }),
+        Paragraph::new(text)
+            .block(screen_block("Welcome"))
+            .wrap(Wrap { trim: false }),
         area,
     );
 }
@@ -294,7 +292,9 @@ fn draw_storage(f: &mut Frame, app: &mut App, area: Rect) {
         .collect();
     let mut state = ListState::default();
     state.select(Some(app.storage_index));
-    let list = List::new(items).block(screen_block("Storage devices (↑↓ to choose, Enter to continue)"));
+    let list = List::new(items).block(screen_block(
+        "Storage devices (↑↓ to choose, Enter to continue)",
+    ));
     f.render_stateful_widget(list, area, &mut state);
 }
 
@@ -315,10 +315,9 @@ fn draw_disk_mode(f: &mut Frame, app: &mut App, area: Rect) {
     }
     let mut state = ListState::default();
     state.select(Some(app.disk_mode_index));
-    let list = List::new(items).block(screen_block(app.tr(
-        "Chọn chế độ sử dụng ổ đĩa",
-        "Choose how this disk is used",
-    )));
+    let list = List::new(items).block(screen_block(
+        app.tr("Chọn chế độ sử dụng ổ đĩa", "Choose how this disk is used"),
+    ));
     f.render_stateful_widget(list, area, &mut state);
 }
 
@@ -371,7 +370,10 @@ fn draw_accounts(f: &mut Frame, app: &mut App, area: Rect) {
         ]),
         Line::from(vec![
             Span::raw("  Repeat:          "),
-            Span::styled(pw(&app.root_password_confirm), field_style(Field::RootPasswordConfirm)),
+            Span::styled(
+                pw(&app.root_password_confirm),
+                field_style(Field::RootPasswordConfirm),
+            ),
         ]),
         Line::from(""),
         Line::from(vec![
@@ -384,7 +386,10 @@ fn draw_accounts(f: &mut Frame, app: &mut App, area: Rect) {
         ]),
         Line::from(vec![
             Span::raw("  Repeat:          "),
-            Span::styled(pw(&app.user_password_confirm), field_style(Field::UserPasswordConfirm)),
+            Span::styled(
+                pw(&app.user_password_confirm),
+                field_style(Field::UserPasswordConfirm),
+            ),
         ]),
         Line::from(""),
         Line::from(app.tr(
@@ -405,7 +410,9 @@ fn draw_desktop(f: &mut Frame, app: &mut App, area: Rect) {
         lines.push(Line::from(format!("   {marker} {}", p.as_str())));
     }
     lines.push(Line::from(""));
-    lines.push(Line::from(app.tr("  Chế độ hiển thị (→/Tab):", "  Display server (→/Tab):")));
+    lines.push(Line::from(
+        app.tr("  Chế độ hiển thị (→/Tab):", "  Display server (→/Tab):"),
+    ));
     for (i, s) in DisplayServer::ALL.iter().enumerate() {
         let marker = if i == app.server_index { "●" } else { "○" };
         lines.push(Line::from(format!("   {marker} {}", s.as_str())));
@@ -419,7 +426,9 @@ fn draw_desktop(f: &mut Frame, app: &mut App, area: Rect) {
         "  ⚠ Sway/Hyprland are Wayland-only.",
     )));
     let p = Paragraph::new(lines)
-        .block(screen_block(app.tr("Môi trường desktop", "Desktop environment")))
+        .block(screen_block(
+            app.tr("Môi trường desktop", "Desktop environment"),
+        ))
         .wrap(Wrap { trim: false });
     f.render_widget(p, area);
 }
@@ -431,7 +440,7 @@ fn draw_services(f: &mut Frame, app: &mut App, area: Rect) {
         camarelol_core::services::AudioStack::PipeWire => "pipewire",
         camarelol_core::services::AudioStack::PulseAudio => "pulseaudio",
     };
-    let entries = vec![
+    let entries = [
         format!("{} NetworkManager", marker(app.services.network_manager)),
         format!("{} Bluetooth", marker(app.services.bluetooth)),
         format!("{} Audio: {audio}", marker(true)),
@@ -487,8 +496,11 @@ fn draw_packages(f: &mut Frame, app: &mut App, area: Rect) {
         .split(inner);
     let list = List::new(items);
     f.render_stateful_widget(list, chunks[0], &mut state);
-    let input = Paragraph::new(app.custom_package_input.clone())
-        .block(Block::default().borders(Borders::ALL).title(" add package (Tab) "));
+    let input = Paragraph::new(app.custom_package_input.clone()).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .title(" add package (Tab) "),
+    );
     f.render_widget(input, chunks[1]);
 }
 
@@ -510,15 +522,24 @@ fn draw_review(f: &mut Frame, app: &mut App, area: Rect) {
         let phrase = required_phrase(plan.disk_risk);
         lines.push(Line::from(vec![
             Span::raw(" Type "),
-            Span::styled(phrase, Style::default().fg(BAD).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                phrase,
+                Style::default().fg(BAD).add_modifier(Modifier::BOLD),
+            ),
             Span::raw(" to confirm: "),
-            Span::styled(app.confirm_phrase.clone(), Style::default().fg(Color::Black).bg(Color::White)),
+            Span::styled(
+                app.confirm_phrase.clone(),
+                Style::default().fg(Color::Black).bg(Color::White),
+            ),
         ]));
     } else {
         lines.push(Line::from(" No plan yet — open the layout step first."));
     }
     let p = Paragraph::new(lines)
-        .block(screen_block(app.tr("Xem lại kế hoạch (Enter để cài)", "Review plan (Enter to install)")))
+        .block(screen_block(app.tr(
+            "Xem lại kế hoạch (Enter để cài)",
+            "Review plan (Enter to install)",
+        )))
         .wrap(Wrap { trim: false });
     f.render_widget(p, area);
 }
@@ -553,13 +574,18 @@ fn draw_done(f: &mut Frame, app: &mut App, area: Rect) {
     let mut lines = vec![
         Line::from(Span::styled(
             app.outcome_text(),
-            Style::default().fg(outcome_color).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(outcome_color)
+                .add_modifier(Modifier::BOLD),
         )),
         Line::from(""),
     ];
     if let Some(report) = &app.report {
         for p in &report.phases {
-            lines.push(Line::from(format!("  {:<14} {:<10} {}", p.name, p.state, p.details)));
+            lines.push(Line::from(format!(
+                "  {:<14} {:<10} {}",
+                p.name, p.state, p.details
+            )));
         }
     }
     let p = Paragraph::new(lines)
@@ -568,7 +594,7 @@ fn draw_done(f: &mut Frame, app: &mut App, area: Rect) {
     f.render_widget(p, area);
 }
 
-fn draw_help(f: &mut Frame, app: &App, area: Rect) {
+fn draw_help(f: &mut Frame, _app: &App, area: Rect) {
     let lines = vec![
         Line::from(""),
         Line::from("  ↑ / ↓      move / navigate"),

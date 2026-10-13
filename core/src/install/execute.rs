@@ -43,7 +43,6 @@ pub const TARGET_ROOT: &str = "/mnt";
 pub struct RealSystemRunner {
     ops: OpRunner,
     gate: SafetyGate,
-    log_tag: String,
     /// Non-fatal problems worth telling the user about.
     pub warnings: Vec<String>,
 }
@@ -53,7 +52,6 @@ impl RealSystemRunner {
         RealSystemRunner {
             ops: OpRunner::new(),
             gate,
-            log_tag: "install".into(),
             warnings: Vec::new(),
         }
     }
@@ -80,10 +78,12 @@ impl RealSystemRunner {
 
     /// Run a script inside the target system via `arch-chroot`, piping the
     /// script on stdin (no argv exposure of secrets).
-    fn chroot_run(&mut self, script: &str, phase: &str) -> Result<()> {
+    fn chroot_run(&mut self, script: &str, _phase: &str) -> Result<()> {
         self.ensure_exec()?;
-        self.gate
-            .authorize(crate::safety::Operation::Pacstrap, crate::storage::device::RiskLevel::Low)?;
+        self.gate.authorize(
+            crate::safety::Operation::Pacstrap,
+            crate::storage::device::RiskLevel::Low,
+        )?;
         let out = crate::sys::run_with_input(
             "arch-chroot",
             &[TARGET_ROOT],
@@ -105,13 +105,15 @@ impl SystemRunner for RealSystemRunner {
     fn apply_partition_table(&mut self, disk: &StorageDevice, plan: &PartitionPlan) -> Result<()> {
         self.ensure_exec()?;
         let log = Logger::default();
-        self.ops.apply_partition_table(disk, plan, &self.gate.clone(), &log)
+        self.ops
+            .apply_partition_table(disk, plan, &self.gate.clone(), &log)
     }
 
     fn format_partition(&mut self, spec: &PartitionSpec, target: &str) -> Result<()> {
         self.ensure_exec()?;
         let log = Logger::default();
-        self.ops.format_partition(spec, target, &self.gate.clone(), &log)
+        self.ops
+            .format_partition(spec, target, &self.gate.clone(), &log)
     }
 
     fn mount(&mut self, source: &str, target: &str) -> Result<()> {
@@ -122,23 +124,21 @@ impl SystemRunner for RealSystemRunner {
 
     fn pacstrap(&mut self, packages: &[String]) -> Result<()> {
         self.ensure_exec()?;
-        self.gate
-            .authorize(crate::safety::Operation::Pacstrap, crate::storage::device::RiskLevel::Low)?;
+        self.gate.authorize(
+            crate::safety::Operation::Pacstrap,
+            crate::storage::device::RiskLevel::Low,
+        )?;
         let mut args = vec![TARGET_ROOT.to_string()];
         args.extend(packages.iter().cloned());
         let refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
-        let out = crate::sys::run_with_timeout(
-            "pacstrap",
-            &refs,
-            std::time::Duration::from_secs(3600),
-        )?;
+        let out =
+            crate::sys::run_with_timeout("pacstrap", &refs, std::time::Duration::from_secs(3600))?;
         if !out.success() {
-            return Err(CamarelolError::new(
-                ErrorCode::CommandFailed,
-                "pacstrap failed",
-            )
-            .with_context(out.stderr.trim().to_string())
-            .with_remediation("check the network connection and the mirror, then retry"));
+            return Err(
+                CamarelolError::new(ErrorCode::CommandFailed, "pacstrap failed")
+                    .with_context(out.stderr.trim().to_string())
+                    .with_remediation("check the network connection and the mirror, then retry"),
+            );
         }
         Ok(())
     }
@@ -147,8 +147,10 @@ impl SystemRunner for RealSystemRunner {
         self.ensure_exec()?;
         let out = crate::sys::run("genfstab", &["-U", TARGET_ROOT])?;
         if !out.success() {
-            return Err(CamarelolError::new(ErrorCode::CommandFailed, "genfstab failed")
-                .with_context(out.stderr.trim().to_string()));
+            return Err(
+                CamarelolError::new(ErrorCode::CommandFailed, "genfstab failed")
+                    .with_context(out.stderr.trim().to_string()),
+            );
         }
         let fstab = format!("{TARGET_ROOT}/etc/fstab");
         use std::io::Write;
@@ -183,12 +185,17 @@ impl SystemRunner for RealSystemRunner {
                     crate::hardware::Firmware::Bios => {
                         format!("--target=i386-pc {}", disk.path)
                     }
-                    _ => "--target=x86_64-efi --efi-directory=/boot --bootloader-id=camareLOL".to_string(),
+                    _ => "--target=x86_64-efi --efi-directory=/boot --bootloader-id=camareLOL"
+                        .to_string(),
                 };
                 let mut args = vec![TARGET_ROOT.to_string(), "grub-install".to_string()];
                 args.extend(target.split(' ').map(|s| s.to_string()));
                 let refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
-                let out = crate::sys::run_with_timeout("arch-chroot", &refs, std::time::Duration::from_secs(600))?;
+                let out = crate::sys::run_with_timeout(
+                    "arch-chroot",
+                    &refs,
+                    std::time::Duration::from_secs(600),
+                )?;
                 if !out.success() {
                     return Err(CamarelolError::new(
                         ErrorCode::CommandFailed,
@@ -260,8 +267,10 @@ impl SystemRunner for RealSystemRunner {
             std::time::Duration::from_secs(900),
         )?;
         if !out.success() {
-            return Err(CamarelolError::new(ErrorCode::CommandFailed, "mkinitcpio failed")
-                .with_context(out.stderr.trim().to_string()));
+            return Err(
+                CamarelolError::new(ErrorCode::CommandFailed, "mkinitcpio failed")
+                    .with_context(out.stderr.trim().to_string()),
+            );
         }
         Ok(())
     }
@@ -275,21 +284,36 @@ pub struct SimulatedRunner {
 
 impl SimulatedRunner {
     pub fn new() -> Self {
-        SimulatedRunner { calls: Vec::new(), fail_on: None }
+        SimulatedRunner {
+            calls: Vec::new(),
+            fail_on: None,
+        }
+    }
+}
+
+impl Default for SimulatedRunner {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
 impl SystemRunner for SimulatedRunner {
     fn apply_partition_table(&mut self, disk: &StorageDevice, _plan: &PartitionPlan) -> Result<()> {
         if self.fail_on.as_deref() == Some("partition") {
-            return Err(CamarelolError::new(ErrorCode::CommandFailed, "simulated partition failure"));
+            return Err(CamarelolError::new(
+                ErrorCode::CommandFailed,
+                "simulated partition failure",
+            ));
         }
         self.calls.push(format!("partition {}", disk.path));
         Ok(())
     }
     fn format_partition(&mut self, _spec: &PartitionSpec, target: &str) -> Result<()> {
         if self.fail_on.as_deref() == Some("format") {
-            return Err(CamarelolError::new(ErrorCode::CommandFailed, "simulated format failure"));
+            return Err(CamarelolError::new(
+                ErrorCode::CommandFailed,
+                "simulated format failure",
+            ));
         }
         self.calls.push(format!("format {target}"));
         Ok(())
@@ -300,10 +324,14 @@ impl SystemRunner for SimulatedRunner {
     }
     fn pacstrap(&mut self, packages: &[String]) -> Result<()> {
         if self.fail_on.as_deref() == Some("pacstrap") {
-            return Err(CamarelolError::new(ErrorCode::CommandFailed, "simulated pacstrap failure")
-                .with_remediation("retryable"));
+            return Err(CamarelolError::new(
+                ErrorCode::CommandFailed,
+                "simulated pacstrap failure",
+            )
+            .with_remediation("retryable"));
         }
-        self.calls.push(format!("pacstrap {} packages", packages.len()));
+        self.calls
+            .push(format!("pacstrap {} packages", packages.len()));
         Ok(())
     }
     fn genfstab(&mut self) -> Result<()> {
@@ -311,7 +339,8 @@ impl SystemRunner for SimulatedRunner {
         Ok(())
     }
     fn install_bootloader(&mut self, bl: Bootloader, disk: &StorageDevice) -> Result<()> {
-        self.calls.push(format!("bootloader {} on {}", bl.as_str(), disk.path));
+        self.calls
+            .push(format!("bootloader {} on {}", bl.as_str(), disk.path));
         Ok(())
     }
     fn chroot_script(&mut self, script: &str) -> Result<()> {
@@ -367,7 +396,7 @@ pub fn run_install(
     cfg: &InstallationConfig,
     disk: &StorageDevice,
     plan: &PartitionPlan,
-    gate: &SafetyGate,
+    _gate: &SafetyGate,
     log: &Logger,
     runner: &mut dyn SystemRunner,
     sink: &mut dyn ProgressSink,
@@ -382,7 +411,11 @@ pub fn run_install(
             }
         }
     };
-    let pf = Preflight { firmware, plan: plan.clone(), config: cfg.clone() };
+    let pf = Preflight {
+        firmware,
+        plan: plan.clone(),
+        config: cfg.clone(),
+    };
 
     let mut phases: Vec<PhaseReport> = Vec::new();
     let mut warnings: Vec<String> = Vec::new();
@@ -393,55 +426,57 @@ pub fn run_install(
     macro_rules! run_phase {
         ($name:expr, $body:expr, $aborted:ident) => {{
             if !$aborted {
-            let phase_name: &str = $name;
-            let phase_result: Result<String> = (|| $body)();
-            if let Err(e) = preconditions(phase_name, &pf) {
-                log.log(phase_name, &format!("precondition failed: {e}"));
-                phases.push(PhaseReport {
-                    name: phase_name.to_string(),
-                    state: PhaseState::Failed.as_str().to_string(),
-                    retryable: false,
-                    details: e.to_string(),
-                });
-                outcome = Outcome::Incomplete;
-                sink.emit(ProgressEvent::PhaseFinished {
-                    name: phase_name.to_string(),
-                    state: PhaseState::Failed,
-                });
-                $aborted = true;
-            } else {
-                sink.emit(ProgressEvent::PhaseStarted { name: phase_name.to_string() });
-                match phase_result {
-                    Ok(details) => {
-                        log.log(phase_name, "ok");
-                        phases.push(PhaseReport {
-                            name: phase_name.to_string(),
-                            state: PhaseState::Completed.as_str().to_string(),
-                            retryable: retryable(phase_name),
-                            details,
-                        });
-                        sink.emit(ProgressEvent::PhaseFinished {
-                            name: phase_name.to_string(),
-                            state: PhaseState::Completed,
-                        });
-                    }
-                    Err(e) => {
-                        log.log(phase_name, &format!("failed: {e}"));
-                        phases.push(PhaseReport {
-                            name: phase_name.to_string(),
-                            state: PhaseState::Failed.as_str().to_string(),
-                            retryable: retryable(phase_name),
-                            details: e.to_string(),
-                        });
-                        outcome = Outcome::Incomplete;
-                        sink.emit(ProgressEvent::PhaseFinished {
-                            name: phase_name.to_string(),
-                            state: PhaseState::Failed,
-                        });
-                        $aborted = true;
+                let phase_name: &str = $name;
+                let phase_result: Result<String> = (|| $body)();
+                if let Err(e) = preconditions(phase_name, &pf) {
+                    log.log(phase_name, &format!("precondition failed: {e}"));
+                    phases.push(PhaseReport {
+                        name: phase_name.to_string(),
+                        state: PhaseState::Failed.as_str().to_string(),
+                        retryable: false,
+                        details: e.to_string(),
+                    });
+                    outcome = Outcome::Incomplete;
+                    sink.emit(ProgressEvent::PhaseFinished {
+                        name: phase_name.to_string(),
+                        state: PhaseState::Failed,
+                    });
+                    $aborted = true;
+                } else {
+                    sink.emit(ProgressEvent::PhaseStarted {
+                        name: phase_name.to_string(),
+                    });
+                    match phase_result {
+                        Ok(details) => {
+                            log.log(phase_name, "ok");
+                            phases.push(PhaseReport {
+                                name: phase_name.to_string(),
+                                state: PhaseState::Completed.as_str().to_string(),
+                                retryable: retryable(phase_name),
+                                details,
+                            });
+                            sink.emit(ProgressEvent::PhaseFinished {
+                                name: phase_name.to_string(),
+                                state: PhaseState::Completed,
+                            });
+                        }
+                        Err(e) => {
+                            log.log(phase_name, &format!("failed: {e}"));
+                            phases.push(PhaseReport {
+                                name: phase_name.to_string(),
+                                state: PhaseState::Failed.as_str().to_string(),
+                                retryable: retryable(phase_name),
+                                details: e.to_string(),
+                            });
+                            outcome = Outcome::Incomplete;
+                            sink.emit(ProgressEvent::PhaseFinished {
+                                name: phase_name.to_string(),
+                                state: PhaseState::Failed,
+                            });
+                            $aborted = true;
+                        }
                     }
                 }
-            }
             }
         }};
     }
@@ -456,98 +491,104 @@ pub fn run_install(
     while !aborted && phase_idx < PHASE_ORDER.len() {
         let phase = PHASE_ORDER[phase_idx];
         phase_idx += 1;
-        run_phase!(phase, {
-            match phase {
-                "preflight" => Ok(format!(
-                    "firmware={} bootloader={} fs={} partitions={}",
-                    firmware.as_str(),
-                    cfg.bootloader().map(|b| b.as_str().to_string()).unwrap_or_default(),
-                    cfg.filesystem,
-                    plan.partitions.len()
-                )),
-                "partition" => {
-                    runner.apply_partition_table(disk, plan)?;
-                    Ok(format!("wrote {} layout to {}", plan.table_type, disk.path))
-                }
-                "format" => {
-                    for (i, spec) in plan.partitions.iter().enumerate() {
-                        let target = part(i + 1);
-                        runner.format_partition(spec, &target)?;
+        run_phase!(
+            phase,
+            {
+                match phase {
+                    "preflight" => Ok(format!(
+                        "firmware={} bootloader={} fs={} partitions={}",
+                        firmware.as_str(),
+                        cfg.bootloader()
+                            .map(|b| b.as_str().to_string())
+                            .unwrap_or_default(),
+                        cfg.filesystem,
+                        plan.partitions.len()
+                    )),
+                    "partition" => {
+                        runner.apply_partition_table(disk, plan)?;
+                        Ok(format!("wrote {} layout to {}", plan.table_type, disk.path))
                     }
-                    Ok("filesystems created".into())
-                }
-                "mount" => {
-                    for (i, spec) in plan.partitions.iter().enumerate() {
-                        let target = part(i + 1);
-                        match spec.purpose {
-                            PartitionPurpose::BiosBoot => continue,
-                            _ => match spec.mount_point.as_deref() {
-                                Some(mp) => {
-                                    let mnt = format!("{TARGET_ROOT}{mp}");
-                                    runner.mount(&target, &mnt)?;
+                    "format" => {
+                        for (i, spec) in plan.partitions.iter().enumerate() {
+                            let target = part(i + 1);
+                            runner.format_partition(spec, &target)?;
+                        }
+                        Ok("filesystems created".into())
+                    }
+                    "mount" => {
+                        for (i, spec) in plan.partitions.iter().enumerate() {
+                            let target = part(i + 1);
+                            match spec.purpose {
+                                PartitionPurpose::BiosBoot => continue,
+                                _ => {
+                                    if let Some(mp) = spec.mount_point.as_deref() {
+                                        let mnt = format!("{TARGET_ROOT}{mp}");
+                                        runner.mount(&target, &mnt)?;
+                                    }
                                 }
-                                None => {}
-                            },
+                            }
                         }
+                        Ok("target mounted".into())
                     }
-                    Ok("target mounted".into())
-                }
-                "pacstrap" => {
-                    let mut pkgs = cfg.packages.pacstrap_list();
-                    pkgs.extend(crate::desktop::packages_for(cfg.desktop_profile().unwrap_or(
-                        crate::desktop::DesktopProfile::ConsoleOnly,
-                    )));
-                    pkgs.extend(cfg.services.packages());
-                    // The bootloader has to exist inside the target before we
-                    // can install it into it.
-                    let bootloader = cfg.bootloader()?;
-                    pkgs.extend(bootloader.target_packages().iter().map(|p| p.to_string()));
-                    runner.pacstrap(&pkgs)?;
-                    Ok(format!("installed {} packages", pkgs.len()))
-                }
-                "fstab" => {
-                    runner.genfstab()?;
-                    Ok("fstab generated".into())
-                }
-                "bootloader" => {
-                    runner.install_bootloader(cfg.bootloader()?, disk)?;
-                    Ok(format!("{} installed", cfg.bootloader()?.as_str()))
-                }
-                "system-config" => {
-                    let script = system_config_script(cfg);
-                    runner.chroot_script(&script)?;
-                    Ok("locale, keymap, timezone and hostname written".into())
-                }
-                "accounts" => {
-                    let script = account_script(cfg);
-                    runner.chroot_script(&script)?;
-                    Ok(format!("{} user(s) configured", cfg.users.len()))
-                }
-                "services" => {
-                    runner.enable_services(&cfg.services.services())?;
-                    Ok("services enabled".into())
-                }
-                "initramfs" => {
-                    runner.mkinitcpio()?;
-                    Ok("initramfs generated".into())
-                }
-                "post-check" => {
-                    if !runner.target_mounted() {
-                        // Nothing to verify against; we say so instead of pretending.
-                        Ok("target not mounted here; verification deferred".into())
-                    } else {
-                        let w = post_check(cfg, plan, TARGET_ROOT);
-                        if w.is_empty() {
-                            Ok("all post-install checks passed".into())
+                    "pacstrap" => {
+                        let mut pkgs = cfg.packages.pacstrap_list();
+                        pkgs.extend(crate::desktop::packages_for(
+                            cfg.desktop_profile()
+                                .unwrap_or(crate::desktop::DesktopProfile::ConsoleOnly),
+                        ));
+                        pkgs.extend(cfg.services.packages());
+                        // The bootloader has to exist inside the target before we
+                        // can install it into it.
+                        let bootloader = cfg.bootloader()?;
+                        pkgs.extend(bootloader.target_packages().iter().map(|p| p.to_string()));
+                        runner.pacstrap(&pkgs)?;
+                        Ok(format!("installed {} packages", pkgs.len()))
+                    }
+                    "fstab" => {
+                        runner.genfstab()?;
+                        Ok("fstab generated".into())
+                    }
+                    "bootloader" => {
+                        runner.install_bootloader(cfg.bootloader()?, disk)?;
+                        Ok(format!("{} installed", cfg.bootloader()?.as_str()))
+                    }
+                    "system-config" => {
+                        let script = system_config_script(cfg);
+                        runner.chroot_script(&script)?;
+                        Ok("locale, keymap, timezone and hostname written".into())
+                    }
+                    "accounts" => {
+                        let script = account_script(cfg);
+                        runner.chroot_script(&script)?;
+                        Ok(format!("{} user(s) configured", cfg.users.len()))
+                    }
+                    "services" => {
+                        runner.enable_services(&cfg.services.services())?;
+                        Ok("services enabled".into())
+                    }
+                    "initramfs" => {
+                        runner.mkinitcpio()?;
+                        Ok("initramfs generated".into())
+                    }
+                    "post-check" => {
+                        if !runner.target_mounted() {
+                            // Nothing to verify against; we say so instead of pretending.
+                            Ok("target not mounted here; verification deferred".into())
                         } else {
-                            warnings.extend(w.clone());
-                            Ok(format!("{} warning(s)", w.len()))
+                            let w = post_check(cfg, plan, TARGET_ROOT);
+                            if w.is_empty() {
+                                Ok("all post-install checks passed".into())
+                            } else {
+                                warnings.extend(w.clone());
+                                Ok(format!("{} warning(s)", w.len()))
+                            }
                         }
                     }
+                    other => Ok(format!("phase {other} skipped")),
                 }
-                other => Ok(format!("phase {other} skipped")),
-            }
-        }, aborted);
+            },
+            aborted
+        );
     }
 
     for w in runner.warnings() {
@@ -560,7 +601,11 @@ pub fn run_install(
         outcome = Outcome::CompletedWithWarnings;
     }
 
-    InstallReport { phases, outcome, warnings }
+    InstallReport {
+        phases,
+        outcome,
+        warnings,
+    }
 }
 
 /// Build the in-target script that writes locale / keymap / timezone / hostname.
@@ -596,7 +641,9 @@ fn account_script(cfg: &InstallationConfig) -> String {
         script.push_str("passwd --lock root\n");
     }
     for u in &cfg.users {
-        script.push_str(&format!("id -u {u} >/dev/null 2>&1 || useradd -m -s /bin/bash {u}\n"));
+        script.push_str(&format!(
+            "id -u {u} >/dev/null 2>&1 || useradd -m -s /bin/bash {u}\n"
+        ));
         if let Some(pw) = cfg.user_password(u) {
             script.push_str(&format!("echo '{u}:{pw}' | chpasswd\n"));
         }
@@ -630,7 +677,10 @@ fn post_check(cfg: &InstallationConfig, plan: &PartitionPlan, root: &str) -> Vec
     if !fstab.exists() {
         w.push("fstab is missing".into());
     }
-    let root_mounted = plan.partitions.iter().any(|p| p.mount_point.as_deref() == Some("/"));
+    let root_mounted = plan
+        .partitions
+        .iter()
+        .any(|p| p.mount_point.as_deref() == Some("/"));
     if !root_mounted {
         w.push("no root partition in plan".into());
     }
@@ -700,8 +750,10 @@ mod tests {
 
     #[test]
     fn failing_precondition_blocks_the_run() {
-        let mut cfg = InstallationConfig::default();
-        cfg.hostname = "-bad hostname-".into();
+        let cfg = InstallationConfig {
+            hostname: "-bad hostname-".into(),
+            ..Default::default()
+        };
         let mut runner = SimulatedRunner::new();
         let mut sink = NullSink;
         let log = Logger::default();
@@ -724,9 +776,11 @@ mod tests {
     fn account_script_hides_nothing_but_is_memory_only() {
         // The script may contain the password inline (it is piped on stdin) but
         // it must never end up in argv: assert the runner uses stdin.
-        let mut cfg = InstallationConfig::default();
-        cfg.users = vec!["alice".into()];
-        cfg.admin_users = vec!["alice".into()];
+        let mut cfg = InstallationConfig {
+            users: vec!["alice".into()],
+            admin_users: vec!["alice".into()],
+            ..Default::default()
+        };
         cfg.set_passwords(Some("rootpw"), &[("alice", "alicepw")]);
         let script = account_script(&cfg);
         assert!(script.contains("useradd -m -s /bin/bash alice"));

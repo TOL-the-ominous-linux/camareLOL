@@ -74,18 +74,30 @@ pub struct SafetyGate {
 
 impl Default for SafetyGate {
     fn default() -> Self {
-        SafetyGate { armed: false, dry_run: true, confirmations: HashMap::new() }
+        SafetyGate {
+            armed: false,
+            dry_run: true,
+            confirmations: HashMap::new(),
+        }
     }
 }
 
 impl SafetyGate {
     /// Gate that allows writing, still requiring confirmations.
     pub fn armed() -> Self {
-        SafetyGate { armed: true, dry_run: true, confirmations: HashMap::new() }
+        SafetyGate {
+            armed: true,
+            dry_run: true,
+            confirmations: HashMap::new(),
+        }
     }
 
     pub fn armed_and_execute() -> Self {
-        SafetyGate { armed: true, dry_run: false, confirmations: HashMap::new() }
+        SafetyGate {
+            armed: true,
+            dry_run: false,
+            confirmations: HashMap::new(),
+        }
     }
 
     /// Record a typed confirmation. The phrase must match the risk level.
@@ -105,7 +117,12 @@ impl SafetyGate {
             .unwrap_or(0);
         self.confirmations.insert(
             (op, risk),
-            ConfirmationRecord { operation: op, phrase: phrase.to_string(), at_unix: at, risk },
+            ConfirmationRecord {
+                operation: op,
+                phrase: phrase.to_string(),
+                at_unix: at,
+                risk,
+            },
         );
         Ok(())
     }
@@ -122,9 +139,14 @@ impl SafetyGate {
         if !self.armed {
             return Err(CamarelolError::new(
                 ErrorCode::SafetyGateClosed,
-                format!("refusing to {}: destructive mode is not enabled", op.as_str()),
+                format!(
+                    "refusing to {}: destructive mode is not enabled",
+                    op.as_str()
+                ),
             )
-            .with_remediation("restart camareLOL with --allow-destructive after backing up your data"));
+            .with_remediation(
+                "restart camareLOL with --allow-destructive after backing up your data",
+            ));
         }
         if self.dry_run {
             return Ok(());
@@ -138,7 +160,10 @@ impl SafetyGate {
                     risk.as_str()
                 ),
             )
-            .with_remediation(format!("type `{}` in the confirmation dialog", required_phrase(risk))));
+            .with_remediation(format!(
+                "type `{}` in the confirmation dialog",
+                required_phrase(risk)
+            )));
         }
         Ok(())
     }
@@ -224,7 +249,9 @@ mod tests {
     #[test]
     fn locked_gate_refuses_everything() {
         let gate = SafetyGate::default();
-        let err = gate.authorize(Operation::FormatPartition, RiskLevel::High).unwrap_err();
+        let err = gate
+            .authorize(Operation::FormatPartition, RiskLevel::High)
+            .unwrap_err();
         assert_eq!(err.code, ErrorCode::SafetyGateClosed);
         assert_eq!(gate.mode(), GateMode::Locked);
     }
@@ -234,7 +261,9 @@ mod tests {
         // In dry-run mode the call is allowed because nothing is written: this
         // is what the Review screen shows the user.
         let dry = SafetyGate::armed();
-        assert!(dry.authorize(Operation::FormatPartition, RiskLevel::High).is_ok());
+        assert!(dry
+            .authorize(Operation::FormatPartition, RiskLevel::High)
+            .is_ok());
 
         // The same call must be refused once the gate is really executing.
         let exec_gate = SafetyGate::armed_and_execute();
@@ -247,11 +276,17 @@ mod tests {
     #[test]
     fn wrong_phrase_is_rejected() {
         let mut gate = SafetyGate::armed_and_execute();
-        assert!(gate.confirm(Operation::WritePartitionTable, RiskLevel::Low, "yes").is_err());
-        gate.confirm(Operation::WritePartitionTable, RiskLevel::Low, "ERASE").unwrap();
-        gate.authorize(Operation::WritePartitionTable, RiskLevel::Low).unwrap();
+        assert!(gate
+            .confirm(Operation::WritePartitionTable, RiskLevel::Low, "yes")
+            .is_err());
+        gate.confirm(Operation::WritePartitionTable, RiskLevel::Low, "ERASE")
+            .unwrap();
+        gate.authorize(Operation::WritePartitionTable, RiskLevel::Low)
+            .unwrap();
         // A confirmation for Low does not cover High.
-        assert!(gate.authorize(Operation::WritePartitionTable, RiskLevel::High).is_err());
+        assert!(gate
+            .authorize(Operation::WritePartitionTable, RiskLevel::High)
+            .is_err());
     }
 
     #[test]

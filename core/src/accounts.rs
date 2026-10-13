@@ -81,10 +81,7 @@ pub fn validate_hostname(host: &str) -> Result<()> {
                 "hostname labels must end with a letter or digit",
             ));
         }
-        if !label
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '-')
-        {
+        if !label.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
             return Err(CamarelolError::new(
                 ErrorCode::InvalidAccount,
                 "hostname may only contain letters, digits and hyphens",
@@ -109,14 +106,18 @@ pub fn validate_username(name: &str) -> Result<()> {
             "username must be 1..32 characters",
         ));
     }
-    if !name.chars().next().unwrap().is_ascii_lowercase() && !name.chars().next().unwrap().is_ascii_digit()
+    if !name.chars().next().unwrap().is_ascii_lowercase()
+        && !name.chars().next().unwrap().is_ascii_digit()
     {
         return Err(CamarelolError::new(
             ErrorCode::InvalidAccount,
             "username must start with a lowercase letter or digit",
         ));
     }
-    if name.chars().any(|c| !(c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '-')) {
+    if name
+        .chars()
+        .any(|c| !(c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '-'))
+    {
         return Err(CamarelolError::new(
             ErrorCode::InvalidAccount,
             "username may only contain lowercase letters, digits, `_` and `-`",
@@ -139,7 +140,14 @@ pub fn validate_password(password: &str) -> Result<()> {
             "password must be at least 8 characters",
         ));
     }
-    let weak = ["password", "12345678", "qwerty", "archlinux", "letmein", "admin123"];
+    let weak = [
+        "password",
+        "12345678",
+        "qwerty",
+        "archlinux",
+        "letmein",
+        "admin123",
+    ];
     let lower = password.to_ascii_lowercase();
     for w in weak {
         if lower.contains(w) {
@@ -224,7 +232,10 @@ mod tests {
             root_login_allowed: false,
             users: vec![],
         };
-        assert_eq!(validate_account_plan(&plan).unwrap_err().code, ErrorCode::InvalidAccount);
+        assert_eq!(
+            validate_account_plan(&plan).unwrap_err().code,
+            ErrorCode::InvalidAccount
+        );
     }
 
     #[test]
@@ -233,7 +244,10 @@ mod tests {
             hostname: "arch".into(),
             root_password_set: true,
             root_login_allowed: false,
-            users: vec![UserAccount { has_admin: true, ..UserAccount::new("alice") }],
+            users: vec![UserAccount {
+                has_admin: true,
+                ..UserAccount::new("alice")
+            }],
         };
         assert!(validate_account_plan(&plan).is_ok());
     }

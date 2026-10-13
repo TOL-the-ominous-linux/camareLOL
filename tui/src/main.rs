@@ -2,16 +2,16 @@
 
 mod app;
 mod draw;
-mod update;
 mod scripted;
+mod update;
 
 use crate::app::App;
 use camarelol_core::config::InstallationConfig;
 use camarelol_core::error::{CamarelolError, ErrorCode};
-use camarelol_core::hardware::{self, Firmware};
-use camarelol_core::install::execute::{RealSystemRunner, SimulatedRunner, SystemRunner};
+use camarelol_core::hardware::Firmware;
+use camarelol_core::install::execute::SimulatedRunner;
 use camarelol_core::install::run_install;
-use camarelol_core::install::{NullSink, Outcome, ProgressEvent, ProgressSink};
+use camarelol_core::install::{NullSink, Outcome};
 use camarelol_core::logging::Logger;
 use camarelol_core::safety::SafetyGate;
 use camarelol_core::storage::scan_devices;
@@ -78,23 +78,6 @@ OPTIONS:
 "
 }
 
-struct CliSink;
-
-impl ProgressSink for CliSink {
-    fn emit(&mut self, event: ProgressEvent) {
-        match event {
-            ProgressEvent::PhaseStarted { name } => {
-                println!("▶ {name} — {}", camarelol_core::install::describe_phase(&name));
-            }
-            ProgressEvent::PhaseFinished { name, state } => {
-                println!("■ {name} — {}", state.as_str());
-            }
-            ProgressEvent::CommandPreview { command } => println!("  $ {command}"),
-            ProgressEvent::Info { message } => println!("  · {message}"),
-        }
-    }
-}
-
 fn main() {
     let args = match parse_args() {
         Ok(a) => a,
@@ -131,7 +114,11 @@ fn main() {
     }
 
     if let Some(cfg_path) = args.scripted.clone() {
-        match scripted::run_scripted(&cfg_path, args.mock.as_deref(), args.allow_destructive && args.execute) {
+        match scripted::run_scripted(
+            &cfg_path,
+            args.mock.as_deref(),
+            args.allow_destructive && args.execute,
+        ) {
             Ok(report) => {
                 println!("{}", report.render());
                 std::process::exit(if report.all_completed() { 0 } else { 1 });

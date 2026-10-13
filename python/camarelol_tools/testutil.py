@@ -11,6 +11,7 @@ from here so they can run against:
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import tempfile
@@ -22,6 +23,13 @@ BINARY_NAMES = ("camarelol",)
 
 
 def find_binary() -> Path | None:
+    """Locate the camareLOL binary.
+
+    Order: $CAMARELOL_BIN, PATH, then the usual cargo target directories.
+    """
+    override = os.environ.get("CAMARELOL_BIN")
+    if override and Path(override).exists():
+        return Path(override)
     for name in BINARY_NAMES:
         found = shutil.which(name)
         if found:

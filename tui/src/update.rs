@@ -2,7 +2,7 @@
 
 use super::app::{App, Field, Screen};
 use camarelol_core::error::ErrorCode;
-use camarelol_core::install::execute::{RealSystemRunner, SystemRunner};
+use camarelol_core::install::execute::RealSystemRunner;
 use camarelol_core::install::{run_install, Outcome, PhaseState, ProgressEvent, ProgressSink};
 use camarelol_core::safety::{required_phrase, Operation};
 use camarelol_core::storage::RiskLevel;
@@ -17,16 +17,20 @@ impl<'a> ProgressSink for AppSink<'a> {
     fn emit(&mut self, event: ProgressEvent) {
         match &event {
             ProgressEvent::PhaseStarted { name } => {
-                self.app
-                    .install_output
-                    .push(format!("▶ {} — {}", name, camarelol_core::install::describe_phase(name)));
+                self.app.install_output.push(format!(
+                    "▶ {} — {}",
+                    name,
+                    camarelol_core::install::describe_phase(name)
+                ));
                 self.app.logger.log("install", &format!("started {name}"));
             }
             ProgressEvent::PhaseFinished { name, state } => {
                 self.app
                     .install_output
                     .push(format!("■ {name} — {}", state_str(state)));
-                self.app.logger.log("install", &format!("finished {name}: {}", state_str(state)));
+                self.app
+                    .logger
+                    .log("install", &format!("finished {name}: {}", state_str(state)));
                 self.app.phase_progress += 1;
             }
             ProgressEvent::CommandPreview { command } => {
@@ -86,22 +90,24 @@ impl App {
                     self.go_next();
                 }
             }
-            Screen::Language | Screen::Keyboard | Screen::Timezone | Screen::Filesystem | Screen::Bootloader => {
-                match key.code {
-                    KeyCode::Up => self.move_cursor(-1),
-                    KeyCode::Down => self.move_cursor(1),
-                    KeyCode::Enter => {
-                        if self.screen == Screen::Language {
-                            self.sync_language_to_system();
-                        }
-                        if self.screen == Screen::Bootloader {
-                            self.rebuild_plan();
-                        }
-                        self.go_next();
+            Screen::Language
+            | Screen::Keyboard
+            | Screen::Timezone
+            | Screen::Filesystem
+            | Screen::Bootloader => match key.code {
+                KeyCode::Up => self.move_cursor(-1),
+                KeyCode::Down => self.move_cursor(1),
+                KeyCode::Enter => {
+                    if self.screen == Screen::Language {
+                        self.sync_language_to_system();
                     }
-                    _ => {}
+                    if self.screen == Screen::Bootloader {
+                        self.rebuild_plan();
+                    }
+                    self.go_next();
                 }
-            }
+                _ => {}
+            },
             Screen::Storage => match key.code {
                 KeyCode::Up => self.move_cursor(-1),
                 KeyCode::Down => self.move_cursor(1),
@@ -220,10 +226,8 @@ impl App {
             Screen::Progress => {
                 // nothing: install runs synchronously and moves to Done
             }
-            Screen::Done => {
-                if key.code == KeyCode::Enter {
-                    self.quit = true;
-                }
+            Screen::Done if key.code == KeyCode::Enter => {
+                self.quit = true;
             }
             _ => {}
         }
@@ -356,9 +360,15 @@ impl App {
             1 => self.services.bluetooth = !self.services.bluetooth,
             2 => {
                 self.services.audio = match self.services.audio {
-                    camarelol_core::services::AudioStack::PipeWire => camarelol_core::services::AudioStack::PulseAudio,
-                    camarelol_core::services::AudioStack::PulseAudio => camarelol_core::services::AudioStack::None,
-                    camarelol_core::services::AudioStack::None => camarelol_core::services::AudioStack::PipeWire,
+                    camarelol_core::services::AudioStack::PipeWire => {
+                        camarelol_core::services::AudioStack::PulseAudio
+                    }
+                    camarelol_core::services::AudioStack::PulseAudio => {
+                        camarelol_core::services::AudioStack::None
+                    }
+                    camarelol_core::services::AudioStack::None => {
+                        camarelol_core::services::AudioStack::PipeWire
+                    }
                 }
             }
             3 => self.services.zram = !self.services.zram,
@@ -427,7 +437,13 @@ impl App {
                     .core
                     .devices
                     .iter()
-                    .map(|d| if d.path == fresh.path { fresh.clone() } else { d.clone() })
+                    .map(|d| {
+                        if d.path == fresh.path {
+                            fresh.clone()
+                        } else {
+                            d.clone()
+                        }
+                    })
                     .collect();
             }
             Err(e) => {
@@ -497,7 +513,8 @@ impl App {
 
         let mut runner = RealSystemRunner::new(gate.clone());
         let mut sink = AppSink { app: self };
-        let logger = camarelol_core::logging::Logger::new(std::path::Path::new("/var/log/camarelol"));
+        let logger =
+            camarelol_core::logging::Logger::new(std::path::Path::new("/var/log/camarelol"));
         let report = run_install(&cfg, &device, &plan, &gate, &logger, &mut runner, &mut sink);
         let completed = report.all_completed();
         self.outcome = Some(match report.outcome {
@@ -527,21 +544,24 @@ impl App {
     /// Report of the install for the Done screen.
     pub fn outcome_text(&self) -> String {
         match self.outcome {
-            Some(Outcome::Completed) => self.tr(
-                "Hoàn tất. Bạn có thể khởi động lại và rút USB cài đặt.",
-                "Completed. You may reboot and remove the installation medium.",
-            )
-            .to_string(),
-            Some(Outcome::CompletedWithWarnings) => self.tr(
-                "Hoàn tất nhưng có cảnh báo — hãy đọc nhật ký.",
-                "Completed with warnings — please read the log.",
-            )
-            .to_string(),
-            Some(_) => self.tr(
-                "Chưa hoàn tất. Hãy xem nhật ký và phần cứu hộ.",
-                "Not finished. See the log and the recovery section.",
-            )
-            .to_string(),
+            Some(Outcome::Completed) => self
+                .tr(
+                    "Hoàn tất. Bạn có thể khởi động lại và rút USB cài đặt.",
+                    "Completed. You may reboot and remove the installation medium.",
+                )
+                .to_string(),
+            Some(Outcome::CompletedWithWarnings) => self
+                .tr(
+                    "Hoàn tất nhưng có cảnh báo — hãy đọc nhật ký.",
+                    "Completed with warnings — please read the log.",
+                )
+                .to_string(),
+            Some(_) => self
+                .tr(
+                    "Chưa hoàn tất. Hãy xem nhật ký và phần cứu hộ.",
+                    "Not finished. See the log and the recovery section.",
+                )
+                .to_string(),
             None => String::new(),
         }
     }

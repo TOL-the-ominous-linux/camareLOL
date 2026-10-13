@@ -16,7 +16,11 @@ pub enum DisplayServer {
 
 impl DisplayServer {
     /// All options, in display order.
-    pub const ALL: [DisplayServer; 3] = [DisplayServer::Auto, DisplayServer::Wayland, DisplayServer::X11];
+    pub const ALL: [DisplayServer; 3] = [
+        DisplayServer::Auto,
+        DisplayServer::Wayland,
+        DisplayServer::X11,
+    ];
 
     pub fn as_str(&self) -> &'static str {
         match self {
@@ -67,13 +71,41 @@ impl DesktopProfile {
 
     pub fn packages(&self) -> Vec<String> {
         match self {
-            DesktopProfile::Plasma => vec!["plasma".into(), "konsole".into(), "dolphin".into(), "sddm".into()],
+            DesktopProfile::Plasma => vec![
+                "plasma".into(),
+                "konsole".into(),
+                "dolphin".into(),
+                "sddm".into(),
+            ],
             DesktopProfile::Gnome => vec!["gnome".into(), "gnome-tweaks".into(), "gdm".into()],
-            DesktopProfile::Xfce => vec!["xfce4".into(), "xfce4-goodies".into(), "lightdm".into(), "lightdm-gtk-greeter".into()],
-            DesktopProfile::Cinnamon => vec!["cinnamon".into(), "lightdm".into(), "lightdm-gtk-greeter".into()],
+            DesktopProfile::Xfce => vec![
+                "xfce4".into(),
+                "xfce4-goodies".into(),
+                "lightdm".into(),
+                "lightdm-gtk-greeter".into(),
+            ],
+            DesktopProfile::Cinnamon => vec![
+                "cinnamon".into(),
+                "lightdm".into(),
+                "lightdm-gtk-greeter".into(),
+            ],
             DesktopProfile::Lxqt => vec!["lxqt".into(), "sddm".into()],
-            DesktopProfile::Hyprland => vec!["hyprland".into(), "kitty".into(), "wofi".into(), "waybar".into(), "greetd".into(), "greetd-tuigreeter".into()],
-            DesktopProfile::Sway => vec!["sway".into(), "foot".into(), "wofi".into(), "waybar".into(), "greetd".into(), "greetd-tuigreeter".into()],
+            DesktopProfile::Hyprland => vec![
+                "hyprland".into(),
+                "kitty".into(),
+                "wofi".into(),
+                "waybar".into(),
+                "greetd".into(),
+                "greetd-tuigreeter".into(),
+            ],
+            DesktopProfile::Sway => vec![
+                "sway".into(),
+                "foot".into(),
+                "wofi".into(),
+                "waybar".into(),
+                "greetd".into(),
+                "greetd-tuigreeter".into(),
+            ],
             DesktopProfile::ConsoleOnly => vec![],
         }
     }
@@ -116,7 +148,10 @@ impl DesktopProfile {
 }
 
 /// Resolve `Auto` to an actual display server.
-pub fn resolve_display_server(profile: DesktopProfile, requested: DisplayServer) -> Result<DisplayServer> {
+pub fn resolve_display_server(
+    profile: DesktopProfile,
+    requested: DisplayServer,
+) -> Result<DisplayServer> {
     match requested {
         DisplayServer::Auto => {
             if profile.supports_wayland() {
@@ -161,7 +196,11 @@ pub fn validate_desktop_config(
         if !profile.display_managers().contains(&dm) {
             return Err(CamarelolError::new(
                 ErrorCode::InvalidConfig,
-                format!("{} is not a known display manager for {}", dm, profile.as_str()),
+                format!(
+                    "{} is not a known display manager for {}",
+                    dm,
+                    profile.as_str()
+                ),
             )
             .with_remediation(format!("use one of: {:?}", profile.display_managers())));
         }
@@ -197,13 +236,30 @@ mod tests {
 
     #[test]
     fn console_only_rejects_display_manager() {
-        assert!(validate_desktop_config(DesktopProfile::ConsoleOnly, DisplayServer::Auto, Some("sddm")).is_err());
-        assert!(validate_desktop_config(DesktopProfile::ConsoleOnly, DisplayServer::Auto, None).is_ok());
+        assert!(validate_desktop_config(
+            DesktopProfile::ConsoleOnly,
+            DisplayServer::Auto,
+            Some("sddm")
+        )
+        .is_err());
+        assert!(
+            validate_desktop_config(DesktopProfile::ConsoleOnly, DisplayServer::Auto, None).is_ok()
+        );
     }
 
     #[test]
     fn gnome_uses_gdm() {
-        assert!(validate_desktop_config(DesktopProfile::Gnome, DisplayServer::Wayland, Some("gdm")).is_ok());
-        assert!(validate_desktop_config(DesktopProfile::Gnome, DisplayServer::Wayland, Some("sddm")).is_err());
+        assert!(validate_desktop_config(
+            DesktopProfile::Gnome,
+            DisplayServer::Wayland,
+            Some("gdm")
+        )
+        .is_ok());
+        assert!(validate_desktop_config(
+            DesktopProfile::Gnome,
+            DisplayServer::Wayland,
+            Some("sddm")
+        )
+        .is_err());
     }
 }

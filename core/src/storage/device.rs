@@ -193,7 +193,8 @@ impl Partition {
             .as_deref()
             .map(|t| t.eq_ignore_ascii_case("c12a7328-f81f-11d2-ba4b-00a0c93ec93b"))
             .unwrap_or(false)
-            || self.part_label
+            || self
+                .part_label
                 .as_deref()
                 .map(|l| l.to_ascii_lowercase().contains("efi"))
                 .unwrap_or(false)
@@ -205,7 +206,8 @@ impl Partition {
             .map(|t| t.to_ascii_lowercase().contains("recovery"))
             .unwrap_or(false)
             || (self.filesystem == Some(Filesystem::Ntfs)
-                && self.part_label
+                && self
+                    .part_label
                     .as_deref()
                     .map(|l| l.to_ascii_lowercase().contains("recovery"))
                     .unwrap_or(false))
@@ -306,10 +308,21 @@ impl StorageDevice {
     }
 
     pub fn used_by_live_system(&self) -> bool {
-        matches!(&self.mount_state, MountState::Mounted { live_system: true, .. })
-            || self.partitions.iter().any(|p| {
-                matches!(&p.mount_state, MountState::Mounted { live_system: true, .. })
-            })
+        matches!(
+            &self.mount_state,
+            MountState::Mounted {
+                live_system: true,
+                ..
+            }
+        ) || self.partitions.iter().any(|p| {
+            matches!(
+                &p.mount_state,
+                MountState::Mounted {
+                    live_system: true,
+                    ..
+                }
+            )
+        })
     }
 
     pub fn efi_partitions(&self) -> Vec<&Partition> {
@@ -343,7 +356,11 @@ impl StorageDevice {
         } else {
             format!("{count} partition{}", if count == 1 { "" } else { "s" })
         };
-        let os = if self.has_windows() { " | Windows detected" } else { "" };
+        let os = if self.has_windows() {
+            " | Windows detected"
+        } else {
+            ""
+        };
         format!(
             "{} — {} | {} | {}{}",
             self.kind.as_str(),

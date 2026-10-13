@@ -10,7 +10,7 @@
 //! filesystem / device disappeared) run without touching real hardware.
 
 use super::device::*;
-use crate::error::{ CamarelolError, ErrorCode, Result};
+use crate::error::{CamarelolError, ErrorCode, Result};
 use crate::sys;
 use serde_json::Value;
 
@@ -29,11 +29,10 @@ pub fn scan_devices() -> Result<Vec<StorageDevice>> {
             .with_remediation("install util-linux: pacman -S util-linux")
     })?;
     if !out.success() {
-        return Err(CamarelolError::new(
-            ErrorCode::CommandFailed,
-            "lsblk failed",
-        )
-        .with_context(out.stderr.trim().to_string()));
+        return Err(
+            CamarelolError::new(ErrorCode::CommandFailed, "lsblk failed")
+                .with_context(out.stderr.trim().to_string()),
+        );
     }
     let mut devices = parse_lsblk_json(&out.stdout)?;
     enrich_mounts(&mut devices)?;
@@ -47,11 +46,13 @@ pub fn scan_devices() -> Result<Vec<StorageDevice>> {
 pub fn scan_devices_from_survey(json: &str) -> Result<Vec<StorageDevice>> {
     // Surveys are produced by serde on our own model, but hand-written surveys
     // (tests, bug reports) may use either scalar or list values.
-    let mut value: Value = serde_json::from_str(json)
-        .map_err(|e| CamarelolError::new(ErrorCode::ParseFailed, format!("bad survey JSON: {e}")))?;
+    let mut value: Value = serde_json::from_str(json).map_err(|e| {
+        CamarelolError::new(ErrorCode::ParseFailed, format!("bad survey JSON: {e}"))
+    })?;
     normalize_lists(&mut value);
-    let devices: Vec<StorageDevice> = serde_json::from_value(value)
-        .map_err(|e| CamarelolError::new(ErrorCode::ParseFailed, format!("bad survey JSON: {e}")))?;
+    let devices: Vec<StorageDevice> = serde_json::from_value(value).map_err(|e| {
+        CamarelolError::new(ErrorCode::ParseFailed, format!("bad survey JSON: {e}"))
+    })?;
     if devices.is_empty() {
         return Err(CamarelolError::new(
             ErrorCode::NoTargetDisk,
@@ -113,9 +114,11 @@ fn str_field(v: &Value, key: &str) -> Option<String> {
         Some(Value::String(s)) if !s.is_empty() => Some(s.clone()),
         // lsblk emits numeric fields as JSON numbers (e.g. `log-sec`).
         Some(Value::Number(n)) => Some(n.to_string()),
-        Some(Value::Array(arr)) => arr
-            .first()
-            .and_then(|x| x.as_str().map(|s| s.to_string()).or_else(|| x.as_u64().map(|n| n.to_string()))),
+        Some(Value::Array(arr)) => arr.first().and_then(|x| {
+            x.as_str()
+                .map(|s| s.to_string())
+                .or_else(|| x.as_u64().map(|n| n.to_string()))
+        }),
         _ => None,
     }
 }
@@ -126,25 +129,6 @@ fn u64_field(v: &Value, key: &str) -> u64 {
 
 fn bool_field(v: &Value, key: &str) -> bool {
     v.get(key).and_then(|x| x.as_bool()).unwrap_or(false)
-}
-
-fn mount_targets(v: &Value) -> Vec<String> {
-    // lsblk >= 2.37 exposes MOUNTPOINTS (array), older versions MOUNTPOINT.
-    if let Some(arr) = v.get("mountpoints").and_then(|m| m.as_array()) {
-        let out: Vec<String> = arr
-            .iter()
-            .filter_map(|x| x.as_str())
-            .map(|s| s.to_string())
-            .filter(|s| !s.is_empty())
-            .collect();
-        if !out.is_empty() {
-            return out;
-        }
-    }
-    if let Some(one) = str_field(v, "mountpoint") {
-        return vec![one];
-    }
-    Vec::new()
 }
 
 fn classify_partition(p: &mut Partition) {
@@ -172,7 +156,13 @@ fn classify_partition(p: &mut Partition) {
     }
 }
 
-fn device_kind(v: &Value, name: &str, rotational: bool, removable: bool, transport: Option<&str>) -> DeviceKind {
+fn device_kind(
+    _v: &Value,
+    name: &str,
+    rotational: bool,
+    removable: bool,
+    transport: Option<&str>,
+) -> DeviceKind {
     match transport {
         Some("usb") => return DeviceKind::Usb,
         Some("nvme") => return DeviceKind::NvmeSsd,
@@ -216,12 +206,18 @@ fn parse_partition(v: &Value) -> Partition {
 
 /// Parse `lsblk -J` output.
 pub fn parse_lsblk_json(raw: &str) -> Result<Vec<StorageDevice>> {
-    let root: Value = serde_json::from_str(raw)
-        .map_err(|e| CamarelolError::new(ErrorCode::ParseFailed, format!("cannot parse lsblk JSON: {e}")))?;
+    let root: Value = serde_json::from_str(raw).map_err(|e| {
+        CamarelolError::new(
+            ErrorCode::ParseFailed,
+            format!("cannot parse lsblk JSON: {e}"),
+        )
+    })?;
     let devices = root
         .get("blockdevices")
         .and_then(|b| b.as_array())
-        .ok_or_else(|| CamarelolError::new(ErrorCode::ParseFailed, "lsblk JSON has no blockdevices"))?;
+        .ok_or_else(|| {
+            CamarelolError::new(ErrorCode::ParseFailed, "lsblk JSON has no blockdevices")
+        })?;
 
     let mut out = Vec::new();
     for d in devices {
@@ -296,7 +292,8 @@ fn parse_disk(d: &Value) -> Result<StorageDevice> {
 /// Any mount *not* under `/mnt` is considered part of the live system, because
 /// camareLOL runs from the installation medium.
 pub fn enrich_mounts(devices: &mut [StorageDevice]) -> Result<()> {
-    let targets: Vec<(String, String)> = match sys::run("findmnt", &["-rn", "-o", "SOURCE,TARGET"]) {
+    let targets: Vec<(String, String)> = match sys::run("findmnt", &["-rn", "-o", "SOURCE,TARGET"])
+    {
         Ok(out) if out.success() => out
             .stdout
             .lines()
@@ -360,20 +357,28 @@ pub fn verify_against(
         Some(d) => d,
         None => {
             // Only accept the path when every device lacks an identity.
-            let any_identity = devices.iter().any(|d| d.identity_strength() > IdentityStrength::KernelNameOnly);
+            let any_identity = devices
+                .iter()
+                .any(|d| d.identity_strength() > IdentityStrength::KernelNameOnly);
             if any_identity {
                 return Err(CamarelolError::new(
                     ErrorCode::DeviceIdentityChanged,
                     format!("no device with identity `{expected_identity}` is present"),
                 )
-                .with_remediation("the disk order changed since the plan was created; redo the plan"));
+                .with_remediation(
+                    "the disk order changed since the plan was created; redo the plan",
+                ));
             }
-            devices.iter().find(|d| d.path == path_hint).cloned().ok_or_else(|| {
-                CamarelolError::new(
-                    ErrorCode::DeviceGone,
-                    format!("device {path_hint} is not present"),
-                )
-            })?
+            devices
+                .iter()
+                .find(|d| d.path == path_hint)
+                .cloned()
+                .ok_or_else(|| {
+                    CamarelolError::new(
+                        ErrorCode::DeviceGone,
+                        format!("device {path_hint} is not present"),
+                    )
+                })?
         }
     };
     if chosen.size_bytes != expected_size {
@@ -388,13 +393,16 @@ pub fn verify_against(
 /// Re-scan just one device and confirm it still matches the recorded identity.
 pub fn rescan_and_verify(expected: &StorageDevice) -> Result<StorageDevice> {
     let devices = scan_devices()?;
-    let found = devices.into_iter().find(|d| d.path == expected.path).ok_or_else(|| {
-        CamarelolError::new(
-            ErrorCode::DeviceGone,
-            format!("device {} is not present any more", expected.path),
-        )
-        .with_remediation("go back to the disk selection step and choose a disk again")
-    })?;
+    let found = devices
+        .into_iter()
+        .find(|d| d.path == expected.path)
+        .ok_or_else(|| {
+            CamarelolError::new(
+                ErrorCode::DeviceGone,
+                format!("device {} is not present any more", expected.path),
+            )
+            .with_remediation("go back to the disk selection step and choose a disk again")
+        })?;
 
     if found.identity() != expected.identity() {
         return Err(CamarelolError::new(

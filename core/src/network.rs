@@ -3,7 +3,7 @@
 //! The check distinguishes "no link" from "link but no internet" from
 //! "internet but the mirror is broken" so the UI can explain the difference.
 
-use crate::error::{CamarelolError, ErrorCode, Result};
+use crate::error::Result;
 use serde::{Deserialize, Serialize};
 use std::net::{TcpStream, ToSocketAddrs};
 use std::time::Duration;
@@ -33,7 +33,12 @@ pub fn list_interfaces() -> Vec<Interface> {
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty());
         let wireless = base.join("wireless").exists() || base.join("phy80211").exists();
-        out.push(Interface { name, carrier, mac, wireless });
+        out.push(Interface {
+            name,
+            carrier,
+            mac,
+            wireless,
+        });
     }
     out
 }
@@ -50,7 +55,9 @@ pub enum Connectivity {
 
 /// Try to reach `1.1.1.1:53` and `archlinux.org:443`.
 pub fn check_internet() -> Result<Connectivity> {
-    let any_link = list_interfaces().iter().any(|i| i.carrier && i.name != "lo");
+    let any_link = list_interfaces()
+        .iter()
+        .any(|i| i.carrier && i.name != "lo");
     if !any_link {
         return Ok(Connectivity::Down);
     }
@@ -106,7 +113,7 @@ mod tests {
 
     #[test]
     fn error_helper() {
-        let e = CamarelolError::new(ErrorCode::NetworkUnreachable, "x");
-        assert_eq!(e.code, ErrorCode::NetworkUnreachable);
+        let e = crate::error::CamarelolError::new(crate::error::ErrorCode::NetworkUnreachable, "x");
+        assert_eq!(e.code, crate::error::ErrorCode::NetworkUnreachable);
     }
 }

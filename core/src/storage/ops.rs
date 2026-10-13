@@ -39,23 +39,33 @@ pub struct OpRunner {
     pub records: Vec<RecordedCommand>,
 }
 
+/// What to run, before the safety gate has approved it.
+struct Cmd<'a> {
+    op: Operation,
+    risk: RiskLevel,
+    program: &'a str,
+    args: Vec<String>,
+    stdin: Option<String>,
+}
+
 impl OpRunner {
     pub fn new() -> Self {
         Self::default()
     }
 
-    fn go(
-        &mut self,
-        gate: &SafetyGate,
-        op: Operation,
-        risk: RiskLevel,
-        program: &str,
-        args: Vec<String>,
-        stdin: Option<String>,
-        log: &Logger,
-    ) -> Result<()> {
+    fn go(&mut self, gate: &SafetyGate, log: &Logger, cmd: Cmd<'_>) -> Result<()> {
+        let Cmd {
+            op,
+            risk,
+            program,
+            args,
+            stdin,
+        } = cmd;
         gate.authorize(op, risk)?;
-        log.log("storage", &format!("{} {} (dry_run={})", program, args.join(" "), gate.dry_run));
+        log.log(
+            "storage",
+            &format!("{} {} (dry_run={})", program, args.join(" "), gate.dry_run),
+        );
         if gate.dry_run {
             self.records.push(RecordedCommand {
                 program: program.to_string(),
@@ -69,9 +79,12 @@ impl OpRunner {
         }
         let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
         let out = match &stdin {
-            Some(input) => {
-                sys::run_with_input(program, &arg_refs, input, std::time::Duration::from_secs(300))?
-            }
+            Some(input) => sys::run_with_input(
+                program,
+                &arg_refs,
+                input,
+                std::time::Duration::from_secs(300),
+            )?,
             None => sys::run(program, &arg_refs)?,
         };
         let status = out.status;
@@ -109,37 +122,65 @@ impl OpRunner {
         gate.authorize(Operation::WritePartitionTable, risk)?;
 
         let script = sfdisk_script(plan, device.size_bytes);
-        log.log("storage", &format!("writing partition plan to {}", device.path));
+        log.log(
+            "storage",
+            &format!("writing partition plan to {}", device.path),
+        );
 
         // 1. zap old signatures only when the plan says so (we always zap: the
         // plan is a full layout). This is the destructive step.
         self.go(
             gate,
-            Operation::WritePartitionTable,
-            risk,
-            "sgdisk",
-            vec!["--zap-all".into(), device.path.clone()],
-            None,
             log,
+            Cmd {
+                op: Operation::WritePartitionTable,
+                risk,
+                program: "sgdisk",
+                args: vec!["--zap-all".into(), device.path.clone()],
+                stdin: None,
+            },
         )?;
         // 2. write the new table + partitions. sfdisk asks the kernel to
         //    re-read the table (no --no-reread here on purpose).
         self.go(
             gate,
-            Operation::WritePartitionTable,
-            risk,
-            "sfdisk",
-            vec!["--force".into(), device.path.clone()],
-            Some(script),
             log,
+            Cmd {
+                op: Operation::WritePartitionTable,
+                risk,
+                program: "sfdisk",
+                args: vec!["--force".into(), device.path.clone()],
+                stdin: Some(script),
+            },
         )?;
         // 3. Belt and braces: ask the kernel and udev to notice the new table.
         //    These helpers legitimately fail on a freshly wiped disk (there is
         //    nothing to probe yet), so they are best effort — the real gate is
         //    the verification below.
-        self.try_go(gate, Operation::WritePartitionTable, risk, "partprobe", vec![device.path.clone()], log);
-        self.try_go(gate, Operation::WritePartitionTable, risk, "blockdev", vec!["--rereadpt".into(), device.path.clone()], log);
-        self.try_go(gate, Operation::WritePartitionTable, risk, "udevadm", vec!["settle".into()], log);
+        self.try_go(
+            gate,
+            Operation::WritePartitionTable,
+            risk,
+            "partprobe",
+            vec![device.path.clone()],
+            log,
+        );
+        self.try_go(
+            gate,
+            Operation::WritePartitionTable,
+            risk,
+            "blockdev",
+            vec!["--rereadpt".into(), device.path.clone()],
+            log,
+        );
+        self.try_go(
+            gate,
+            Operation::WritePartitionTable,
+            risk,
+            "udevadm",
+            vec!["settle".into()],
+            log,
+        );
         // 4. Fail early and clearly if the kernel still does not see the
         //    partitions — formatting a missing device would be a silent no-op.
         //    A dry run wrote nothing, so there is nothing to wait for.
@@ -164,7 +205,18 @@ impl OpRunner {
         log: &Logger,
     ) {
         let before = self.records.len();
-        if let Err(e) = self.go(gate, op, risk, program, args, None, log) {
+        let result = self.go(
+            gate,
+            log,
+            Cmd {
+                op,
+                risk,
+                program,
+                args,
+                stdin: None,
+            },
+        );
+        if let Err(e) = result {
             log.log("storage", &format!("{program} did not need to run: {e}"));
             // Drop the failed attempt: it is not a step of the plan.
             self.records.truncate(before);
@@ -194,7 +246,10 @@ impl OpRunner {
                 .filter(|p| !crate::sys::path_exists(p))
                 .collect::<Vec<String>>();
             if missing.is_empty() {
-                log.log("storage", "all planned partitions are visible to the kernel");
+                log.log(
+                    "storage",
+                    "all planned partitions are visible to the kernel",
+                );
                 return Ok(());
             }
             last_missing = missing;
@@ -232,16 +287,61 @@ impl OpRunner {
         let risk = RiskLevel::Medium;
         match fs {
             Filesystem::Vfat => {
-                self.mkfs("mkfs.fat", vec!["-F".into(), "32".into(), "-n".into(), spec.label.clone().unwrap_or_else(|| "ESP".into()), target.into()], gate, risk, log)?;
+                self.mkfs(
+                    "mkfs.fat",
+                    vec![
+                        "-F".into(),
+                        "32".into(),
+                        "-n".into(),
+                        spec.label.clone().unwrap_or_else(|| "ESP".into()),
+                        target.into(),
+                    ],
+                    gate,
+                    risk,
+                    log,
+                )?;
             }
             Filesystem::Ext4 => {
-                self.mkfs("mkfs.ext4", vec!["-F".into(), "-L".into(), spec.label.clone().unwrap_or_else(|| "camarelol".into()), target.into()], gate, risk, log)?;
+                self.mkfs(
+                    "mkfs.ext4",
+                    vec![
+                        "-F".into(),
+                        "-L".into(),
+                        spec.label.clone().unwrap_or_else(|| "camarelol".into()),
+                        target.into(),
+                    ],
+                    gate,
+                    risk,
+                    log,
+                )?;
             }
             Filesystem::Btrfs => {
-                self.mkfs("mkfs.btrfs", vec!["-f".into(), "-L".into(), spec.label.clone().unwrap_or_else(|| "camarelol".into()), target.into()], gate, risk, log)?;
+                self.mkfs(
+                    "mkfs.btrfs",
+                    vec![
+                        "-f".into(),
+                        "-L".into(),
+                        spec.label.clone().unwrap_or_else(|| "camarelol".into()),
+                        target.into(),
+                    ],
+                    gate,
+                    risk,
+                    log,
+                )?;
             }
             Filesystem::Xfs => {
-                self.mkfs("mkfs.xfs", vec!["-f".into(), "-L".into(), spec.label.clone().unwrap_or_else(|| "camarelol".into()), target.into()], gate, risk, log)?;
+                self.mkfs(
+                    "mkfs.xfs",
+                    vec![
+                        "-f".into(),
+                        "-L".into(),
+                        spec.label.clone().unwrap_or_else(|| "camarelol".into()),
+                        target.into(),
+                    ],
+                    gate,
+                    risk,
+                    log,
+                )?;
             }
             Filesystem::Swap => {
                 self.mkfs("mkswap", vec![target.into()], gate, risk, log)?;
@@ -264,7 +364,17 @@ impl OpRunner {
         risk: RiskLevel,
         log: &Logger,
     ) -> Result<()> {
-        self.go(gate, Operation::FormatPartition, risk, program, args, None, log)
+        self.go(
+            gate,
+            log,
+            Cmd {
+                op: Operation::FormatPartition,
+                risk,
+                program,
+                args,
+                stdin: None,
+            },
+        )
     }
 
     /// Mount a partition under the target root.
@@ -277,21 +387,25 @@ impl OpRunner {
     ) -> Result<()> {
         self.go(
             gate,
-            Operation::Mount,
-            RiskLevel::Low,
-            "mkdir",
-            vec!["-p".into(), target.into()],
-            None,
             log,
+            Cmd {
+                op: Operation::Mount,
+                risk: RiskLevel::Low,
+                program: "mkdir",
+                args: vec!["-p".into(), target.into()],
+                stdin: None,
+            },
         )?;
         self.go(
             gate,
-            Operation::Mount,
-            RiskLevel::Low,
-            "mount",
-            vec![source.into(), target.into()],
-            None,
             log,
+            Cmd {
+                op: Operation::Mount,
+                risk: RiskLevel::Low,
+                program: "mount",
+                args: vec![source.into(), target.into()],
+                stdin: None,
+            },
         )
     }
 
@@ -375,7 +489,7 @@ pub fn sfdisk_script(plan: &PartitionPlan, disk_size_bytes: u64) -> String {
 fn size_in_sectors(spec: &PartitionSpec) -> u64 {
     let bytes = match &spec.size {
         SizeSpec::Bytes(b) => *b,
-        SizeSpec::PercentOfDisk(p) => 0, // only used with an explicit size in v1
+        SizeSpec::PercentOfDisk(_p) => 0, // only used with an explicit size in v1
         SizeSpec::RemainingSpace => 0,
     };
     let sectors = bytes / 512;
@@ -484,10 +598,9 @@ mod tests {
         let plan = test_plan();
         let disk_bytes = 3 * 1024 * 1024 * 1024u64;
         let script = sfdisk_script(&plan, disk_bytes);
-        let last = script
-            .lines()
-            .filter(|l| l.contains("start="))
-            .next_back()
+        let partitions: Vec<&str> = script.lines().filter(|l| l.contains("start=")).collect();
+        let last = partitions
+            .last()
             .expect("at least the root partition is written")
             .to_string();
         let field = |line: &str, key: &str| -> u64 {
