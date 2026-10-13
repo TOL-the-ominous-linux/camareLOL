@@ -27,6 +27,17 @@ impl Bootloader {
         matches!(self, Bootloader::Grub)
     }
 
+    /// Packages needed *inside the target system* to install this bootloader.
+    ///
+    /// They must exist before `arch-chroot /mnt grub-install` can run, so the
+    /// install orchestrator adds them to the pacstrap list.
+    pub fn target_packages(&self) -> &'static [&'static str] {
+        match self {
+            Bootloader::Grub => &["grub", "efibootmgr"],
+            Bootloader::SystemdBoot => &["systemd", "efibootmgr"],
+        }
+    }
+
     /// Packages needed in the target system.
     pub fn packages(&self) -> &'static [&'static str] {
         match self {

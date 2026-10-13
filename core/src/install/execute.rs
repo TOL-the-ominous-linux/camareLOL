@@ -463,6 +463,10 @@ pub fn run_install(
                         crate::desktop::DesktopProfile::ConsoleOnly,
                     )));
                     pkgs.extend(cfg.services.packages());
+                    // The bootloader has to exist inside the target before we
+                    // can install it into it.
+                    let bootloader = cfg.bootloader()?;
+                    pkgs.extend(bootloader.target_packages().iter().map(|p| p.to_string()));
                     runner.pacstrap(&pkgs)?;
                     Ok(format!("installed {} packages", pkgs.len()))
                 }
