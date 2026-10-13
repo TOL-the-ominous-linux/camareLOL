@@ -59,9 +59,11 @@ package() {
     install -Dm755 "target/release/camarelol" "$pkgdir/usr/bin/camarelol"
 
     install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
-    install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
-    install -Dm644 docs/ARCHITECTURE.md "$pkgdir/usr/share/doc/$pkgname/ARCHITECTURE.md"
-    install -Dm644 docs/IPC-PROTOCOL.md "$pkgdir/usr/share/doc/$pkgname/IPC-PROTOCOL.md"
-    install -Dm644 docs/ROADMAP.md "$pkgdir/usr/share/doc/$pkgname/ROADMAP.md"
-    install -Dm644 docs/TESTING.md "$pkgdir/usr/share/doc/$pkgname/TESTING.md"
+    # Ship whatever documentation the tarball happens to carry; a missing
+    # doc file must not break the package.
+    local doc
+    for doc in README.md docs/*.md; do
+        [ -f "$doc" ] || continue
+        install -Dm644 "$doc" "$pkgdir/usr/share/doc/$pkgname/$(basename "$doc")"
+    done
 }

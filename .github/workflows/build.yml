@@ -119,9 +119,8 @@ jobs:
           set -euo pipefail
           version="${GITHUB_REF_NAME#v}"
           [ "$version" = "main" ] && version="$(grep -m1 '^pkgver=' PKGBUILD | cut -d= -f2)"
-          sudo pacman -Syu --noconfirm
-          sudo pacman -S --noconfirm docker
-          sudo systemctl start docker
+          # Docker ships with the GitHub runners; make sure the daemon is up.
+          docker version >/dev/null 2>&1 || sudo systemctl start docker
           sudo chown -R "$(id -u):$(id -g)" "${RUNNER_TEMP}"
           docker run --rm \
             -v "${RUNNER_TEMP}:/build" \
@@ -129,7 +128,8 @@ jobs:
             archlinux:base-devel \
             bash -c '
               set -euo pipefail
-              pacman -Syu --noconfirm --needed rust cargo git
+              pacman -Syu --noconfirm --needed --disable-download-timeout
+              pacman -S --noconfirm --needed rust cargo git
               # Run as a normal user, the way makepkg is meant to be used.
               useradd -m builder
               chown -R builder /build
