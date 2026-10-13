@@ -17,7 +17,7 @@ jobs:
     name: Rust (core + TUI)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install toolchain
         run: |
@@ -56,7 +56,7 @@ jobs:
     name: Python tools
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -70,7 +70,7 @@ jobs:
     name: Java catalog
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -83,7 +83,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [rust, python, java]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Shell scripts parse
         run: |
@@ -121,9 +121,15 @@ jobs:
           [ "$version" = "main" ] && version="$(grep -m1 '^pkgver=' PKGBUILD | cut -d= -f2)"
           # Docker ships with the GitHub runners; make sure the daemon is up.
           docker version >/dev/null 2>&1 || sudo systemctl start docker
-          sudo chown -R "$(id -u):$(id -g)" "${RUNNER_TEMP}"
+          # Use a dedicated directory. Chowning RUNNER_TEMP itself breaks the
+          # runner's own post-job cleanup.
+          pkgdir="${RUNNER_TEMP}/pkgbuild"
+          rm -rf "$pkgdir"
+          mkdir -p "$pkgdir"
+          cp "${RUNNER_TEMP}/camarelol-${version}.tar.gz" "$pkgdir/"
+          tar -xzf "$pkgdir/camarelol-${version}.tar.gz" -C "$pkgdir"
           docker run --rm \
-            -v "${RUNNER_TEMP}:/build" \
+            -v "${pkgdir}:/build" \
             -w "/build" \
             archlinux:base-devel \
             bash -c '
@@ -148,6 +154,9 @@ jobs:
               echo "--- contents ---"
               bsdtar -tf "$srcdir"/camarelol-*.pkg.tar.zst | sort
             '
+          # The container wrote as root; hand the artifacts back to the runner
+          # so the job can clean up after itself.
+          sudo chown -R "$(id -u):$(id -g)" "$pkgdir"
 
   release:
     name: Release (tag only)
@@ -157,7 +166,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: actions/setup-java@v4
         with:
