@@ -63,7 +63,8 @@ impl ServiceSelection {
             v.push("sshd".into());
         }
         if self.zram {
-            v.push("zram-config".into());
+            // zram-generator ships this unit; there is no `zram-config` service.
+            v.push("systemd-zram-generator@zram0.service".into());
         }
         v
     }

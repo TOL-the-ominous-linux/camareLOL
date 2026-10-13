@@ -28,6 +28,12 @@ pub trait SystemRunner {
     /// Is the target system really mounted? The post-check is only meaningful
     /// when it is (unit tests with the simulated runner answer `false`).
     fn target_mounted(&self) -> bool;
+
+    /// Non-fatal problems the user should know about (e.g. a service unit that
+    /// does not exist on the target).
+    fn warnings(&self) -> Vec<String> {
+        Vec::new()
+    }
 }
 
 /// Where the target system is mounted.
@@ -38,11 +44,18 @@ pub struct RealSystemRunner {
     ops: OpRunner,
     gate: SafetyGate,
     log_tag: String,
+    /// Non-fatal problems worth telling the user about.
+    pub warnings: Vec<String>,
 }
 
 impl RealSystemRunner {
     pub fn new(gate: SafetyGate) -> Self {
-        RealSystemRunner { ops: OpRunner::new(), gate, log_tag: "install".into() }
+        RealSystemRunner {
+            ops: OpRunner::new(),
+            gate,
+            log_tag: "install".into(),
+            warnings: Vec::new(),
+        }
     }
 
     pub fn records(&self) -> &[crate::storage::ops::RecordedCommand] {
@@ -199,22 +212,44 @@ impl SystemRunner for RealSystemRunner {
         if services.is_empty() {
             return Ok(());
         }
-        let mut args = vec![TARGET_ROOT.to_string(), "systemctl".to_string(), "enable".to_string()];
-        args.extend(services.iter().cloned());
-        let refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
-        let out = crate::sys::run("arch-chroot", &refs)?;
-        if !out.success() {
+        // Enable each service separately: a unit that does not exist on this
+        // system (optional package, different distribution) must not abort the
+        // whole install. The user is told which ones were skipped.
+        let mut enabled = Vec::new();
+        let mut skipped = Vec::new();
+        for service in services {
+            let refs = [TARGET_ROOT, "systemctl", "enable", service.as_str()];
+            let out = crate::sys::run("arch-chroot", &refs)?;
+            if out.success() {
+                enabled.push(service.clone());
+            } else {
+                let reason = out.stderr.trim().lines().last().unwrap_or("not available");
+                skipped.push(format!("{service} ({reason})"));
+            }
+        }
+        if enabled.is_empty() {
             return Err(CamarelolError::new(
                 ErrorCode::CommandFailed,
-                "enabling services failed",
+                "no service could be enabled in the target system",
             )
-            .with_context(out.stderr.trim().to_string()));
+            .with_context(skipped.join("; "))
+            .with_remediation("check that the matching packages are installed in the profile"));
+        }
+        if !skipped.is_empty() {
+            self.warnings.push(format!(
+                "not enabled (unit missing or disabled): {}",
+                skipped.join(", ")
+            ));
         }
         Ok(())
     }
 
     fn target_mounted(&self) -> bool {
         std::path::Path::new(TARGET_ROOT).join("etc").is_dir()
+    }
+
+    fn warnings(&self) -> Vec<String> {
+        self.warnings.clone()
     }
 
     fn mkinitcpio(&mut self) -> Result<()> {
@@ -513,6 +548,12 @@ pub fn run_install(
                 other => Ok(format!("phase {other} skipped")),
             }
         }, aborted);
+    }
+
+    for w in runner.warnings() {
+        if !warnings.contains(&w) {
+            warnings.push(w);
+        }
     }
 
     if outcome == Outcome::Completed && !warnings.is_empty() {
