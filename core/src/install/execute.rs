@@ -714,7 +714,12 @@ mod tests {
 
     #[test]
     fn simulated_full_run_reports_completed() {
-        let cfg = InstallationConfig::default();
+        // Pin the firmware: these tests must pass on a BIOS host (container)
+        // and on a UEFI host alike.
+        let cfg = InstallationConfig {
+            firmware: "uefi".into(),
+            ..Default::default()
+        };
         let mut runner = SimulatedRunner::new();
         let mut sink = NullSink;
         let log = Logger::default();
@@ -731,7 +736,10 @@ mod tests {
 
     #[test]
     fn a_failed_phase_stops_the_run() {
-        let cfg = InstallationConfig::default();
+        let cfg = InstallationConfig {
+            firmware: "uefi".into(),
+            ..Default::default()
+        };
         let mut runner = SimulatedRunner::new();
         runner.fail_on = Some("pacstrap".into());
         let mut sink = NullSink;
