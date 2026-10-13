@@ -132,7 +132,7 @@ jobs:
               pacman -S --noconfirm --needed rust cargo git
               # The tarball holds camarelol-<version>/; build inside it, the
               # way a user unpacks a release tarball and runs makepkg.
-              srcdir="$(echo /build/camarelol-*)"
+              srcdir="$(find /build -maxdepth 1 -type d -name "camarelol-*" | head -1)"
               echo "source dir: $srcdir"
               test -f "$srcdir/PKGBUILD"
               # Run as a normal user, the way makepkg is meant to be used.
