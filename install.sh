@@ -23,18 +23,38 @@ need_root() {
     [ "$(id -u)" -eq 0 ] || die "needs root: run with sudo"
 }
 
+# rustup installs cargo into ~/.cargo/bin, which is often not on PATH yet.
+ensure_cargo() {
+    if ! command -v cargo >/dev/null 2>&1; then
+        if [ -x "$HOME/.cargo/bin/cargo" ]; then
+            export PATH="$HOME/.cargo/bin:$PATH"
+        else
+            die "cargo not found; install Rust first:
+  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"
+        fi
+    fi
+}
+
 install_binary() {
     need_root
-    local os arch url tmp
-    os=$(uname -s | tr '[:upper:]' '[:lower:]')
+    local arch tmp
     case "$(uname -m)" in
         x86_64|amd64) arch="x86_64" ;;
         *) die "no prebuilt binary for $(uname -m); build from source instead" ;;
     esac
-    url="$REPO/releases/latest/download/camarelol-linux-$arch"
+    # Newer releases publish a platform-specific asset, older ones a plain
+    # `camarelol`. Try both so this keeps working across versions.
     tmp=$(mktemp)
-    info "downloading $url"
-    curl -sSfL "$url" -o "$tmp" || die "download failed"
+    local url
+    for url in "$REPO/releases/latest/download/camarelol-linux-$arch" \
+               "$REPO/releases/latest/download/camarelol"; do
+        info "downloading $(basename "$url")"
+        if curl -sSfL --retry 2 "$url" -o "$tmp"; then
+            break
+        fi
+        tmp=$(mktemp)
+    done
+    [ -s "$tmp" ] || { rm -f "$tmp"; die "no release binary found at $REPO/releases"; }
     info "installing to $BIN"
     install -Dm755 "$tmp" "$BIN"
     rm -f "$tmp"
@@ -42,7 +62,7 @@ install_binary() {
 
 build_from_source() {
     need_root
-    command -v cargo >/dev/null || die "cargo not found; install Rust from https://rustup.rs"
+    ensure_cargo
     local here; here=$(cd "$(dirname "$0")" && pwd)
     info "building camareLOL from source (this takes a few minutes)"
     (cd "$here" && cargo build --release --locked --manifest-path tui/Cargo.toml)
@@ -57,12 +77,12 @@ do_uninstall() {
 }
 
 verify() {
-    command -v "$BIN" >/dev/null || die "$BIN is not on PATH"
+    [ -x "$BIN" ] || die "$BIN was not created"
     info "installed: $("$BIN" --version)"
     info
     info "Next steps:"
     info "  1. Run the non-destructive checks:  camarelol --self-test"
-    info "  2. Boot the Arch live ISO and run:  sudo camarelol"
+    info "  2. From the Arch live ISO:  sudo camarelol --allow-destructive"
     info
     info "camareLOL never writes to a disk before you confirm it, and"
     info "re-checks the disk identity immediately before every write."
