@@ -12,6 +12,15 @@ use ratatui::widgets::{Block, Borders, Clear, Gauge, List, ListItem, ListState, 
 use ratatui::Frame;
 
 const ACCENT: Color = Color::Cyan;
+
+/// Style used for the selected row of a list. Without it ratatui renders the
+/// selection identically to everything else, and the cursor is invisible.
+fn selected_row() -> Style {
+    Style::default()
+        .bg(ACCENT)
+        .fg(Color::Black)
+        .add_modifier(Modifier::BOLD)
+}
 const WARN: Color = Color::Yellow;
 const BAD: Color = Color::Red;
 const GOOD: Color = Color::Green;
@@ -292,9 +301,12 @@ fn draw_storage(f: &mut Frame, app: &mut App, area: Rect) {
         .collect();
     let mut state = ListState::default();
     state.select(Some(app.storage_index));
-    let list = List::new(items).block(screen_block(
-        "Storage devices (↑↓ to choose, Enter to continue)",
-    ));
+    let list = List::new(items)
+        .block(screen_block(
+            "Storage devices (↑↓ to choose, Enter to continue)",
+        ))
+        .highlight_style(selected_row())
+        .highlight_symbol("▸ ");
     f.render_stateful_widget(list, area, &mut state);
 }
 
@@ -315,9 +327,13 @@ fn draw_disk_mode(f: &mut Frame, app: &mut App, area: Rect) {
     }
     let mut state = ListState::default();
     state.select(Some(app.disk_mode_index));
-    let list = List::new(items).block(screen_block(
-        app.tr("Chọn chế độ sử dụng ổ đĩa", "Choose how this disk is used"),
-    ));
+    let list = List::new(items)
+        .block(screen_block(app.tr(
+            "Chọn chế độ sử dụng ổ đĩa",
+            "Choose how this disk is used",
+        )))
+        .highlight_style(selected_row())
+        .highlight_symbol("▸ ");
     f.render_stateful_widget(list, area, &mut state);
 }
 

@@ -252,12 +252,16 @@ impl App {
     }
 
     fn move_cursor(&mut self, delta: i32) {
+        // The storage screen has its own cursor. It used to fall through to the
+        // default arm and silently move the *language* selection instead, so the
+        // arrow keys appeared to do nothing there.
         let count = match self.screen {
             Screen::Language => 2,
             Screen::Keyboard => camarelol_core::locale::KEYMAPS.len(),
             Screen::Timezone => camarelol_core::locale::TIMEZONES.len(),
             Screen::Filesystem => 3,
             Screen::Bootloader => 2,
+            Screen::Storage => self.devices().len().max(1),
             _ => 1,
         };
         let current = match self.screen {
@@ -266,6 +270,7 @@ impl App {
             Screen::Timezone => &mut self.timezone_index,
             Screen::Filesystem => &mut self.fs_index,
             Screen::Bootloader => &mut self.bootloader_index,
+            Screen::Storage => &mut self.storage_index,
             _ => &mut self.language_index,
         };
         let mut idx = *current as i32 + delta;
@@ -637,6 +642,86 @@ mod tests {
         app.handle_key(KeyEvent::from(KeyCode::F(1)));
         app.handle_key(KeyEvent::from(KeyCode::Esc));
         assert_eq!(app.screen, Screen::Timezone);
+    }
+
+    /// Three devices so the storage list has something to move between.
+    fn storage_fixture() -> App {
+        let survey = serde_json::json!([
+            {
+                "kernel_name": "sda", "path": "/dev/sda", "size_bytes": 21474836480i64,
+                "rotational": false, "removable": false, "kind": "SataSsd",
+                "partition_table": "None", "partitions": [], "mount_state": "NotMounted",
+                "os_hints": [], "encrypted": null, "risk": "Low"
+            },
+            {
+                "kernel_name": "sdb", "path": "/dev/sdb", "size_bytes": 21474836480i64,
+                "rotational": false, "removable": false, "kind": "SataSsd",
+                "partition_table": "None", "partitions": [], "mount_state": "NotMounted",
+                "os_hints": [], "encrypted": null, "risk": "Low"
+            }
+        ]);
+        let dir = std::env::temp_dir().join("camarelol-tui-tests");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("survey.json");
+        std::fs::write(&path, survey.to_string()).unwrap();
+
+        let mut app = App::new(Some(path));
+        app.armed = true;
+        app
+    }
+
+    #[test]
+    fn arrow_keys_move_the_disk_cursor_on_the_storage_screen() {
+        // Regression: the storage screen fell through to a default arm that
+        // moved the *language* selection, so the arrows did nothing.
+        let mut app = storage_fixture();
+        assert_eq!(app.devices().len(), 2);
+        app.screen = Screen::Storage;
+        assert_eq!(app.storage_index, 0);
+
+        app.handle_key(KeyEvent::from(KeyCode::Down));
+        assert_eq!(app.storage_index, 1, "Down must select the second disk");
+
+        app.handle_key(KeyEvent::from(KeyCode::Up));
+        assert_eq!(app.storage_index, 0, "Up must go back to the first disk");
+    }
+
+    #[test]
+    fn the_disk_cursor_stays_inside_the_list() {
+        let mut app = storage_fixture();
+        app.screen = Screen::Storage;
+
+        app.handle_key(KeyEvent::from(KeyCode::Up));
+        assert_eq!(app.storage_index, 0, "must not wrap below the first disk");
+
+        app.handle_key(KeyEvent::from(KeyCode::Down));
+        app.handle_key(KeyEvent::from(KeyCode::Down));
+        app.handle_key(KeyEvent::from(KeyCode::Down));
+        assert_eq!(app.storage_index, 1, "must not run past the last disk");
+    }
+
+    #[test]
+    fn enter_picks_the_disk_under_the_cursor() {
+        let mut app = storage_fixture();
+        app.screen = Screen::Storage;
+        app.handle_key(KeyEvent::from(KeyCode::Down));
+        app.handle_key(KeyEvent::from(KeyCode::Enter));
+        assert_eq!(app.selected_disk.as_deref(), Some("/dev/sdb"));
+        assert_eq!(app.screen, Screen::DiskMode);
+    }
+
+    #[test]
+    fn arrow_keys_do_not_disturb_other_screens() {
+        let mut app = storage_fixture();
+        app.screen = Screen::Timezone;
+        app.language_index = 1;
+        let before = app.timezone_index;
+        app.handle_key(KeyEvent::from(KeyCode::Down));
+        assert_eq!(app.timezone_index, before + 1);
+        assert_eq!(
+            app.language_index, 1,
+            "moving the timezone must not touch the language"
+        );
     }
 
     #[test]
