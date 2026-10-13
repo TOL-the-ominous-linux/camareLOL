@@ -79,21 +79,66 @@ jobs:
         run: java/build.sh
 
   package:
-    name: Package check
+    name: PKGBUILD
     runs-on: ubuntu-latest
     needs: [rust, python, java]
     steps:
       - uses: actions/checkout@v4
-      - name: Check the PKGBUILD
+
+      - name: Shell scripts parse
         run: |
-          sudo pacman -Syu --noconfirm base-devel rust cargo git
-          cd "${RUNNER_TEMP}/pkgbuild"
-          cp "$GITHUB_WORKSPACE/PKGBUILD" .
-          # makepkg -o runs package() only, which needs a real build first.
-          sed -i 's/^source=.*/source=()/; s/^sha256sums=.*/sha256sums=()/' PKGBUILD
-          source "$GITHUB_WORKSPACE/build.sh" 2>/dev/null || true
-      - name: Verify the packaging scripts are syntactically valid
-        run: bash -n build.sh && bash -n scripts/vm-test.sh && bash -n scripts/make-data-iso.sh
+          for f in build.sh install.sh scripts/vm-test.sh scripts/make-data-iso.sh java/build.sh; do
+            bash -n "$f" || { echo "syntax error in $f"; exit 1; }
+          done
+          echo "all shell scripts parse"
+
+      - name: PKGBUILD parses and sources cleanly
+        run: |
+          bash -n PKGBUILD || { echo "PKGBUILD has a syntax error"; exit 1; }
+          # Sourcing it must define the functions without running them.
+          ( set -euo pipefail; source PKGBUILD; declare -F build >/dev/null; declare -F package >/dev/null )
+          echo "PKGBUILD defines build() and package()"
+
+      - name: Build the source tarball the PKGBUILD expects
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          [ "$version" = "main" ] && version="$(grep -m1 '^pkgver=' PKGBUILD | cut -d= -f2)"
+          name="camarelol-${version}"
+          staging="${RUNNER_TEMP}/${name}"
+          mkdir -p "$staging"
+          for item in Cargo.toml Cargo.lock rust-toolchain.toml PKGBUILD LICENSE README.md \
+                      core tui python java docs scripts .gitignore; do
+            cp -r "$GITHUB_WORKSPACE/$item" "$staging/" 2>/dev/null || true
+          done
+          rm -rf "$staging"/target "$staging"/*/target "$staging"/java/out
+          tar -czf "${RUNNER_TEMP}/${name}.tar.gz" -C "${RUNNER_TEMP}" "$name"
+
+      - name: makepkg the package in an Arch container
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          [ "$version" = "main" ] && version="$(grep -m1 '^pkgver=' PKGBUILD | cut -d= -f2)"
+          sudo pacman -Syu --noconfirm
+          sudo pacman -S --noconfirm docker
+          sudo systemctl start docker
+          sudo chown -R "$(id -u):$(id -g)" "${RUNNER_TEMP}"
+          docker run --rm \
+            -v "${RUNNER_TEMP}:/build" \
+            -w "/build" \
+            archlinux:base-devel \
+            bash -c '
+              set -euo pipefail
+              pacman -Syu --noconfirm --needed rust cargo git
+              # Run as a normal user, the way makepkg is meant to be used.
+              useradd -m builder
+              chown -R builder /build
+              su builder -c "cd /build && makepkg -s --noconfirm --skippgpcheck"
+              echo "--- built package ---"
+              ls -la /build/*.pkg.tar.zst
+              echo "--- contents ---"
+              bsdtar -tf /build/camarelol-*.pkg.tar.zst | sort
+            '
 
   release:
     name: Release (tag only)
