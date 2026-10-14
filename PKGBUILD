@@ -51,6 +51,9 @@ build() {
 
 check() {
     cd "$(_pkgdir)"
+    # CI runs the test suite in a dedicated job, so it sets this to avoid
+    # running the same 92 tests twice. Packagers still get them here.
+    [ -n "${CARAMELOL_SKIP_TESTS:-}" ] && { echo "skipping tests (CARAMELOL_SKIP_TESTS set)"; return 0; }
     cargo test --release --locked -p camarelol-core
 }
 

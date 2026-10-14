@@ -148,7 +148,7 @@ jobs:
               # Run as a normal user, the way makepkg is meant to be used.
               useradd -m builder
               chown -R builder /build
-              su builder -c "cd $srcdir && makepkg -s --noconfirm --skippgpcheck"
+              su builder -c "cd $srcdir && CARAMELOL_SKIP_TESTS=1 makepkg -s --noconfirm --skippgpcheck"
               echo "--- built package ---"
               ls -la "$srcdir"/*.pkg.tar.zst
               echo "--- contents ---"
