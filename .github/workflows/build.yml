@@ -233,9 +233,13 @@ jobs:
           # The length, never the value: an empty or whitespace-only secret is
           # indistinguishable from a missing one at the -n test, and the release
           # that results looks perfectly normal until every updater refuses it.
-          echo "signing key length: ${#CAMARELOL_SIGNING_KEY}"
-          if [ -n "${CAMARELOL_SIGNING_KEY:-}" ]; then
-            printf '%s' "$CAMARELOL_SIGNING_KEY" > "$RUNNER_TEMP/signing.asc"
+          # Bind first, then measure. Under `set -u` a bare ${#VAR} aborts the
+          # job with "unbound variable" before the check below can explain
+          # anything, and ${#VAR:-} is not valid shell at all.
+          signing_key="${CAMARELOL_SIGNING_KEY:-}"
+          echo "signing key length: ${#signing_key}"
+          if [ -n "$signing_key" ]; then
+            printf '%s' "$signing_key" > "$RUNNER_TEMP/signing.asc"
             chmod 600 "$RUNNER_TEMP/signing.asc"
             gpg --batch --quiet --import "$RUNNER_TEMP/signing.asc"
             # No second secret needed: with one key imported, that is the key.
