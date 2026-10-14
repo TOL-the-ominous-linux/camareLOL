@@ -51,34 +51,33 @@ jobs:
       - name: Publish to the lol-site branch
         run: |
           set -euo pipefail
-          # Orphans carry no history that matters here — the site is two
-          # files that are replaced wholesale — and this keeps the branch
-          # readable instead of thousands of commits deep.
+          version="$(python -c 'import json;print(json.load(open("site/latest.json"))["version"])')"
           git config user.name "camareLOL bot"
           git config user.email "bot@users.noreply.github.com"
 
           branch="lol-site"
-          remote="https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          worktree="$(mktemp -d)"
 
-          # Start the branch from the current tree if it does not exist yet.
-          if git ls-remote --exit-code --heads "$remote" "$branch" >/dev/null 2>&1; then
-            git fetch "$remote" "$branch"
-            worktree="$(mktemp -d)"
+          # Start from the existing mirror so its history stays readable, or
+          # from the current tree the first time.
+          if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
+            git fetch origin "$branch"
             git worktree add -f "$worktree" "refs/remotes/origin/$branch"
-            target="$worktree"
           else
-            target="$(mktemp -d)"
-            git worktree add -f "$target" -b "$branch" HEAD
+            git worktree add -f "$worktree" -b "$branch" HEAD
           fi
 
-          mkdir -p "$target"
-          # Remove whatever the previous run left: a stale extra file would
-          # still be served.
-          find "$target" -mindepth 1 -maxdepth 1 -not -name '.git' -exec rm -rf {} +
-          cp site/latest.json site/latest.json.sig "$target/"
+          # Remove whatever the previous run left: a file from an older release
+          # would still be served.
+          find "$worktree" -mindepth 1 -maxdepth 1 -not -name '.git' -exec rm -rf {} +
+          cp site/latest.json site/latest.json.sig "$worktree/"
+          cp .github/lol-site-README.md "$worktree/README.md"
 
-          cp .github/lol-site-README.md "$target/README.md"
-          ( cd "$target" && git add -A && git commit -m "mirror: v$version" )
-          ( cd "$target" && git push "$remote" "HEAD:$branch" )
+          # Push through `origin`, whose credentials actions/checkout already
+          # set up. Putting a token in a URL would leak it into the process
+          # list and into any log that echoes the command.
+          git -C "$worktree" add -A
+          git -C "$worktree" commit -m "mirror: v$version"
+          git -C "$worktree" push origin "HEAD:$branch"
 
           echo "published the lol-site branch; point your static host at it"
