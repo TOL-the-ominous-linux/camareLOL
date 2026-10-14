@@ -87,7 +87,7 @@ jobs:
 
       - name: Shell scripts parse
         run: |
-          for f in build.sh install.sh scripts/vm-test.sh scripts/make-data-iso.sh scripts/make-signing-key.sh java/build.sh; do
+          for f in build.sh install.sh scripts/vm-test.sh scripts/make-data-iso.sh scripts/make-signing-key.sh scripts/sign-release.sh java/build.sh; do
             bash -n "$f" || { echo "syntax error in $f"; exit 1; }
           done
           echo "all shell scripts parse"
@@ -265,12 +265,20 @@ jobs:
             # Failing beats warning. A warning here shipped v0.1.9 unsigned:
             # the release looked fine, and every camareLOL refused to install
             # it with no hint that the maintainer had simply not set the secret.
-            echo "::error::CAMARELOL_SIGNING_KEY is missing or empty, so this release"
-            echo "::error::would ship an unsigned update index that camareLOL refuses"
-            echo "::error::to install. Set the secret and re-run the release job."
-            echo "::error::To publish an unsigned release on purpose, replace this"
-            echo "::error::check with:  exit 0"
-            exit 1
+            # A file in the tree, not a repository variable: publishing an
+            # unsigned release should be visible in the diff, and deletable the
+            # moment it has served its purpose.
+            if [ -f .github/allow-unsigned-release ]; then
+              echo "::warning::.github/allow-unsigned-release is present"
+              echo "::warning::sign it afterwards with: scripts/sign-release.sh ${VERSION}"
+            else
+              echo "::error::CAMARELOL_SIGNING_KEY is missing or empty, so this release"
+              echo "::error::would ship an unsigned update index that camareLOL refuses"
+              echo "::error::to install. Either set the secret, or set the repository"
+              echo "::error::file .github/allow-unsigned-release, and sign afterwards with"
+              echo "::error::scripts/sign-release.sh ${VERSION}"
+              exit 1
+            fi
           fi
           cat latest.json
 
