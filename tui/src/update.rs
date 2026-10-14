@@ -287,6 +287,7 @@ impl App {
                         false,
                         false,
                         true,
+                        true,
                     ) {
                         Ok(Plan::UpToDate) => UpdateStatus::UpToDate,
                         Ok(Plan::Available(r)) => {

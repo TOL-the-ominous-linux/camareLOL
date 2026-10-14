@@ -35,6 +35,7 @@ import ssl
 import subprocess
 import sys
 import tempfile
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -145,6 +146,17 @@ def verify_signature(index: bytes, sig: bytes, pubkey_path: Path) -> None:
                 "refusing to mirror it"
             )
         log(f"signature verified against pinned key {fingerprint}")
+
+
+def default_expiry(valid_days: int = 7) -> int:
+    """When a mirrored index should stop being accepted.
+
+    Seven days is longer than the mirror refreshes, so a healthy mirror never
+    serves anything near expiry. It exists to stop a taken-over mirror from
+    replaying an old but validly signed index and hiding security fixes — the
+    one thing a mirror can do that it is not allowed to.
+    """
+    return int(time.time()) + valid_days * 86_400
 
 
 def check_shape(index: bytes) -> dict:

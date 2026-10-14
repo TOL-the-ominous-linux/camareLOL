@@ -220,6 +220,11 @@ jobs:
           # and the URL is configurable with --update-url.
           sha="$(sha256sum target/release/camarelol | cut -d' ' -f1)"
           size="$(stat -c%s target/release/camarelol)"
+          # The signature proves who signed, not how fresh it is. This stops a
+          # mirror that has been taken over from replaying a valid old index to
+          # keep clients on a release with known problems. The mirror refreshes
+          # every few hours, so this resets long before it matters.
+          expires="$(( $(date +%s) + 7*86400 ))"
           cat > latest.json <<EOF
           {
             "schema": 1,
@@ -227,11 +232,12 @@ jobs:
             "url": "https://github.com/tamkogay9876-code/camareLOL/releases/download/v${VERSION}/camarelol",
             "sha256": "${sha}",
             "size": ${size},
+            "expires": ${expires},
             "notes": "camareLOL ${VERSION}"
           }
           EOF
           # Fail the release rather than ship an index nothing can parse.
-          python3 -c 'import json,sys; d=json.load(open("latest.json")); assert d["schema"]==1 and len(d["sha256"])==64'
+          python3 -c 'import json,sys; d=json.load(open("latest.json")); assert d["schema"]==1 and len(d["sha256"])==64 and d["expires"] > 0'
 
           # Sign the index when a signing key is configured. Without one the
           # release still ships, but every camareLOL will refuse to install it

@@ -57,6 +57,8 @@ pub enum ErrorCode {
     UpdateRollbackFailed,
     /// The update index carries no usable signature.
     UpdateSignatureMissing,
+    /// The index is correctly signed but older than its stated lifetime.
+    UpdateExpired,
     /// A signature was present but did not verify against the pinned key.
     UpdateSignatureInvalid,
     /// Feature is explicitly not implemented yet; must never be faked.
@@ -92,6 +94,7 @@ impl fmt::Display for ErrorCode {
             ErrorCode::UpdateNotPrivileged => "update_not_privileged",
             ErrorCode::UpdateRollbackFailed => "update_rollback_failed",
             ErrorCode::UpdateSignatureMissing => "update_signature_missing",
+            ErrorCode::UpdateExpired => "update_expired",
             ErrorCode::UpdateSignatureInvalid => "update_signature_invalid",
             ErrorCode::NotSupported => "not_supported",
             ErrorCode::Internal => "internal",

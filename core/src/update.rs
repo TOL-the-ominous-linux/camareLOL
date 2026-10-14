@@ -46,6 +46,13 @@ pub struct Release {
     pub size: Option<u64>,
     #[serde(default)]
     pub notes: Option<String>,
+    /// Unix timestamp after which this index must no longer be accepted.
+    ///
+    /// A signature proves who signed the index, not how old it is. A mirror
+    /// that has been taken over can replay a perfectly valid *old* index and
+    /// stop clients picking up security fixes, so age is checked separately.
+    #[serde(default)]
+    pub expires: Option<i64>,
 }
 
 /// Parse and sanity-check the index document.
@@ -387,6 +394,7 @@ pub fn plan_from_index(
     install_running: bool,
     can_write_target: bool,
     allow_unsigned: bool,
+    allow_expired: bool,
 ) -> Result<Plan> {
     let plan = plan(&Request {
         current_version,
@@ -394,6 +402,8 @@ pub fn plan_from_index(
         opted_in,
         install_running,
         can_write_target,
+        now: unix_now(),
+        allow_expired,
     });
 
     let would_install = matches!(plan, Plan::Install(_));
@@ -409,6 +419,14 @@ pub fn plan_from_index(
         ));
     }
     Ok(plan)
+}
+
+/// Seconds since the Unix epoch.
+fn unix_now() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
 }
 
 /// Compare two `MAJOR.MINOR.PATCH` versions.
@@ -443,6 +461,8 @@ pub enum Block {
     NotPrivileged,
     /// The update would replace a binary that is not the one we are running.
     TargetMismatch,
+    /// The index is correctly signed but too old to act on.
+    Expired,
 }
 
 impl Block {
@@ -451,6 +471,7 @@ impl Block {
             Block::InstallRunning => "an installation is running",
             Block::NotPrivileged => "the current binary is not writable by this user",
             Block::TargetMismatch => "the update would not replace the running binary",
+            Block::Expired => "the index has expired; it is signed but too old to trust",
         }
     }
 }
@@ -478,6 +499,11 @@ pub struct Request<'a> {
     pub install_running: bool,
     /// We can write to the binary we are running.
     pub can_write_target: bool,
+    /// Seconds since the epoch, for the expiry check. Injected so the rule can
+    /// be tested without a clock.
+    pub now: i64,
+    /// The user accepted a stale index.
+    pub allow_expired: bool,
 }
 
 /// Decide what to do. Pure: no network, no filesystem.
@@ -486,6 +512,19 @@ pub fn plan(req: &Request<'_>) -> Plan {
         return Plan::UpToDate;
     }
     let release = req.release.clone();
+
+    // Expiry comes before everything else: an expired index is not a newer
+    // version, it is a stale one, and reporting it as an upgrade would be a
+    // lie the user acts on.
+    if let Some(at) = release.expires {
+        if !req.allow_expired && req.now > at {
+            return Plan::Blocked {
+                release,
+                reason: Block::Expired,
+            };
+        }
+    }
+
     if req.install_running {
         return Plan::Blocked {
             release,
@@ -794,6 +833,7 @@ mod tests {
             sha256: "a".repeat(64),
             size: Some(10),
             notes: None,
+            expires: None,
         }
     }
 
@@ -804,6 +844,8 @@ mod tests {
             opted_in,
             install_running: false,
             can_write_target: true,
+            now: 1_000_000,
+            allow_expired: false,
         }
     }
 
@@ -1064,7 +1106,7 @@ mod tests {
         let idx = index(Trust::Unverified {
             reason: "no key configured".into(),
         });
-        let err = plan_from_index(&idx, "0.1.7", true, false, true, false).unwrap_err();
+        let err = plan_from_index(&idx, "0.1.7", true, false, true, false, false).unwrap_err();
         assert_eq!(err.code, ErrorCode::UpdateSignatureMissing);
         assert!(
             err.remediation.unwrap().contains("--allow-unsigned-update"),
@@ -1078,7 +1120,7 @@ mod tests {
             reason: "no key configured".into(),
         });
         assert!(matches!(
-            plan_from_index(&idx, "0.1.7", true, false, true, true).unwrap(),
+            plan_from_index(&idx, "0.1.7", true, false, true, true, false).unwrap(),
             Plan::Install(_)
         ));
     }
@@ -1087,7 +1129,7 @@ mod tests {
     fn a_signed_index_installs_without_being_asked_twice() {
         let idx = index(Trust::Signed);
         assert!(matches!(
-            plan_from_index(&idx, "0.1.7", true, false, true, false).unwrap(),
+            plan_from_index(&idx, "0.1.7", true, false, true, false, false).unwrap(),
             Plan::Install(_)
         ));
     }
@@ -1100,9 +1142,102 @@ mod tests {
             reason: "no key configured".into(),
         });
         assert!(matches!(
-            plan_from_index(&idx, "0.1.7", false, false, true, false).unwrap(),
+            plan_from_index(&idx, "0.1.7", false, false, true, false, false).unwrap(),
             Plan::Available(_)
         ));
+    }
+
+    // ------------------------------------------------------------- expiry
+
+    fn expiring(rel: &Release, at: Option<i64>) -> Release {
+        Release {
+            expires: at,
+            ..rel.clone()
+        }
+    }
+
+    #[test]
+    fn an_expired_index_is_never_installed() {
+        // A mirror that has been taken over can replay a valid but old index.
+        // The signature still checks, so this rule is what stops it hiding
+        // security fixes.
+        let now = 1_000_000i64;
+        let stale = expiring(&release("9.9.9"), Some(now - 1));
+        let req = Request {
+            current_version: "0.1.7",
+            release: &stale,
+            opted_in: true,
+            install_running: false,
+            can_write_target: true,
+            now,
+            allow_expired: false,
+        };
+        assert_eq!(
+            plan(&req),
+            Plan::Blocked {
+                release: stale,
+                reason: Block::Expired
+            }
+        );
+    }
+
+    #[test]
+    fn an_index_inside_its_lifetime_still_installs() {
+        let now = 1_000_000i64;
+        let fresh = expiring(&release("9.9.9"), Some(now + 86_400));
+        let req = Request {
+            current_version: "0.1.7",
+            release: &fresh,
+            opted_in: true,
+            install_running: false,
+            can_write_target: true,
+            now,
+            allow_expired: false,
+        };
+        assert!(matches!(plan(&req), Plan::Install(_)));
+    }
+
+    #[test]
+    fn expiry_can_be_overridden_on_request() {
+        let now = 1_000_000i64;
+        let stale = expiring(&release("9.9.9"), Some(now - 1));
+        let req = Request {
+            current_version: "0.1.7",
+            release: &stale,
+            opted_in: true,
+            install_running: false,
+            can_write_target: true,
+            now,
+            allow_expired: true,
+        };
+        assert!(matches!(plan(&req), Plan::Install(_)));
+    }
+
+    #[test]
+    fn an_index_without_an_expiry_is_accepted() {
+        // Optional on purpose: an older index that predates the field is still
+        // honoured, rather than every existing mirror breaking at once.
+        assert!(matches!(
+            plan(&request(&release("9.9.9"), "0.1.7", true)),
+            Plan::Install(_)
+        ));
+    }
+
+    #[test]
+    fn an_expired_index_is_not_offered_as_an_upgrade() {
+        // Reporting it as available would be a lie the user acts on.
+        let now = 1_000_000i64;
+        let stale = expiring(&release("9.9.9"), Some(now - 1));
+        let req = Request {
+            current_version: "0.1.7",
+            release: &stale,
+            opted_in: false,
+            install_running: false,
+            can_write_target: true,
+            now,
+            allow_expired: false,
+        };
+        assert!(!matches!(plan(&req), Plan::Available(_)));
     }
 
     #[test]
@@ -1110,7 +1245,7 @@ mod tests {
         // Signature verification must not become a way past the safety rule.
         let idx = index(Trust::Signed);
         assert_eq!(
-            plan_from_index(&idx, "0.1.7", true, true, true, false).unwrap(),
+            plan_from_index(&idx, "0.1.7", true, true, true, false, false).unwrap(),
             Plan::Blocked {
                 release: idx.release.clone(),
                 reason: Block::InstallRunning
@@ -1171,6 +1306,7 @@ mod tests {
             sha256: sha256_hex(&payload),
             size: Some(payload.len() as u64),
             notes: None,
+            expires: None,
         };
 
         let dest = std::env::temp_dir().join(format!("camarelol-dl-{}.bin", std::process::id()));
@@ -1194,6 +1330,7 @@ mod tests {
             sha256: "0".repeat(64),
             size: None,
             notes: None,
+            expires: None,
         };
 
         let dest =

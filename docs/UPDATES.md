@@ -80,6 +80,25 @@ một bản cập nhật không ký thì không nên tự cài vào công cụ x
 
 Xem `keys/README.md` để thiết lập khoá.
 
+## Chống rollback
+
+Chữ ký chứng minh **ai** ký, không chứng minh **cũ bao lâu**. Một trạm trung gian
+bị chiếm có thể phục vụ lại một chỉ mục cũ *hợp lệ* để người dùng không nhận
+được bản vá bảo mật.
+
+Vì vậy chỉ mục mang thêm `expires` (mốc Unix), và binary từ chối chỉ mục quá hạn:
+
+```console
+$ camarelol --update
+error: [update_rollback_blocked] the index expired ...
+```
+
+CI đặt hạn 7 ngày; trạm trung gian làm mới mỗi vài giờ nên không bao giờ chạm
+ngưỡng. Tắt kiểm tra khi cần: `--allow-expired-index`.
+
+Chỉ mục cũ hơn không có trường này vẫn được chấp nhận, để các trạm đang chạy
+không hỏng ngay lập tức.
+
 ## Vì sao không tự cập nhật
 
 Không có cơ chế "khởi động thì tự lên bản mới" cho công cụ này, và có chủ ý:

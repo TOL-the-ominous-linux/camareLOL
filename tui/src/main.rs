@@ -35,6 +35,7 @@ struct Args {
     update_key: Option<PathBuf>,
     update_sig_url: Option<String>,
     allow_unsigned_update: bool,
+    allow_expired_index: bool,
 }
 
 fn parse_args() -> Result<Args, String> {
@@ -58,6 +59,7 @@ fn parse_args() -> Result<Args, String> {
             "--update-key" => a.update_key = args.next().map(PathBuf::from),
             "--update-sig-url" => a.update_sig_url = args.next(),
             "--allow-unsigned-update" => a.allow_unsigned_update = true,
+            "--allow-expired-index" => a.allow_expired_index = true,
             "-h" | "--help" => {
                 println!("{}", usage());
                 std::process::exit(0);
@@ -99,6 +101,7 @@ UPDATES:
                               (default: the index URL plus .sig)
     --allow-unsigned-update   Install even if the index carries no valid
                               signature from the pinned key
+    --allow-expired-index     Accept an index whose expiry has passed
 
     Updates never happen on their own. --check-update only reports, --update
     refuses while an installation is running, and it refuses an index that is
@@ -121,15 +124,16 @@ fn main() {
     };
 
     if args.check_update || args.update || args.rollback_update {
-        match cmd_update(
-            args.check_update,
-            args.update,
-            args.rollback_update,
-            args.update_url,
-            args.update_key,
-            args.update_sig_url,
-            args.allow_unsigned_update,
-        ) {
+        match cmd_update(UpdateOptions {
+            check_only: args.check_update,
+            install: args.update,
+            rollback: args.rollback_update,
+            url_override: args.update_url,
+            key_path: args.update_key,
+            signature_url: args.update_sig_url,
+            allow_unsigned: args.allow_unsigned_update,
+            allow_expired: args.allow_expired_index,
+        }) {
             Ok(code) => std::process::exit(code),
             Err(e) => {
                 eprintln!("error: {e}");
@@ -196,15 +200,32 @@ fn main() {
 ///
 /// The exit code is 0 on success, 10 when a newer release exists but nothing
 /// was done. Scripts can use that to nag without failing.
-fn cmd_update(
+/// What the update sub-commands were asked to do.
+///
+/// A struct rather than eight flags: at the seventh one it stopped being
+/// possible to tell `allow_unsigned` from `allow_expired` at a call site.
+struct UpdateOptions {
     check_only: bool,
     install: bool,
     rollback: bool,
     url_override: Option<String>,
     key_path: Option<PathBuf>,
-    args_sig: Option<String>,
+    signature_url: Option<String>,
     allow_unsigned: bool,
-) -> Result<i32, CamarelolError> {
+    allow_expired: bool,
+}
+
+fn cmd_update(opts: UpdateOptions) -> Result<i32, CamarelolError> {
+    let UpdateOptions {
+        check_only,
+        install,
+        rollback,
+        url_override,
+        key_path,
+        signature_url: args_sig,
+        allow_unsigned,
+        allow_expired,
+    } = opts;
     use camarelol_core::update::{self, Plan};
 
     // Asking for both means the user wants to know first; report, never install.
@@ -251,6 +272,7 @@ fn cmd_update(
         false,
         can_write,
         allow_unsigned,
+        allow_expired,
     )?;
 
     match &plan {
