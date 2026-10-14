@@ -328,11 +328,7 @@ fn load_public_key(path: Option<&std::path::Path>) -> Result<Option<String>, Cam
             .with_context(e.to_string())
         });
     }
-    let embedded = env!("CAMARELOL_UPDATE_PUBKEY").trim();
-    if embedded.is_empty() {
-        return Ok(None);
-    }
-    Ok(Some(embedded.to_string()))
+    Ok(crate::version::embedded_update_key())
 }
 
 fn is_writable(path: &std::path::Path) -> bool {

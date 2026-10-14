@@ -53,12 +53,15 @@ pub fn banner() -> String {
 /// one. `None` means "nothing is pinned", and the updater then refuses to
 /// install rather than trusting whatever key the index offers.
 pub fn embedded_update_key() -> Option<String> {
-    let key = env!("CAMARELOL_UPDATE_PUBKEY").trim();
-    if key.is_empty() {
-        None
-    } else {
-        Some(key.to_string())
+    // include_str!, not a build-script environment variable: cargo parses build
+    // script output line by line, so an armored key pasted into one would be
+    // truncated at its first line break and gpg could not read it back.
+    const KEY: &str = include_str!("../../keys/camarelol.pub");
+    let key = KEY.trim();
+    if key.is_empty() || !key.starts_with("-----BEGIN PGP PUBLIC KEY BLOCK-----") {
+        return None;
     }
+    Some(key.to_string())
 }
 
 #[cfg(test)]
@@ -82,17 +85,6 @@ mod tests {
     #[test]
     fn the_banner_matches_the_version_it_reports() {
         assert!(banner().contains(VERSION));
-    }
-
-    #[test]
-    fn an_absent_update_key_is_reported_as_absent() {
-        // Not an error: it is the state before a key has been set up, and the
-        // updater has a defined, safe behaviour for it.
-        let key = embedded_update_key();
-        assert_eq!(
-            key.is_none(),
-            env!("CAMARELOL_UPDATE_PUBKEY").trim().is_empty()
-        );
     }
 
     #[test]
