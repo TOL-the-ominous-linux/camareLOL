@@ -20,9 +20,11 @@ $ gpg --armor --export <KEYID> > keys/camarelol.pub
 Khoá riêng **không** được đưa vào kho mã nguồn. Lưu nó ở nơi an toàn và đưa
 vào GitHub Actions secret:
 
-- `CAMARELOL_SIGNING_KEY` — khoá riêng ở dạng ASCII-armored
-- `CAMARELOL_SIGNING_KEY_ID` — mã khoá để `--local-user` (tuỳ chọn,
-  mặc định `camarelol-release`)
+- `CAMARELOL_SIGNING_KEY` — khoá riêng ở dạng ASCII-armored, lấy bằng
+  `gpg --armor --export-secret-keys <KEYID>`
+
+`CAMARELOL_SIGNING_KEY_ID` là tuỳ chọn. Bỏ trống thì CI tự lấy khoá duy nhất vừa
+nhập, nên thường chỉ cần **một** secret. Chỉ đặt nó khi bạn nhập nhiều khoá.
 
 CI sẽ ký `latest.json` thành `latest.json.sig` và tự kiểm tra lại chữ ký trước
 khi phát hành.

@@ -231,10 +231,18 @@ jobs:
           # unless the user passes --allow-unsigned-update, which is the
           # honest outcome: an unsigned index proves nothing.
           if [ -n "${CAMARELOL_SIGNING_KEY:-}" ]; then
-            keyid="${CAMARELOL_SIGNING_KEY_ID:-camarelol-release}"
             printf '%s' "$CAMARELOL_SIGNING_KEY" > "$RUNNER_TEMP/signing.asc"
             chmod 600 "$RUNNER_TEMP/signing.asc"
             gpg --batch --quiet --import "$RUNNER_TEMP/signing.asc"
+            # No second secret needed: with one key imported, that is the key.
+            keyid="${CAMARELOL_SIGNING_KEY_ID:-}"
+            if [ -z "$keyid" ]; then
+              keyid="$(gpg --batch --with-colons --list-secret-keys | awk -F: '/^sec/{print $5; exit}')"
+            fi
+            if [ -z "$keyid" ]; then
+              echo "::error::the signing secret contains no private key"
+              exit 1
+            fi
             gpg --batch --yes --detach-sign --armor \
               --local-user "$keyid" -o latest.json.sig latest.json
             rm -f "$RUNNER_TEMP/signing.asc"
