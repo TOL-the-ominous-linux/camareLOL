@@ -101,6 +101,8 @@ pub enum Field {
     Username,
     UserPassword,
     UserPasswordConfirm,
+    /// Not a text field: the row that gives the new user sudo/admin rights.
+    Admin,
     CustomPackage,
 }
 

@@ -373,19 +373,31 @@ fn draw_accounts(f: &mut Frame, app: &mut App, area: Rect) {
         }
     };
     let pw = |s: &str| "*".repeat(s.chars().count());
+    // A `▸` on the focused row: without it there is no way to tell which field
+    // your keystrokes are going into, which reads as "typing does nothing".
+    let label = |name: &str, field: Field| {
+        let marker = if app.field == field { "▸" } else { " " };
+        format!("{marker} {name}")
+    };
     let lines = vec![
         Line::from(""),
         Line::from(vec![
-            Span::raw("  Hostname:        "),
+            Span::raw(format!("  {}", label("Hostname:      ", Field::Hostname))),
             Span::styled(app.hostname.clone(), field_style(Field::Hostname)),
         ]),
         Line::from(""),
         Line::from(vec![
-            Span::raw("  Root password:   "),
+            Span::raw(format!(
+                "  {}",
+                label("Root password: ", Field::RootPassword)
+            )),
             Span::styled(pw(&app.root_password), field_style(Field::RootPassword)),
         ]),
         Line::from(vec![
-            Span::raw("  Repeat:          "),
+            Span::raw(format!(
+                "  {}",
+                label("Repeat:        ", Field::RootPasswordConfirm)
+            )),
             Span::styled(
                 pw(&app.root_password_confirm),
                 field_style(Field::RootPasswordConfirm),
@@ -393,18 +405,39 @@ fn draw_accounts(f: &mut Frame, app: &mut App, area: Rect) {
         ]),
         Line::from(""),
         Line::from(vec![
-            Span::raw("  User name:       "),
+            Span::raw(format!("  {}", label("User name:     ", Field::Username))),
             Span::styled(app.username.clone(), field_style(Field::Username)),
         ]),
         Line::from(vec![
-            Span::raw("  User password:   "),
+            Span::raw(format!(
+                "  {}",
+                label("User password: ", Field::UserPassword)
+            )),
             Span::styled(pw(&app.user_password), field_style(Field::UserPassword)),
         ]),
         Line::from(vec![
-            Span::raw("  Repeat:          "),
+            Span::raw(format!(
+                "  {}",
+                label("Repeat:        ", Field::UserPasswordConfirm)
+            )),
             Span::styled(
                 pw(&app.user_password_confirm),
                 field_style(Field::UserPasswordConfirm),
+            ),
+        ]),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled(
+                label("User is admin: ", Field::Admin),
+                field_style(Field::Admin),
+            ),
+            Span::styled(
+                if app.user_is_admin {
+                    "yes (sudo)"
+                } else {
+                    "no"
+                },
+                field_style(Field::Admin),
             ),
         ]),
         Line::from(""),

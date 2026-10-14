@@ -68,6 +68,13 @@ impl App {
                 }
                 return;
             }
+            // Esc goes back one step everywhere it is advertised. Handled
+            // globally because several screens used to drop it, which made
+            // them one-way ratchets even though the footer offered a way back.
+            KeyCode::Esc if self.can_go_back() => {
+                self.go_back();
+                return;
+            }
             KeyCode::F(10) => {
                 self.rebuild_plan();
                 self.screen = Screen::Review;
@@ -163,7 +170,6 @@ impl App {
                     self.rebuild_plan();
                     self.go_next();
                 }
-                KeyCode::Esc => self.screen = Screen::Storage,
                 _ => {}
             },
             Screen::Layout => match key.code {
@@ -175,7 +181,6 @@ impl App {
                     self.rebuild_plan();
                     self.go_next();
                 }
-                KeyCode::Esc => self.screen = Screen::DiskMode,
                 _ => {}
             },
             Screen::Services => match key.code {
@@ -232,7 +237,6 @@ impl App {
             Screen::Accounts => self.handle_accounts_key(key),
             Screen::Review => match key.code {
                 KeyCode::Enter => self.try_start_install(),
-                KeyCode::Esc => self.screen = Screen::Packages,
                 KeyCode::Char('s') => self.save_config_now(),
                 _ => {}
             },
@@ -249,6 +253,38 @@ impl App {
     fn go_next(&mut self) {
         let next = self.screen.index() + 1;
         self.screen = Screen::at(next);
+        self.focus_default_field();
+    }
+
+    /// Put the cursor somewhere the next keystroke will land.
+    ///
+    /// Arriving at a form with no field focused meant the very first
+    /// keystrokes went nowhere: the screen looked frozen until you happened to
+    /// press Tab.
+    fn focus_default_field(&mut self) {
+        if self.screen == Screen::Accounts {
+            self.field = Field::Hostname;
+        }
+    }
+
+    /// Whether Esc should move to the previous step here.
+    ///
+    /// Not on the first screen (nowhere to go), not once the install is
+    /// running (going back would desync the progress log from reality).
+    fn can_go_back(&self) -> bool {
+        let i = self.screen.index();
+        i > 0 && i < Screen::Progress.index()
+    }
+
+    fn go_back(&mut self) {
+        if !self.can_go_back() {
+            return;
+        }
+        self.previous = Some(self.screen);
+        self.screen = Screen::at(self.screen.index() - 1);
+        // A text field must not keep the cursor it had on the screen we left.
+        self.field = Field::None;
+        self.focus_default_field();
     }
 
     fn move_cursor(&mut self, delta: i32) {
@@ -285,21 +321,37 @@ impl App {
 
     // ------------------------------------------------------------- accounts
 
+    /// The rows the account form cursor moves between, in display order.
+    fn account_fields() -> [Field; 7] {
+        [
+            Field::Hostname,
+            Field::RootPassword,
+            Field::RootPasswordConfirm,
+            Field::Username,
+            Field::UserPassword,
+            Field::UserPasswordConfirm,
+            Field::Admin,
+        ]
+    }
+
+    fn move_account_field(&mut self, delta: i32) {
+        let fields = Self::account_fields();
+        let pos = fields.iter().position(|f| *f == self.field).unwrap_or(0) as i32;
+        let next = (pos + delta).rem_euclid(fields.len() as i32) as usize;
+        self.field = fields[next];
+    }
+
     fn handle_accounts_key(&mut self, key: KeyEvent) {
         match key.code {
-            KeyCode::Tab => {
-                self.field = match self.field {
-                    Field::None => Field::Hostname,
-                    Field::Hostname => Field::RootPassword,
-                    Field::RootPassword => Field::RootPasswordConfirm,
-                    Field::RootPasswordConfirm => Field::Username,
-                    Field::Username => Field::UserPassword,
-                    Field::UserPassword => Field::UserPasswordConfirm,
-                    Field::UserPasswordConfirm => Field::None,
-                    _ => Field::None,
-                };
+            // Up/Down used to fall through to `_ => {}`: the footer promised
+            // they moved, and typing did nothing until Tab had been pressed.
+            KeyCode::Down | KeyCode::Tab => self.move_account_field(1),
+            KeyCode::Up | KeyCode::BackTab => self.move_account_field(-1),
+            KeyCode::Right if self.field == Field::Admin => {
+                self.user_is_admin = !self.user_is_admin
             }
-            KeyCode::Char(' ') if self.field == Field::None => {
+            KeyCode::Left if self.field == Field::Admin => self.user_is_admin = !self.user_is_admin,
+            KeyCode::Char(' ') if self.field == Field::Admin => {
                 self.user_is_admin = !self.user_is_admin;
             }
             KeyCode::Backspace => match self.field {
@@ -685,6 +737,161 @@ mod tests {
             path.display()
         );
         app
+    }
+
+    /// Put the wizard on the accounts screen the way the user reaches it.
+    fn accounts_fixture() -> App {
+        let mut app = storage_fixture();
+        app.screen = Screen::Filesystem;
+        app.go_next();
+        assert_eq!(app.screen, Screen::Accounts);
+        app
+    }
+
+    #[test]
+    fn typing_lands_in_the_first_field_without_pressing_tab_first() {
+        // Regression: the form arrived with no field focused, so every
+        // keystroke was dropped and the screen looked frozen.
+        let mut app = accounts_fixture();
+        assert_eq!(app.field, Field::Hostname);
+        let before = app.hostname.clone();
+        for c in "pc".chars() {
+            app.handle_key(KeyEvent::from(KeyCode::Char(c)));
+        }
+        assert_eq!(app.hostname, format!("{before}pc"));
+    }
+
+    #[test]
+    fn arriving_by_esc_also_focuses_the_first_field() {
+        // Walking back into the form used to leave the cursor nowhere, which is
+        // the same "typing does nothing" trap as arriving for the first time.
+        let mut app = accounts_fixture();
+        app.screen = Screen::Bootloader;
+        app.handle_key(KeyEvent::from(KeyCode::Esc));
+        assert_eq!(app.screen, Screen::Accounts);
+        assert_eq!(app.field, Field::Hostname);
+
+        app.hostname.clear();
+        app.handle_key(KeyEvent::from(KeyCode::Char('x')));
+        assert_eq!(app.hostname, "x");
+    }
+
+    #[test]
+    fn arrow_keys_move_between_account_fields() {
+        let mut app = accounts_fixture();
+        assert_eq!(app.field, Field::Hostname);
+
+        app.handle_key(KeyEvent::from(KeyCode::Down));
+        assert_eq!(app.field, Field::RootPassword);
+        app.handle_key(KeyEvent::from(KeyCode::Down));
+        assert_eq!(app.field, Field::RootPasswordConfirm);
+
+        app.handle_key(KeyEvent::from(KeyCode::Up));
+        assert_eq!(app.field, Field::RootPassword);
+    }
+
+    #[test]
+    fn tab_and_the_arrows_visit_the_same_fields() {
+        let by_tab = {
+            let mut app = accounts_fixture();
+            let mut seen = vec![app.field];
+            for _ in 0..6 {
+                app.handle_key(KeyEvent::from(KeyCode::Tab));
+                seen.push(app.field);
+            }
+            seen
+        };
+        let by_arrow = {
+            let mut app = accounts_fixture();
+            let mut seen = vec![app.field];
+            for _ in 0..6 {
+                app.handle_key(KeyEvent::from(KeyCode::Down));
+                seen.push(app.field);
+            }
+            seen
+        };
+        assert_eq!(by_tab, by_arrow);
+        assert_eq!(
+            by_tab.len(),
+            7,
+            "all six fields plus the admin row are reachable"
+        );
+    }
+
+    #[test]
+    fn the_admin_row_is_reachable_and_toggles() {
+        // It used to be a feature with no way to see it: nothing drew the
+        // state, and only a Space press in an unfocused screen changed it.
+        let mut app = accounts_fixture();
+        app.user_is_admin = true;
+
+        for _ in 0..6 {
+            app.handle_key(KeyEvent::from(KeyCode::Down));
+        }
+        assert_eq!(app.field, Field::Admin);
+
+        app.handle_key(KeyEvent::from(KeyCode::Char(' ')));
+        assert!(!app.user_is_admin, "Space must toggle the admin row");
+        app.handle_key(KeyEvent::from(KeyCode::Right));
+        assert!(app.user_is_admin, "Right must toggle it back");
+    }
+
+    #[test]
+    fn the_admin_flag_reaches_the_built_config() {
+        let mut app = accounts_fixture();
+        for _ in 0..6 {
+            app.handle_key(KeyEvent::from(KeyCode::Down));
+        }
+        app.handle_key(KeyEvent::from(KeyCode::Char(' ')));
+
+        // Admin sits below the password fields; the username is the third
+        // one up from it (Admin, UserPasswordConfirm, UserPassword, Username).
+        for _ in 0..3 {
+            app.handle_key(KeyEvent::from(KeyCode::Up));
+        }
+        assert_eq!(app.field, Field::Username);
+        for c in "alice".chars() {
+            app.handle_key(KeyEvent::from(KeyCode::Char(c)));
+        }
+
+        app.user_is_admin = false;
+        let without = app.build_config().unwrap();
+        assert!(
+            without.admin_users.is_empty(),
+            "a non-admin user must not be in admin_users"
+        );
+
+        app.user_is_admin = true;
+        assert_eq!(app.build_config().unwrap().admin_users, vec!["alice"]);
+    }
+
+    #[test]
+    fn esc_walks_back_one_step_on_every_wizard_screen() {
+        // The footer offers Esc everywhere, but six screens used to drop it,
+        // turning them into one-way ratchets.
+        for screen in Screen::ORDER {
+            if !matches!(screen, Screen::Welcome | Screen::Progress | Screen::Done) {
+                let mut app = storage_fixture();
+                app.screen = screen;
+                app.handle_key(KeyEvent::from(KeyCode::Esc));
+                assert_eq!(
+                    app.screen,
+                    Screen::at(screen.index() - 1),
+                    "Esc on {:?} must land on the previous step",
+                    screen
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn esc_does_nothing_where_there_is_nowhere_to_go() {
+        for screen in [Screen::Welcome, Screen::Progress, Screen::Done] {
+            let mut app = storage_fixture();
+            app.screen = screen;
+            app.handle_key(KeyEvent::from(KeyCode::Esc));
+            assert_eq!(app.screen, screen, "Esc on {:?} must be inert", screen);
+        }
     }
 
     #[test]
