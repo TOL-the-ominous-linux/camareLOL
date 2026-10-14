@@ -5,8 +5,15 @@
 //! indistinguishable. An installer that erases disks should be able to say
 //! exactly which commit it is before anyone trusts it with a disk.
 
-/// Version from `Cargo.toml` (the workspace version).
-pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+/// The version this build should be called.
+///
+/// The git tag wins when there is one: `Cargo.toml` fell behind the tag once,
+/// and a build that calls itself 0.1.5 while shipping as 0.1.6 is precisely
+/// the kind of ambiguity this module exists to remove.
+pub const VERSION: &str = match option_env!("CAMARELOL_RELEASE_VERSION") {
+    Some(v) => v,
+    None => env!("CARGO_PKG_VERSION"),
+};
 
 /// Short commit hash, or "unknown" when built outside a git checkout.
 pub fn git_sha() -> &'static str {
@@ -61,7 +68,17 @@ mod tests {
     }
 
     #[test]
-    fn the_banner_matches_the_crate_version() {
+    fn the_banner_matches_the_version_it_reports() {
         assert!(banner().contains(VERSION));
+    }
+
+    #[test]
+    fn the_version_looks_like_a_version() {
+        // Three dotted numbers, or something is wrong with how it was derived.
+        let parts: Vec<&str> = VERSION.split('.').collect();
+        assert_eq!(parts.len(), 3, "version was {VERSION:?}");
+        for p in parts {
+            assert!(p.parse::<u32>().is_ok(), "version was {VERSION:?}");
+        }
     }
 }

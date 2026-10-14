@@ -39,6 +39,20 @@ fn emit(key: &str, value: &str) {
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
 
+    // The tag is the version of record. Cargo.toml drifted from it once (a
+    // release tagged 0.1.6 still printed 0.1.5), and a stale version is worse
+    // than none: it is exactly what made two different builds look identical.
+    let tag_version = git(&["describe", "--tags", "--abbrev=0"])
+        .and_then(|t| t.strip_prefix('v').map(str::to_string))
+        .filter(|v| {
+            !v.is_empty()
+                && v.split('.').count() == 3
+                && v.split('.').all(|p| p.parse::<u32>().is_ok())
+        });
+    if let Some(v) = &tag_version {
+        println!("cargo:rustc-env=CAMARELOL_RELEASE_VERSION={v}");
+    }
+
     emit(
         "CAMARELOL_GIT_SHA",
         &git(&["rev-parse", "--short", "HEAD"]).unwrap_or_else(|| "unknown".into()),

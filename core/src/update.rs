@@ -312,6 +312,12 @@ mod sys {
             allowed_proto,
             "--proto-redir",
             "=https",
+            // Release assets live behind a redirect to a CDN. Without this
+            // curl saves the empty 302 body and reports success, which looked
+            // exactly like a corrupt manifest.
+            "--location",
+            "--max-redirs",
+            "3",
             "--max-filesize",
             &size_limit,
             "--max-time",
@@ -337,6 +343,13 @@ mod sys {
         let body = std::fs::read_to_string(&path).unwrap_or_default();
         if dest.is_none() {
             let _ = std::fs::remove_file(&path);
+        }
+        if body.trim().is_empty() {
+            return Err(CamarelolError::new(
+                ErrorCode::UpdateDownloadFailed,
+                format!("the server sent an empty response for {url}"),
+            )
+            .with_remediation("check the URL by hand with: curl -L <URL>"));
         }
         Ok(body)
     }
