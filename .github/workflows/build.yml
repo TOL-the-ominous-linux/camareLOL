@@ -243,8 +243,13 @@ jobs:
               echo "::error::the signing secret contains no private key"
               exit 1
             fi
-            gpg --batch --yes --detach-sign --armor \
-              --local-user "$keyid" -o latest.json.sig latest.json
+            # A passphrase-protected key needs loopback pinentry, otherwise
+            # batch mode has no way to ask for it.
+            sign_args=(--batch --yes --detach-sign --armor --local-user "$keyid")
+            if [ -n "${CAMARELOL_SIGNING_PASSPHRASE:-}" ]; then
+              sign_args+=(--pinentry-mode loopback --passphrase "$CAMARELOL_SIGNING_PASSPHRASE")
+            fi
+            gpg "${sign_args[@]}" -o latest.json.sig latest.json
             rm -f "$RUNNER_TEMP/signing.asc"
             gpg --batch --verify latest.json.sig latest.json
             echo "signed the update index"
