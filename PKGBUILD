@@ -4,7 +4,7 @@
 # This PKGBUILD builds from the GitHub release tarball so that `makepkg` never
 # needs network access to a VCS host.
 pkgname=camarelol
-pkgver=0.1.0
+pkgver=0.1.3
 pkgrel=1
 pkgdesc="A modern, safety-first TUI installer for Arch Linux"
 arch=('x86_64')

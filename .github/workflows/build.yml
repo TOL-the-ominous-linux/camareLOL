@@ -112,6 +112,8 @@ jobs:
             cp -r "$GITHUB_WORKSPACE/$item" "$staging/" 2>/dev/null || true
           done
           rm -rf "$staging"/target "$staging"/*/target "$staging"/java/out
+          # Keep pkgver in step with the tarball name.
+          sed -i "s/^pkgver=.*/pkgver=${version}/" "$staging/PKGBUILD"
           tar -czf "${RUNNER_TEMP}/${name}.tar.gz" -C "${RUNNER_TEMP}" "$name"
 
       - name: makepkg the package in an Arch container
@@ -195,6 +197,9 @@ jobs:
             cp -r "$GITHUB_WORKSPACE/$item" "$staging/" 2>/dev/null || true
           done
           rm -rf "$staging"/target "$staging"/*/target "$staging"/java/out
+          # The tarball is named after the tag; keep pkgver in step with it so
+          # makepkg looks for the file we just produced.
+          sed -i "s/^pkgver=.*/pkgver=${version}/" "$staging/PKGBUILD"
           tar -czf "${RUNNER_TEMP}/${name}.tar.gz" -C "${RUNNER_TEMP}" "$name"
           echo "SHA256=$(sha256sum "${RUNNER_TEMP}/${name}.tar.gz" | cut -d' ' -f1)" >> "$GITHUB_ENV"
           echo "VERSION=${version}" >> "$GITHUB_ENV"
