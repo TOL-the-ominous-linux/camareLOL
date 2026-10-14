@@ -87,7 +87,7 @@ jobs:
 
       - name: Shell scripts parse
         run: |
-          for f in build.sh install.sh scripts/vm-test.sh scripts/make-data-iso.sh java/build.sh; do
+          for f in build.sh install.sh scripts/vm-test.sh scripts/make-data-iso.sh scripts/make-signing-key.sh java/build.sh; do
             bash -n "$f" || { echo "syntax error in $f"; exit 1; }
           done
           echo "all shell scripts parse"

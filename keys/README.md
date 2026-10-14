@@ -9,21 +9,25 @@ chỉ mục cũng chọn được khoá xác nhận cho chính nó — kiểm tr
 
 ## Tạo cặp khoá
 
-**Trên máy riêng của bạn**, không phải trên máy đã dùng để build:
+```console
+$ ./scripts/make-signing-key.sh              # không mật khẩu
+$ ./scripts/make-signing-key.sh --passphrase # có mật khẩu
+```
+
+Script làm hết: tạo khoá Ed25519 chỉ ký, ghi khoá công khai vào `keys/camarelol.pub`,
+ghi khoá riêng vào `~/camarelol-signing.asc`, rồi **ký thử và kiểm tra vân tay**
+trước khi kết thúc. Nếu keyring đã có khoá, nó dừng lại và nhắc xoá khoá cũ —
+xoá khoá là việc không thể đảo ngược nên script không tự làm.
+
+Chạy thủ công cũng được:
 
 ```console
 $ gpg --full-generate-key
   → 10  (ECC, chỉ ký — không cần mã hoá, ta chỉ ký)
   → kích thước: Enter (mặc định 255)
-  → hạn: 0 rồi Enter (không hết hạn; thay đổi bằng 2y nếu bạn thích)
+  → hạn: 0 rồi Enter (không hết hạn; thay bằng 2y nếu bạn thích)
   → tên: camareLOL release
   → email: của bạn
-  → mật khẩu: xem ghi chú bên dưới
-```
-
-Sau đó:
-
-```console
 $ gpg --list-secret-keys --keyid-format long          # tìm mã khoá
 $ gpg --armor --export <KEYID> > keys/camarelol.pub  # commit file này
 $ gpg --armor --export-secret-keys <KEYID> > ~/camarelol-signing.asc
