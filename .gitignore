@@ -22,3 +22,9 @@ core/camarelol-*.log
 __pycache__/
 *.pyc
 java/out/
+
+# release artefacts from scripts/sign-release.sh
+/out/
+
+# generated update mirror content; lol_sync.py writes it
+/lol/site/
