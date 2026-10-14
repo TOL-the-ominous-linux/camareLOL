@@ -204,6 +204,29 @@ jobs:
           echo "SHA256=$(sha256sum "${RUNNER_TEMP}/${name}.tar.gz" | cut -d' ' -f1)" >> "$GITHUB_ENV"
           echo "VERSION=${version}" >> "$GITHUB_ENV"
 
+      - name: Build the update index
+        run: |
+          set -euo pipefail
+          # The index carries the checksum of the binary we just built, so the
+          # updater can verify what it downloads. It is an asset, not a
+          # silently published page: hosting it is a deliberate deployment step
+          # and the URL is configurable with --update-url.
+          sha="$(sha256sum target/release/camarelol | cut -d' ' -f1)"
+          size="$(stat -c%s target/release/camarelol)"
+          cat > latest.json <<EOF
+          {
+            "schema": 1,
+            "version": "${VERSION}",
+            "url": "https://github.com/tamkogay9876-code/camareLOL/releases/download/v${VERSION}/camarelol",
+            "sha256": "${sha}",
+            "size": ${size},
+            "notes": "camareLOL ${VERSION}"
+          }
+          EOF
+          # Fail the release rather than ship an index nothing can parse.
+          python3 -c 'import json,sys; d=json.load(open("latest.json")); assert d["schema"]==1 and len(d["sha256"])==64'
+          cat latest.json
+
       - name: Upload assets
         uses: softprops/action-gh-release@v2
         with:
@@ -211,6 +234,7 @@ jobs:
             ${{ runner.temp }}/camarelol-${{ env.VERSION }}.tar.gz
             target/release/camarelol
             java/out/camarelol-catalog.jar
+            latest.json
           generate_release_notes: true
           body: |
             ## camareLOL ${{ env.VERSION }}

@@ -41,6 +41,20 @@ pub enum ErrorCode {
     SafetyGateClosed,
     /// User has not confirmed a high risk operation.
     ConfirmationRequired,
+    /// The update index could not be understood.
+    UpdateManifestInvalid,
+    /// An update URL was refused because it was not HTTPS.
+    UpdateUrlRefused,
+    /// A download did not match the checksum published for it.
+    UpdateChecksumMismatch,
+    /// The update could not be downloaded.
+    UpdateDownloadFailed,
+    /// The downloaded update would not run; nothing was installed.
+    UpdateCandidateFailed,
+    /// The running binary cannot be replaced (permissions).
+    UpdateNotPrivileged,
+    /// The previous binary could not be restored.
+    UpdateRollbackFailed,
     /// Feature is explicitly not implemented yet; must never be faked.
     NotSupported,
     /// Generic internal error.
@@ -66,6 +80,13 @@ impl fmt::Display for ErrorCode {
             ErrorCode::NetworkUnreachable => "network_unreachable",
             ErrorCode::SafetyGateClosed => "safety_gate_closed",
             ErrorCode::ConfirmationRequired => "confirmation_required",
+            ErrorCode::UpdateManifestInvalid => "update_manifest_invalid",
+            ErrorCode::UpdateUrlRefused => "update_url_refused",
+            ErrorCode::UpdateChecksumMismatch => "update_checksum_mismatch",
+            ErrorCode::UpdateDownloadFailed => "update_download_failed",
+            ErrorCode::UpdateCandidateFailed => "update_candidate_failed",
+            ErrorCode::UpdateNotPrivileged => "update_not_privileged",
+            ErrorCode::UpdateRollbackFailed => "update_rollback_failed",
             ErrorCode::NotSupported => "not_supported",
             ErrorCode::Internal => "internal",
         };

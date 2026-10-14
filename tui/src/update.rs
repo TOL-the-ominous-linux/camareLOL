@@ -1,11 +1,12 @@
 //! Key handling / navigation for the camareLOL TUI.
 
-use super::app::{App, Field, Screen};
+use super::app::{App, Field, Screen, UpdateStatus};
 use camarelol_core::error::ErrorCode;
 use camarelol_core::install::execute::RealSystemRunner;
 use camarelol_core::install::{run_install, Outcome, PhaseState, ProgressEvent, ProgressSink};
 use camarelol_core::safety::{required_phrase, Operation};
 use camarelol_core::storage::RiskLevel;
+use camarelol_core::update::Plan;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 /// A sink that streams events into the App so the UI can render them.
@@ -98,11 +99,14 @@ impl App {
         }
 
         match self.screen {
-            Screen::Welcome => {
-                if key.code == KeyCode::Enter {
-                    self.go_next();
-                }
-            }
+            Screen::Welcome => match key.code {
+                KeyCode::Enter => self.go_next(),
+                // Check for a newer release. Reporting only: replacing the
+                // binary is a deliberate `--update` on the command line, never
+                // something a keypress inside the installer does for you.
+                KeyCode::Char('u') => self.start_update_check(),
+                _ => {}
+            },
             Screen::Language
             | Screen::Keyboard
             | Screen::Timezone
@@ -247,6 +251,50 @@ impl App {
                 self.quit = true;
             }
             _ => {}
+        }
+    }
+
+    /// Kick off the update check on a background thread.
+    pub fn start_update_check(&mut self) {
+        if self.update_status == UpdateStatus::Checking {
+            return;
+        }
+        let (tx, rx) = std::sync::mpsc::channel();
+        self.update_rx = Some(rx);
+        self.update_status = UpdateStatus::Checking;
+
+        std::thread::spawn(move || {
+            let outcome = match camarelol_core::update::check(
+                camarelol_core::update::DEFAULT_MANIFEST_URL,
+                crate::version::VERSION,
+                false,
+                false,
+                false,
+            ) {
+                Ok(Plan::UpToDate) => UpdateStatus::UpToDate,
+                Ok(Plan::Available(r)) => UpdateStatus::Available(r.version),
+                Ok(Plan::Blocked { release, reason }) => {
+                    UpdateStatus::Blocked(release.version, reason.as_str().to_string())
+                }
+                Ok(Plan::Install(_)) => UpdateStatus::UpToDate,
+                Err(e) => UpdateStatus::Failed(e.message),
+            };
+            // The status is plain owned data, so it moves across the channel
+            // without any formatting games.
+            let _ = tx.send(outcome);
+        });
+    }
+
+    /// Pick up the background result, if it has arrived. Cheap to call every
+    /// tick, so the UI updates the moment the check finishes.
+    pub fn poll_update_check(&mut self) {
+        let ready = match self.update_rx.as_ref() {
+            Some(rx) => rx.try_recv().ok(),
+            None => None,
+        };
+        if let Some(status) = ready {
+            self.update_rx = None;
+            self.update_status = status;
         }
     }
 

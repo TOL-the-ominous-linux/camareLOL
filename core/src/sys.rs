@@ -46,11 +46,27 @@ pub fn run(program: &str, args: &[&str]) -> Result<CommandOutput> {
 /// Run a command with a timeout. On timeout the child is killed and
 /// [`ErrorCode::CommandFailed`] is returned.
 pub fn run_with_timeout(program: &str, args: &[&str], timeout: Duration) -> Result<CommandOutput> {
+    let mut cmd = Command::new(program);
+    cmd.args(args);
+    run_command(cmd, timeout)
+}
+
+/// Run a command the caller has already configured.
+///
+/// Same guarantees as [`run_with_timeout`] — no shell, cleared environment,
+/// timeout, pipes drained while waiting — but for the cases where the argument
+/// list has to be built differently (long flag sets, or values that must not
+/// pass through `&str` slices).
+pub fn run_command(mut cmd: Command, timeout: Duration) -> Result<CommandOutput> {
+    let program = cmd.get_program().to_string_lossy().to_string();
+    let program = program.as_str();
+    let args: Vec<String> = cmd
+        .get_args()
+        .map(|a| a.to_string_lossy().to_string())
+        .collect();
     let start = Instant::now();
 
-    let mut cmd = Command::new(program);
-    cmd.args(args)
-        .stdin(Stdio::null())
+    cmd.stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
@@ -110,7 +126,7 @@ pub fn run_with_timeout(program: &str, args: &[&str], timeout: Duration) -> Resu
     let code = status.map(|s| s.code().unwrap_or(-1)).unwrap_or(-1);
     Ok(CommandOutput {
         program: program.to_string(),
-        args: args.iter().map(|s| s.to_string()).collect(),
+        args,
         status: code,
         stdout,
         stderr,

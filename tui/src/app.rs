@@ -91,6 +91,22 @@ impl Screen {
     }
 }
 
+/// What the background update check is doing, and what it found.
+///
+/// A network round trip must never happen on the input thread: `crossterm`
+/// would stop redrawing for as long as curl takes, which looks exactly like a
+/// frozen installer.
+#[derive(Debug, Clone, PartialEq)]
+pub enum UpdateStatus {
+    Idle,
+    Checking,
+    UpToDate,
+    Available(String),
+    /// A newer version exists but was not installed, and here is why.
+    Blocked(String, String),
+    Failed(String),
+}
+
 /// Which edit field has focus on a form screen.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Field {
@@ -144,6 +160,9 @@ pub struct App {
     pub user_password: String,
     pub user_password_confirm: String,
     pub user_is_admin: bool,
+    /// Receiver for the result of the background update check.
+    pub update_rx: Option<std::sync::mpsc::Receiver<UpdateStatus>>,
+    pub update_status: UpdateStatus,
     pub confirm_phrase: String,
 
     // runtime
@@ -206,6 +225,8 @@ impl App {
             user_password: String::new(),
             user_password_confirm: String::new(),
             user_is_admin: true,
+            update_rx: None,
+            update_status: UpdateStatus::Idle,
             confirm_phrase: String::new(),
             message: None,
             error: None,

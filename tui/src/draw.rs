@@ -1,6 +1,6 @@
 //! Rendering for the camareLOL TUI. Keyboard-first, works on small terminals.
 
-use super::app::{App, Field, Screen};
+use super::app::{App, Field, Screen, UpdateStatus};
 use camarelol_core::desktop::{DesktopProfile, DisplayServer};
 use camarelol_core::locale::{KEYMAPS, TIMEZONES};
 use camarelol_core::network;
@@ -117,9 +117,18 @@ fn draw_header(f: &mut Frame, app: &App, area: Rect) {
         app.screen.index() + 1
     };
     let total = Screen::ORDER.len();
+    // Show the commit too: two builds of the same version string are otherwise
+    // indistinguishable, and the user has no other way to tell which one they
+    // are trusting with a disk.
+    let build = crate::version::git_sha();
+    let build = if build == "unknown" {
+        String::new()
+    } else {
+        format!("+{build}")
+    };
     let title = format!(
-        " camareLOL v{} — {}  ({}/{}) ",
-        env!("CARGO_PKG_VERSION"),
+        " camareLOL v{}{build} — {}  ({}/{}) ",
+        crate::version::VERSION,
         app.screen.title(),
         step.min(total),
         total
@@ -205,6 +214,8 @@ fn draw_welcome(f: &mut Frame, app: &App, area: Rect) {
             "  Nhấn Enter để bắt đầu. Không có thao tác phá hủy nào diễn ra trước khi bạn xác nhận.",
             "  Press Enter to start. Nothing destructive happens before you confirm it.",
         )),
+        Line::from(""),
+        Line::from(format!("  {}", update_hint(app))),
     ];
     f.render_widget(
         Paragraph::new(text)
@@ -212,6 +223,38 @@ fn draw_welcome(f: &mut Frame, app: &App, area: Rect) {
             .wrap(Wrap { trim: false }),
         area,
     );
+}
+
+/// The update line on the welcome screen.
+///
+/// It always reports; it never offers to install. Replacing the binary is a
+/// deliberate command-line action, not something a keypress does for you.
+fn update_hint(app: &App) -> String {
+    match &app.update_status {
+        UpdateStatus::Idle => app.tr(
+            "Nhấn u để kiểm tra bản cập nhật (chỉ báo cáo, không tự cài).",
+            "Press u to check for a newer release (reports only, installs nothing).",
+        ),
+        UpdateStatus::Checking => {
+            app.tr("Đang kiểm tra bản cập nhật...", "Checking for updates...")
+        }
+        UpdateStatus::UpToDate => app.tr(
+            "Bạn đang dùng bản mới nhất.",
+            "You are on the latest release.",
+        ),
+        UpdateStatus::Available(v) => format!(
+            "{} {v} — {}",
+            app.tr("Đã có bản mới:", "A newer release exists:"),
+            app.tr(
+                "chạy `camarelol --update` để cài",
+                "run `camarelol --update` to install it"
+            )
+        ),
+        UpdateStatus::Blocked(v, why) => format!("{v}: {why}"),
+        UpdateStatus::Failed(e) => {
+            format!("{} {e}", app.tr("Không kiểm tra được:", "Could not check:"))
+        }
+    }
 }
 
 fn draw_choice(f: &mut Frame, app: &mut App, area: Rect) {
@@ -673,4 +716,76 @@ fn draw_logs(f: &mut Frame, app: &App, area: Rect) {
         .block(screen_block("Installation log (Esc to close)"))
         .style(Style::default());
     f.render_widget(list, area);
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::app::{App, Screen, UpdateStatus};
+    use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
+
+    fn welcome_app(status: UpdateStatus) -> App {
+        let dir = std::env::temp_dir().join("camarelol-draw-tests");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(format!("draw-{}.json", std::process::id()));
+        std::fs::write(&path, "[]").unwrap();
+        let mut app = App::new(Some(path));
+        app.screen = Screen::Welcome;
+        app.update_status = status;
+        app
+    }
+
+    /// Render the welcome screen and return it as plain text.
+    fn welcome_text(status: UpdateStatus) -> String {
+        let mut app = welcome_app(status);
+        let backend = TestBackend::new(90, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal.draw(|f| super::draw(f, &mut app)).unwrap();
+        let buf = terminal.backend().buffer().clone();
+        buf.content()
+            .iter()
+            .map(|c| c.symbol())
+            .collect::<Vec<_>>()
+            .chunks(90)
+            .map(|row| row.concat())
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    #[test]
+    fn the_welcome_screen_offers_a_key_to_check_for_updates() {
+        let text = welcome_text(UpdateStatus::Idle);
+        assert!(
+            text.contains("Press u to check"),
+            "the update key must be discoverable, got:\n{text}"
+        );
+    }
+
+    #[test]
+    fn a_newer_release_is_announced_with_how_to_install_it() {
+        let text = welcome_text(UpdateStatus::Available("9.9.9".into()));
+        assert!(text.contains("9.9.9"), "got:\n{text}");
+        assert!(
+            text.contains("camarelol --update"),
+            "it must say how to install, got:\n{text}"
+        );
+    }
+
+    #[test]
+    fn a_failed_check_is_shown_rather_than_hidden() {
+        assert!(
+            welcome_text(UpdateStatus::Failed("no route to host".into()))
+                .contains("no route to host")
+        );
+    }
+
+    #[test]
+    fn a_blocked_update_explains_itself() {
+        let text = welcome_text(UpdateStatus::Blocked(
+            "9.9.9".into(),
+            "an installation is running".into(),
+        ));
+        assert!(text.contains("9.9.9"), "got:\n{text}");
+        assert!(text.contains("an installation is running"), "got:\n{text}");
+    }
 }

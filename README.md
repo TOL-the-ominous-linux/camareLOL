@@ -31,6 +31,19 @@ $ git clone https://github.com/tamkogay9876-code/camareLOL
 $ cd camareLOL && sudo ./install.sh --binary
 ```
 
+Staying current — the updater reports by default and installs only when you ask:
+
+```console
+$ camarelol --check-update     # reports, downloads nothing
+$ camarelol --update           # download, verify SHA-256, install
+$ camarelol --rollback-update  # put the previous binary back
+```
+
+It never replaces itself on its own, never while an install is running, and
+refuses a download whose checksum does not match. See
+[docs/UPDATES.md](docs/UPDATES.md), including what the checksum does *not*
+protect against.
+
 ### From source
 
 ```console

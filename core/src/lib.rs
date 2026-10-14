@@ -27,6 +27,7 @@ pub mod safety;
 pub mod services;
 pub mod storage;
 pub mod sys;
+pub mod update;
 
 use crate::error::{CamarelolError, ErrorCode, Result};
 use crate::install::execute::SystemRunner;
