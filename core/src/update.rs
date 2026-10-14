@@ -171,6 +171,49 @@ pub struct Index {
     pub trust: Trust,
 }
 
+/// Try several indexes in order and return the first that works.
+///
+/// A mirror being unreachable is an availability problem, not a trust one: the
+/// returned index still has to carry a signature from the pinned key, so a
+/// hostile mirror can only ever cause this to move on to the next URL.
+pub fn fetch_any(
+    urls: &[String],
+    signature_url_for: &dyn Fn(&str) -> String,
+    public_key: Option<&str>,
+) -> Result<(Index, String)> {
+    if urls.is_empty() {
+        return Err(CamarelolError::new(
+            ErrorCode::UpdateDownloadFailed,
+            "no update index is configured",
+        ));
+    }
+    let mut last: Option<CamarelolError> = None;
+    for url in urls {
+        match fetch_index(url, Some(&signature_url_for(url)), public_key) {
+            Ok(index) => return Ok((index, url.clone())),
+            Err(e) => {
+                log_mirror_failure(url, &e);
+                last = Some(e);
+            }
+        }
+    }
+    Err(last.unwrap_or_else(|| {
+        CamarelolError::new(
+            ErrorCode::UpdateDownloadFailed,
+            "no update index is reachable",
+        )
+    }))
+}
+
+fn log_mirror_failure(url: &str, err: &CamarelolError) {
+    // A dead mirror is worth saying out loud: otherwise a client that falls
+    // through to the second URL looks like it is just using that one.
+    eprintln!(
+        "  mirror did not answer: {url} ({}: {})",
+        err.code, err.message
+    );
+}
+
 /// Fetch the index, verify its signature if we can, and parse it.
 ///
 /// The order matters: the signature is checked over the raw bytes *before*

@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
     tags: ['v*']
+  # Mirror health is worth watching even when nobody changed any code.
+  schedule:
+    - cron: "41 5 * * *"
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -166,6 +169,25 @@ jobs:
           # The container wrote as root; hand the artifacts back to the runner
           # so the job can clean up after itself.
           sudo chown -R "$(id -u):$(id -g)" "$pkgdir"
+
+  mirrors:
+    name: Mirror health
+    # A mirror that dies should be noticed by the maintainer, not by whoever
+    # next tries to update and fails.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Check every configured mirror
+        run: |
+          set -euo pipefail
+          python lol/check_mirrors.py --json > mirror-status.json || true
+          cat mirror-status.json
+          python lol/report_mirror_status.py mirror-status.json
 
   release:
     name: Release (tag only)

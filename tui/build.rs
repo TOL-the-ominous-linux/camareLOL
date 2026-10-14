@@ -39,6 +39,18 @@ fn emit(key: &str, value: &str) {
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
 
+    // A build script runs with the package directory as its working directory,
+    // so files that belong to the workspace live one level up.
+    let package = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_default();
+    let root = std::path::Path::new(&package)
+        .parent()
+        .map(std::path::Path::to_path_buf)
+        .unwrap_or_else(|| std::path::PathBuf::from(&package));
+    println!(
+        "cargo:rerun-if-changed={}",
+        root.join("mirrors.toml").display()
+    );
+
     // The tag is the version of record. Cargo.toml drifted from it once (a
     // release tagged 0.1.6 still printed 0.1.5), and a stale version is worse
     // than none: it is exactly what made two different builds look identical.
@@ -80,6 +92,16 @@ fn main() {
     }
     if std::env::var("CAMARELOL_NO_UPDATE").is_ok() {
         println!("cargo:rustc-env=CAMARELOL_NO_UPDATE=1");
+    }
+
+    // The mirror list is embedded so adding one is a data change, not a code
+    // change, and so a tampered copy on disk cannot redirect updates.
+    let mirrors = std::fs::read_to_string(root.join("mirrors.toml")).unwrap_or_default();
+    if !mirrors.trim().is_empty() {
+        println!(
+            "cargo:rustc-env=CAMARELOT_MIRRORS={}",
+            mirrors.replace('\n', "\\n")
+        );
     }
 
     // Reproducible builds prefer SOURCE_DATE_EPOCH (set by the CI tarball step).

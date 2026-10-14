@@ -72,6 +72,35 @@ pub fn update_channel() -> Option<&'static str> {
     })
 }
 
+/// Every index URL this build knows about, in the order it should try them.
+///
+/// Taken from `mirrors.toml` at build time. Several mirrors only matter if the
+/// updater falls back between them; a second URL nobody tries is decoration.
+pub fn mirrors() -> &'static [String] {
+    static LIST: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
+    LIST.get_or_init(|| {
+        let raw = match option_env!("CAMARELOT_MIRRORS") {
+            Some(r) => r.replace("\\n", "\n"),
+            None => return Vec::new(),
+        };
+        let doc: toml::Value = match raw.parse() {
+            Ok(d) => d,
+            Err(_) => return Vec::new(),
+        };
+        doc.get("mirrors")
+            .and_then(|m| m.as_array())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str())
+                    .map(|u| u.trim().to_string())
+                    .filter(|u| !u.is_empty())
+                    .collect()
+            })
+            .unwrap_or_default()
+    })
+    .as_slice()
+}
+
 /// The update-signing public key built into this binary, if the project has
 /// one. `None` means "nothing is pinned", and the updater then refuses to
 /// install rather than trusting whatever key the index offers.
@@ -108,6 +137,16 @@ mod tests {
     #[test]
     fn the_banner_matches_the_version_it_reports() {
         assert!(banner().contains(VERSION));
+    }
+
+    #[test]
+    fn the_embedded_mirror_list_is_usable() {
+        let list = mirrors();
+        assert!(!list.is_empty(), "mirrors.toml produced no URLs");
+        for url in list {
+            assert!(url.starts_with("https://"), "mirror {url:?} is not https");
+            assert!(url.ends_with(".json"), "mirror {url:?} is not an index");
+        }
     }
 
     #[test]

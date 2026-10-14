@@ -274,7 +274,30 @@ fn cmd_update(opts: UpdateOptions) -> Result<i32, CamarelolError> {
     // Nothing is running an install from this process, so the one hard stop
     // (an install in progress) cannot trigger here; a library caller has to
     // pass that flag itself, which is where the real protection lives.
-    let index = update::fetch_index(&url, sig_url.as_deref(), public_key.as_deref())?;
+    // With no explicit URL, try every mirror in order. A mirror that does not
+    // answer is an availability problem, not a trust one: whatever comes back
+    // still has to carry a signature from the pinned key.
+    let (index, index_url) = match (&sig_url, url_override.as_ref()) {
+        (Some(sig), Some(_)) => {
+            let i = update::fetch_index(&url, Some(sig), public_key.as_deref())?;
+            (i, url.clone())
+        }
+        _ => {
+            let urls: Vec<String> = if url_override.is_some() {
+                vec![url.clone()]
+            } else {
+                let list = version::mirrors();
+                if list.is_empty() {
+                    vec![url.clone()]
+                } else {
+                    list.to_vec()
+                }
+            };
+            println!("indexes to try: {}", urls.len());
+            update::fetch_any(&urls, &|u| format!("{u}.sig"), public_key.as_deref())?
+        }
+    };
+    println!("answered by: {index_url}");
     println!("trust: {}", index.trust.reason());
     let plan = update::plan_from_index(
         &index,

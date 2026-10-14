@@ -1,0 +1,26 @@
+# Các nơi phục vụ chỉ mục cập nhật.
+#
+# Updater thử lần lượt theo thứ tự dưới đây và dừng ở chỗ trả lời được.
+# Thứ tự KHÔNG quan trọng về mặt bảo mật: mọi bản sao đều phải có chữ ký
+# đúng của khoá mà binary ghim sẵn, nên kẻ chiếm được mirror nào thì cũng
+# không tạo ra được bản cập nhật giả. Thứ tự chỉ quyết định *ai được hỏi
+# trước*, tức là tốc độ và sẵn có.
+#
+# URL phải là https:// và trỏ tới đúng một tệp chỉ mục. Chữ ký được suy ra
+# bằng cách thêm ".sig".
+
+mirrors = [
+  # Mirror chính: Netlify phục vụ tĩnh, có CDN, rẻ.
+  "https://camarelol.netlify.app/latest.json",
+
+  # GitHub Releases: chập hơn CDN nhưng gần như không bao giờ mất. Đây cũng
+  # là nơi bản gốc của mọi thứ, nên nó là dự phòng hợp lý.
+  "https://github.com/tamkogay9876-code/camareLOL/releases/latest/download/latest.json",
+
+  # Thêm URL mới chỉ cần sửa file này rồi build lại — không phải sửa mã nguồn.
+  #
+  # KHÔNG thêm dịch vụ không phải để phục vụ tệp tĩnh:
+  #   - caddyserver.com là trang chủ đạt của dự án máy chủ web Caddy, không
+  #     phải nơi lưu trữ miễn phí
+  #   - PyPI là kho gói Python; đẩy binary Rust vào đó là lạm dụng dịch vụ
+]
