@@ -50,20 +50,33 @@ mkdir -p "$REPO/keys"
 # ---------------------------------------------------------------- old keys
 # Một khoá từng bị lộ thì phải bị xoá, không phải chỉ phớt lờ. Nhắc trước,
 # không tự xoá: xoá khoá là việc không thể đảo ngược.
-existing="$(gpg --batch --list-secret-keys --with-colons 2>/dev/null | awk -F: '/^fpr/{print $10}')"
+# Cần kiểm tra cả khoá công khai, không chỉ khoá bí mật: xoá khoá bí mật đi
+# không xoá khoá công khai, và gpg vẫn từ chối tạo khoá mới trùng user-id
+# ("A key for ... already exists"). Script cũ chỉ nhìn khoá bí mật nên bỏ lọt
+# đúng trường hợp đó.
+list_keys() {
+    gpg --batch --list-keys --with-colons 2>/dev/null | awk -F: '/^pub/{print $5}'
+}
+
+existing="$(list_keys)"
 if [ -n "$existing" ]; then
-    printf '\nĐã có khoá trong keyring của bạn:\n'
+    printf '\nKeyring của bạn đã có khoá:\n'
     while read -r fpr; do
         [ -n "$fpr" ] && note "$fpr"
     done <<< "$existing"
     printf '\nNếu bất kỳ khoá nào từng bị dán ra nơi công khai, hãy xoá nó:\n'
-    printf '    gpg --delete-secret-keys <MÃ-KHOÁ>\n'
+    printf '    gpg --delete-keys <MÃ-KHOÁ>\n'
+    printf '\n(Lệnh này xoá cả khoá công khai lẫn khoá bí mật. Chỉ dùng\n'
+    printf ' --delete-secret-keys sẽ để lại khoá công khai và lần chạy sau\n'
+    printf ' vẫn thất bại.)\n'
     printf 'Sau đó chạy lại script này.\n\n'
     read -r -p 'Đã xoá xong, tiếp tục? [y/N] ' answer
     case "$answer" in
         [yY]|[yY][eE][sS]) ;;
         *) die "đã dừng" ;;
     esac
+    still="$(list_keys)"
+    [ -z "$still" ] || die "keyring vẫn còn khoá — xoá hết rồi hãy chạy lại"
 fi
 
 # --------------------------------------------------------------- generate
