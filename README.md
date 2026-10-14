@@ -23,12 +23,35 @@ tại đây — lần chạy sau sẽ xoá.
 
 | Dịch vụ | Cách làm |
 |---|---|
-| **Netlify** | Netlify → Add new site → Import an existing project → chọn repo, branch `lol-site`. Publish directory: `.` |
-| **Vercel** | Vercel → Add New → Project → Import → chọn repo, Framework Preset: *Other*, Build command để trống, Output Directory `.` |
+| **Vercel** | Xem bên dưới — dự án đã có sẵn `vercel.json` |
+| **Netlify** | Netlify → Add new site → Import an existing project → repo, branch `lol-site`. Publish directory: `.` |
 | **Cloudflare Pages** | Workers & Pages → Create → Pages → Connect to Git → repo, production branch `lol-site` |
 | **GitHub Pages** | Settings → Pages → Deploy from a branch → `lol-site` / `/ (root)` |
 
-Cả bốn đều chỉ cần biết: nhánh `lol-site`, thư mục phục vụ là thư mục gốc.
+## Vercel
+
+`vercel.json` nằm sẵn trong nhánh này: không framework, không build, phục vụ
+tĩnh, kèm header cache và `nosniff`.
+
+1. Vercel → **Add New → Project** → **Import** kho `tamkogay9876-code/camareLOL`
+2. **Framework Preset**: *Other* (đã khai báo trong `vercel.json`, nhưng chọn
+   *Other* cho chắc)
+3. **Build Command**: để trống — không có gì để build
+4. **Output Directory**: `.`
+5. **Install Command**: để trống
+
+Xong thì vào **Settings → Git → Production Branch** và đổi sang `lol-site`.
+**Bước này quan trọng**: mặc định Vercel lấy `main`, mà `main` chứa mã nguồn
+trình cài đặt chứ không phải mirror. Đổi sang `lol-site` thì mỗi lần có bản phát
+hành mới, Vercel tự deploy lại.
+
+Đợi lần deploy đầu tiên xong, URL sẽ có dạng `https://camareLOL.vercel.app`.
+Kiểm tra:
+
+```console
+$ curl -sS https://camareLOL.vercel.app/latest.json | head -2
+$ curl -sSI https://camareLOL.vercel.app/latest.json | head -4
+```
 
 ## Không có gì đáng tin ở đây cả
 
