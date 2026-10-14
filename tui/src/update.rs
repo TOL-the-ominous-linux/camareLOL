@@ -644,8 +644,11 @@ mod tests {
         assert_eq!(app.screen, Screen::Timezone);
     }
 
-    /// Three devices so the storage list has something to move between.
-    fn storage_fixture() -> App {
+    /// A storage screen with two empty disks.
+    ///
+    /// `name` keeps each test on its own file: the suite runs in parallel and
+    /// a shared temp file would be written by several tests at once.
+    fn storage_fixture(name: &str) -> App {
         let survey = serde_json::json!([
             {
                 "kernel_name": "sda", "path": "/dev/sda", "size_bytes": 21474836480i64,
@@ -662,10 +665,13 @@ mod tests {
         ]);
         let dir = std::env::temp_dir().join("camarelol-tui-tests");
         std::fs::create_dir_all(&dir).unwrap();
-        let path = dir.join("survey.json");
+        let path = dir.join(format!("{name}.json"));
         std::fs::write(&path, survey.to_string()).unwrap();
 
         let mut app = App::new(Some(path));
+        // Pin the firmware so the wizard behaves the same on any host.
+        app.core
+            .set_firmware(camarelol_core::hardware::Firmware::Uefi);
         app.armed = true;
         app
     }
@@ -674,7 +680,7 @@ mod tests {
     fn arrow_keys_move_the_disk_cursor_on_the_storage_screen() {
         // Regression: the storage screen fell through to a default arm that
         // moved the *language* selection, so the arrows did nothing.
-        let mut app = storage_fixture();
+        let mut app = storage_fixture("arrows");
         assert_eq!(app.devices().len(), 2);
         app.screen = Screen::Storage;
         assert_eq!(app.storage_index, 0);
@@ -688,7 +694,7 @@ mod tests {
 
     #[test]
     fn the_disk_cursor_stays_inside_the_list() {
-        let mut app = storage_fixture();
+        let mut app = storage_fixture("arrows");
         app.screen = Screen::Storage;
 
         app.handle_key(KeyEvent::from(KeyCode::Up));
@@ -702,7 +708,7 @@ mod tests {
 
     #[test]
     fn enter_picks_the_disk_under_the_cursor() {
-        let mut app = storage_fixture();
+        let mut app = storage_fixture("arrows");
         app.screen = Screen::Storage;
         app.handle_key(KeyEvent::from(KeyCode::Down));
         app.handle_key(KeyEvent::from(KeyCode::Enter));
@@ -712,7 +718,7 @@ mod tests {
 
     #[test]
     fn arrow_keys_do_not_disturb_other_screens() {
-        let mut app = storage_fixture();
+        let mut app = storage_fixture("arrows");
         app.screen = Screen::Timezone;
         app.language_index = 1;
         let before = app.timezone_index;

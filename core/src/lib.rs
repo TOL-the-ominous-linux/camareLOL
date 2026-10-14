@@ -78,13 +78,25 @@ impl Core {
     /// `camarelol --self-test` fail on BIOS machines, because the plan was
     /// built for UEFI while the install resolved the real (BIOS) mode.
     pub fn with_devices(devices: Vec<storage::StorageDevice>) -> Self {
+        Self::with_devices_and_firmware(devices, hardware::detect_firmware())
+    }
+
+    /// Same as [`Core::with_devices`] but with an explicit firmware mode.
+    ///
+    /// Tests use this so they behave identically on a UEFI workstation, on a
+    /// BIOS machine and inside a container (where detection legitimately
+    /// returns `Unknown` and the planner correctly refuses to proceed).
+    pub fn with_devices_and_firmware(
+        devices: Vec<storage::StorageDevice>,
+        firmware: hardware::Firmware,
+    ) -> Self {
         Core {
             config: config::InstallationConfig::default(),
             gate: SafetyGate::default(),
             devices,
             log: logging::Logger::default(),
             boot: boot::Bootloader::Grub,
-            firmware: hardware::detect_firmware(),
+            firmware,
         }
     }
 
@@ -257,12 +269,45 @@ mod tests {
     use crate::protocol::{parse_request, Method, Request, ResponseStatus};
 
     fn core() -> Core {
-        Core::with_devices(
+        // Pin the firmware: inside a container detection returns Unknown, and
+        // the planner (correctly) refuses to build a plan in that case.
+        Core::with_devices_and_firmware(
             storage::scan::scan_devices_from_survey(
                 r#"[{"kernel_name":"vdb","path":"/dev/vdb","size_bytes":21474836480,"rotational":false,"removable":false,"kind":"Virtual","partition_table":"None","partitions":[],"mount_state":"NotMounted","os_hints":[],"encrypted":null,"risk":"Low"}]"#,
             )
             .unwrap(),
+            hardware::Firmware::Uefi,
         )
+    }
+
+    #[test]
+    fn planning_works_for_every_known_firmware_mode() {
+        // A container has neither efivars nor ACPI tables, so detection yields
+        // Unknown there. The planner must stay testable regardless of host.
+        let devices = storage::scan::scan_devices_from_survey(
+            r#"[{"kernel_name":"vdb","path":"/dev/vdb","size_bytes":21474836480,"rotational":false,"removable":false,"kind":"Virtual","partition_table":"None","partitions":[],"mount_state":"NotMounted","os_hints":[],"encrypted":null,"risk":"Low"}]"#,
+        )
+        .unwrap();
+        for mode in [hardware::Firmware::Uefi, hardware::Firmware::Bios] {
+            let core = Core::with_devices_and_firmware(devices.clone(), mode);
+            let plan = core
+                .plan_for("/dev/vdb")
+                .unwrap_or_else(|e| panic!("plan failed for {}: {e}", mode.as_str()));
+            core.validate_plan(&plan)
+                .unwrap_or_else(|e| panic!("validate failed for {}: {e}", mode.as_str()));
+        }
+    }
+
+    #[test]
+    fn planning_refuses_when_the_firmware_is_unknown() {
+        // Correct behaviour: rather than guess, refuse and explain.
+        let devices = storage::scan::scan_devices_from_survey(
+            r#"[{"kernel_name":"vdb","path":"/dev/vdb","size_bytes":21474836480,"rotational":false,"removable":false,"kind":"Virtual","partition_table":"None","partitions":[],"mount_state":"NotMounted","os_hints":[],"encrypted":null,"risk":"Low"}]"#,
+        )
+        .unwrap();
+        let core = Core::with_devices_and_firmware(devices, hardware::Firmware::Unknown);
+        let err = core.plan_for("/dev/vdb").unwrap_err();
+        assert_eq!(err.code, ErrorCode::InvalidBootConfig);
     }
 
     #[test]
