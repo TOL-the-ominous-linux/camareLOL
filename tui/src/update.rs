@@ -263,7 +263,14 @@ impl App {
         self.update_rx = Some(rx);
         self.update_status = UpdateStatus::Checking;
 
-        let manifest_url = camarelol_core::update::DEFAULT_MANIFEST_URL.to_string();
+        // A build with no update channel says so rather than reaching for a
+        // default it was not given.
+        let Some(manifest_url) = crate::version::update_channel().map(str::to_string) else {
+            self.update_status = UpdateStatus::Failed(
+                "this build has no update channel (packaged from source)".into(),
+            );
+            return;
+        };
         let sig_url = format!("{manifest_url}.sig");
         let key = crate::version::embedded_update_key();
 

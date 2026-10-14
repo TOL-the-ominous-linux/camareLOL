@@ -65,6 +65,23 @@ fn main() {
     let dirty = git(&["status", "--porcelain"]).is_some();
     emit("CAMARELOL_GIT_DIRTY", if dirty { "yes" } else { "no" });
 
+    // Where the bundled updater looks. A distribution packaging camareLOL from
+    // source sets this to its own mirror, or CAMARELOL_NO_UPDATE to switch the
+    // updater off: its updates come from the package manager, and offering
+    // binaries that manager never built would be wrong.
+    // Without this, cargo reuses the cached build when only the environment
+    // changed, and a distribution's setting silently has no effect.
+    println!("cargo:rerun-if-env-changed=CAMARELOL_UPDATE_URL");
+    println!("cargo:rerun-if-env-changed=CAMARELOL_NO_UPDATE");
+    if let Ok(url) = std::env::var("CAMARELOL_UPDATE_URL") {
+        if !url.trim().is_empty() {
+            println!("cargo:rustc-env=CAMARELOL_UPDATE_URL={}", url.trim());
+        }
+    }
+    if std::env::var("CAMARELOL_NO_UPDATE").is_ok() {
+        println!("cargo:rustc-env=CAMARELOL_NO_UPDATE=1");
+    }
+
     // Reproducible builds prefer SOURCE_DATE_EPOCH (set by the CI tarball step).
     let built = std::env::var("SOURCE_DATE_EPOCH").ok();
     emit("CAMARELOL_BUILD_EPOCH", built.as_deref().unwrap_or("0"));

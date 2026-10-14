@@ -27,9 +27,11 @@ use std::cmp::Ordering;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 
-/// Where the release index lives. Overridable so a mirror, a local test server
-/// or an air-gapped site can be used instead.
-pub const DEFAULT_MANIFEST_URL: &str = "https://tamkogay9876-code.github.io/camareLOL/latest.json";
+/// Used when a build says nothing about its update channel.
+///
+/// A short URL on purpose: this string ends up in `curl` commands and in
+/// `--help`, and people read it and retype it.
+pub const FALLBACK_MANIFEST_URL: &str = "https://camarelol.netlify.app/latest.json";
 
 /// Bumped when the manifest layout changes incompatibly.
 pub const MANIFEST_SCHEMA: u32 = 1;

@@ -99,6 +99,30 @@ ngưỡng. Tắt kiểm tra khi cần: `--allow-expired-index`.
 Chỉ mục cũ hơn không có trường này vẫn được chấp nhận, để các trạm đang chạy
 không hỏng ngay lập tức.
 
+## Nếu bạn đóng gói camareLOL
+
+Khi build từ mã nguồn — ebuild của Gentoo, PKGBUILD của Arch, hay gói của
+chính bạn — **binary nên dùng kênh cập nhật của bạn, không phải của dự án
+gốc**:
+
+```console
+$ CARAMELOL_UPDATE_URL="https://mirror.cua-ban.vn/camarelol/latest.json" cargo build --release
+$ CAMAMELOL_NO_UPDATE=1 cargo build --release    # hoặc tắt hẳn
+```
+
+Vì sao:
+
+- Cập nhật đi qua trình quản lý gói của bạn, không phải updater nhúng.
+- Updater gốc sẽ đề nghị binary mà quản lý gói của bạn chưa build, chưa kiểm
+  thử — đúng thứ bạn không muốn cài lên máy người dùng.
+
+Hai biến được ghi vào **lúc build**, không đọc lúc chạy: giá trị lấy từ môi
+trường khi khởi động có thể bị kẻ cài đặt thay đổi, và đó không phải phía nên
+tin.
+
+**Lưu ý:** đổi biến môi trường *sau* lần build đầu có thể không kích hoạt
+build lại. Xoá `target/release/build/camarelol-*` hoặc build trong thư mục sạch.
+
 ## Vì sao không tự cập nhật
 
 Không có cơ chế "khởi động thì tự lên bản mới" cho công cụ này, và có chủ ý:

@@ -231,9 +231,19 @@ fn cmd_update(opts: UpdateOptions) -> Result<i32, CamarelolError> {
     // Asking for both means the user wants to know first; report, never install.
     let install = install && !check_only;
 
+    let built_in = version::update_channel();
+    if built_in.is_none() && url_override.is_none() {
+        return Err(CamarelolError::new(
+            ErrorCode::UpdateUrlRefused,
+            "this build was packaged without an update channel",
+        )
+        .with_remediation(
+            "updates come from the package manager that built it, or pass --update-url",
+        ));
+    }
     let url = url_override
         .clone()
-        .unwrap_or_else(|| update::DEFAULT_MANIFEST_URL.to_string());
+        .unwrap_or_else(|| built_in.unwrap_or_default().to_string());
     let target = std::env::current_exe().map_err(|e| {
         CamarelolError::new(
             ErrorCode::UpdateNotPrivileged,
@@ -250,10 +260,11 @@ fn cmd_update(opts: UpdateOptions) -> Result<i32, CamarelolError> {
     }
 
     let can_write = is_writable(&target);
-    // By default the detached signature sits next to the index.
-    let sig_url = args_sig
-        .clone()
-        .or_else(|| url_override.as_ref().map(|u| format!("{u}.sig")));
+    // By default the detached signature sits next to the index. This has to be
+    // derived from the URL actually in use: deriving it from --update-url alone
+    // meant the built-in default silently got no signature at all, which only
+    // showed up once there was a default to fall back to.
+    let sig_url = args_sig.clone().or_else(|| Some(format!("{url}.sig")));
     let public_key = load_public_key(key_path.as_deref())?;
 
     println!("{}", version::banner());

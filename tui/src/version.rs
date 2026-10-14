@@ -49,6 +49,29 @@ pub fn banner() -> String {
     s
 }
 
+/// The update index this build should use.
+///
+/// Lives here rather than in the core crate on purpose: it is a packaging
+/// decision of the binary, and `cargo:rustc-env` from this package's build
+/// script never reaches another crate's `option_env!`.
+///
+/// A distribution that packages camareLOL from source sets
+/// `CAMARELOL_UPDATE_URL` to its own mirror, or `CAMARELOL_NO_UPDATE` to leave
+/// the updater switched off. Its updates come from its package manager, and
+/// offering binaries that manager never built or tested would be wrong.
+pub fn update_channel() -> Option<&'static str> {
+    if option_env!("CAMARELOL_NO_UPDATE").is_some() {
+        return None;
+    }
+    // Baked in rather than read at start-up: a value taken from the environment
+    // could be set by whoever installed the package, which is the wrong side to
+    // trust it from.
+    Some(match option_env!("CAMARELOL_UPDATE_URL") {
+        Some(url) if !url.trim().is_empty() => url.trim(),
+        _ => camarelol_core::update::FALLBACK_MANIFEST_URL,
+    })
+}
+
 /// The update-signing public key built into this binary, if the project has
 /// one. `None` means "nothing is pinned", and the updater then refuses to
 /// install rather than trusting whatever key the index offers.
@@ -85,6 +108,14 @@ mod tests {
     #[test]
     fn the_banner_matches_the_version_it_reports() {
         assert!(banner().contains(VERSION));
+    }
+
+    #[test]
+    fn the_update_channel_is_never_empty_when_present() {
+        if let Some(url) = update_channel() {
+            assert!(url.starts_with("https://"), "channel was {url:?}");
+            assert!(url.ends_with(".json"), "channel was {url:?}");
+        }
     }
 
     #[test]
