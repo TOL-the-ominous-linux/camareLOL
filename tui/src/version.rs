@@ -49,6 +49,18 @@ pub fn banner() -> String {
     s
 }
 
+/// The update-signing public key built into this binary, if the project has
+/// one. `None` means "nothing is pinned", and the updater then refuses to
+/// install rather than trusting whatever key the index offers.
+pub fn embedded_update_key() -> Option<String> {
+    let key = env!("CAMARELOL_UPDATE_PUBKEY").trim();
+    if key.is_empty() {
+        None
+    } else {
+        Some(key.to_string())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -70,6 +82,17 @@ mod tests {
     #[test]
     fn the_banner_matches_the_version_it_reports() {
         assert!(banner().contains(VERSION));
+    }
+
+    #[test]
+    fn an_absent_update_key_is_reported_as_absent() {
+        // Not an error: it is the state before a key has been set up, and the
+        // updater has a defined, safe behaviour for it.
+        let key = embedded_update_key();
+        assert_eq!(
+            key.is_none(),
+            env!("CAMARELOL_UPDATE_PUBKEY").trim().is_empty()
+        );
     }
 
     #[test]

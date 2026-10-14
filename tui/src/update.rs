@@ -263,20 +263,42 @@ impl App {
         self.update_rx = Some(rx);
         self.update_status = UpdateStatus::Checking;
 
+        let manifest_url = camarelol_core::update::DEFAULT_MANIFEST_URL.to_string();
+        let sig_url = format!("{manifest_url}.sig");
+        let key = crate::version::embedded_update_key();
+
         std::thread::spawn(move || {
-            let outcome = match camarelol_core::update::check(
-                camarelol_core::update::DEFAULT_MANIFEST_URL,
-                crate::version::VERSION,
-                false,
-                false,
-                false,
+            let outcome = match camarelol_core::update::fetch_index(
+                &manifest_url,
+                Some(sig_url.as_str()),
+                key.as_deref(),
             ) {
-                Ok(Plan::UpToDate) => UpdateStatus::UpToDate,
-                Ok(Plan::Available(r)) => UpdateStatus::Available(r.version),
-                Ok(Plan::Blocked { release, reason }) => {
-                    UpdateStatus::Blocked(release.version, reason.as_str().to_string())
+                Ok(index) => {
+                    let trust = if index.trust.is_signed() {
+                        String::new()
+                    } else {
+                        format!(" ({})", index.trust.reason())
+                    };
+                    // Reporting only, so the signature rule does not apply.
+                    match camarelol_core::update::plan_from_index(
+                        &index,
+                        crate::version::VERSION,
+                        false,
+                        false,
+                        false,
+                        true,
+                    ) {
+                        Ok(Plan::UpToDate) => UpdateStatus::UpToDate,
+                        Ok(Plan::Available(r)) => {
+                            UpdateStatus::Available(format!("{}{trust}", r.version))
+                        }
+                        Ok(Plan::Blocked { release, reason }) => {
+                            UpdateStatus::Blocked(release.version, reason.as_str().to_string())
+                        }
+                        Ok(Plan::Install(_)) => UpdateStatus::UpToDate,
+                        Err(e) => UpdateStatus::Failed(e.message),
+                    }
                 }
-                Ok(Plan::Install(_)) => UpdateStatus::UpToDate,
                 Err(e) => UpdateStatus::Failed(e.message),
             };
             // The status is plain owned data, so it moves across the channel

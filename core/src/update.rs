@@ -130,6 +130,287 @@ pub fn url_is_acceptable(url: &str) -> bool {
     false
 }
 
+/// How far the update index can be trusted.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Trust {
+    /// A detached signature from a pinned key verified over the exact bytes
+    /// we are about to act on.
+    Signed,
+    /// No key is configured, or no signature was published.
+    Unverified { reason: String },
+}
+
+impl Trust {
+    pub fn is_signed(&self) -> bool {
+        matches!(self, Trust::Signed)
+    }
+
+    pub fn reason(&self) -> String {
+        match self {
+            Trust::Signed => "the index is signed by a pinned key".to_string(),
+            Trust::Unverified { reason } => reason.clone(),
+        }
+    }
+}
+
+/// The update index as fetched, before anyone acts on it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Index {
+    /// Exactly the bytes the signature covers.
+    pub bytes: Vec<u8>,
+    pub release: Release,
+    pub trust: Trust,
+}
+
+/// Fetch the index, verify its signature if we can, and parse it.
+///
+/// The order matters: the signature is checked over the raw bytes *before*
+/// they are parsed, so a tampered `url` or `sha256` cannot be smuggled past
+/// us by hiding inside an otherwise valid JSON document.
+pub fn fetch_index(
+    manifest_url: &str,
+    signature_url: Option<&str>,
+    public_key: Option<&str>,
+) -> Result<Index> {
+    let bytes = sys::download(manifest_url, None, 256 * 1024)?;
+
+    let trust = match (public_key, signature_url) {
+        (Some(key), Some(sig_url)) => match verify_signature(&bytes, sig_url, key) {
+            Ok(()) => Trust::Signed,
+            // A signature we could not fetch is "not signed", not "broken".
+            // A signature that is present but wrong stays a hard error: that
+            // is someone pretending.
+            Err(e) if e.code == ErrorCode::UpdateSignatureMissing => Trust::Unverified {
+                reason: format!("the signature could not be fetched: {}", e.message),
+            },
+            Err(e) => return Err(e),
+        },
+        (None, _) => Trust::Unverified {
+            reason: "no public key is configured, so the index cannot be authenticated".to_string(),
+        },
+        (Some(_), None) => Trust::Unverified {
+            reason: "the index has no signature alongside it".to_string(),
+        },
+    };
+
+    let text = String::from_utf8(bytes.clone()).map_err(|_| {
+        CamarelolError::new(
+            ErrorCode::UpdateManifestInvalid,
+            "the update index is not text",
+        )
+        .with_remediation("the URL may point at a binary or an error page")
+    })?;
+    let release = parse_manifest(&text)?;
+
+    Ok(Index {
+        bytes,
+        release,
+        trust,
+    })
+}
+
+/// Verify a detached signature over `manifest` using `public_key`.
+///
+/// gpg runs with a throwaway home directory so it cannot touch the user's real
+/// keyring, and the key that actually signed is compared against the key we
+/// were given: a valid signature from *some* other key proves nothing.
+pub fn verify_signature(manifest: &[u8], signature_url: &str, public_key: &str) -> Result<()> {
+    if !url_is_acceptable(signature_url) {
+        return Err(CamarelolError::new(
+            ErrorCode::UpdateUrlRefused,
+            format!("refusing to fetch a signature from a non-HTTPS URL: {signature_url}"),
+        ));
+    }
+
+    let home = std::env::temp_dir().join(format!("camarelol-gnupg-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&home);
+    std::fs::create_dir_all(&home)?;
+    // gpg refuses to use a home directory that others can read.
+    set_mode(&home, 0o700)?;
+
+    let result = (|| -> Result<()> {
+        let key_file = home.join("pinned.pub");
+        std::fs::write(&key_file, public_key)?;
+        let sig_file = home.join("index.sig");
+        let manifest_file = home.join("index.json");
+        std::fs::write(&manifest_file, manifest)?;
+        if let Err(e) = sys::download(signature_url, Some(&sig_file), 64 * 1024) {
+            return Err(CamarelolError::new(
+                ErrorCode::UpdateSignatureMissing,
+                "no signature is published next to the index",
+            )
+            .with_context(e.message));
+        }
+
+        // Import first: verifying against a keyring that only *shows* the key
+        // leaves gpg unable to find it.
+        let expected = import_key(&home, &key_file)?;
+        let out = crate::sys::run_command(
+            gpg_command(
+                &home,
+                &[
+                    "--status-fd",
+                    "1",
+                    "--verify",
+                    &sig_file.to_string_lossy(),
+                    &manifest_file.to_string_lossy(),
+                ],
+            ),
+            std::time::Duration::from_secs(30),
+        )
+        .map_err(|e| {
+            CamarelolError::new(
+                ErrorCode::UpdateSignatureInvalid,
+                "could not run gpg to check the update signature",
+            )
+            .with_context(e.to_string())
+            .with_remediation("install gnupg, or pass --allow-unsigned-update")
+        })?;
+
+        let signer = valid_signer(&out.stdout).ok_or_else(|| {
+            CamarelolError::new(
+                ErrorCode::UpdateSignatureInvalid,
+                "the update index is not signed by the pinned key",
+            )
+            .with_context(out.stderr.trim().to_string())
+            .with_remediation("do not install this update")
+        })?;
+
+        if !signer.eq_ignore_ascii_case(&expected) {
+            return Err(CamarelolError::new(
+                ErrorCode::UpdateSignatureInvalid,
+                format!("the index was signed by {signer}, but the pinned key is {expected}"),
+            )
+            .with_remediation("that is not the key you configured; do not install this update"));
+        }
+        Ok(())
+    })();
+
+    let _ = std::fs::remove_dir_all(&home);
+    result
+}
+
+fn gpg_command(home: &std::path::Path, args: &[&str]) -> std::process::Command {
+    let mut cmd = std::process::Command::new("gpg");
+    cmd.arg("--homedir")
+        .arg(home.to_string_lossy().to_string())
+        .arg("--batch")
+        .arg("--no-tty")
+        .args(args);
+    cmd
+}
+
+/// Import the public key into the throwaway keyring and return its fingerprint.
+///
+/// The fingerprint is the whole point of pinning: verifying with whatever key
+/// gpg happens to have proves nothing, so the key that signed is compared with
+/// the key we were handed.
+fn import_key(home: &std::path::Path, key_file: &std::path::Path) -> Result<String> {
+    // gpg 2.4 writes nothing colon-separated to stdout while importing, so the
+    // fingerprint is read back with --list-keys afterwards.
+    let imported = crate::sys::run_command(
+        gpg_command(home, &["--import", &key_file.to_string_lossy()]),
+        std::time::Duration::from_secs(30),
+    )
+    .map_err(|e| {
+        CamarelolError::new(
+            ErrorCode::UpdateSignatureInvalid,
+            "could not run gpg to load the pinned public key",
+        )
+        .with_context(e.to_string())
+        .with_remediation("install gnupg, or pass --allow-unsigned-update")
+    })?;
+    if !imported.success() {
+        return Err(CamarelolError::new(
+            ErrorCode::UpdateSignatureInvalid,
+            "the pinned file is not a public key gpg can read",
+        )
+        .with_context(imported.stderr.trim().to_string()));
+    }
+
+    let listing = crate::sys::run_command(
+        gpg_command(home, &["--with-colons", "--list-keys"]),
+        std::time::Duration::from_secs(30),
+    )
+    .map_err(|e| {
+        CamarelolError::new(
+            ErrorCode::UpdateSignatureInvalid,
+            "could not read the pinned public key back",
+        )
+        .with_context(e.to_string())
+        .with_remediation("check the --update-key file")
+    })?;
+
+    listing
+        .stdout
+        .lines()
+        .find(|l| l.starts_with("fpr"))
+        .and_then(|l| l.split(':').nth(9))
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| {
+            CamarelolError::new(
+                ErrorCode::UpdateSignatureInvalid,
+                "the pinned public key has no fingerprint",
+            )
+            .with_remediation("the file may not be a public key")
+        })
+}
+
+/// The fingerprint gpg reported for a good signature, if the signature is good.
+fn valid_signer(status: &str) -> Option<String> {
+    // An expired, revoked or simply wrong signature is never acceptable, and
+    // gpg says so with status lines we must not talk past.
+    if status
+        .lines()
+        .any(|l| l.contains("BADSIG") || l.contains("EXPKEYSIG") || l.contains("REVKEYSIG"))
+    {
+        return None;
+    }
+    if !status.lines().any(|l| l.contains("GOODSIG")) {
+        return None;
+    }
+    // "[GNUPG:] VALIDSIG <fingerprint> <date> ..." — the key is field two.
+    status
+        .lines()
+        .find(|l| l.contains("VALIDSIG"))
+        .and_then(|l| l.split_whitespace().nth(2))
+        .map(|s| s.to_string())
+}
+
+/// Compare a fetched index with what we are running, refusing to install an
+/// index we cannot authenticate unless the user said to.
+pub fn plan_from_index(
+    index: &Index,
+    current_version: &str,
+    opted_in: bool,
+    install_running: bool,
+    can_write_target: bool,
+    allow_unsigned: bool,
+) -> Result<Plan> {
+    let plan = plan(&Request {
+        current_version,
+        release: &index.release,
+        opted_in,
+        install_running,
+        can_write_target,
+    });
+
+    let would_install = matches!(plan, Plan::Install(_));
+    if would_install && !index.trust.is_signed() && !allow_unsigned {
+        return Err(CamarelolError::new(
+            ErrorCode::UpdateSignatureMissing,
+            "refusing to install an update index that is not signed",
+        )
+        .with_context(index.trust.reason())
+        .with_remediation(
+            "publish latest.json.sig and configure a pinned key (see docs/UPDATES.md), \
+             or re-run with --allow-unsigned-update if you accept the risk",
+        ));
+    }
+    Ok(plan)
+}
+
 /// Compare two `MAJOR.MINOR.PATCH` versions.
 ///
 /// Suffixes after a `-` are ignored: `1.2.0-rc1` sorts as `1.2.0` rather than
@@ -243,44 +524,19 @@ pub fn verify(bytes: &[u8], expected: &str) -> Result<()> {
     Ok(())
 }
 
-/// Fetch the index and decide what to do.
-pub fn check(
-    manifest_url: &str,
-    current_version: &str,
-    opted_in: bool,
-    install_running: bool,
-    can_write_target: bool,
-) -> Result<Plan> {
-    let raw = fetch_text(manifest_url)?;
-    let release = parse_manifest(&raw)?;
-    Ok(plan(&Request {
-        current_version,
-        release: &release,
-        opted_in,
-        install_running,
-        can_write_target,
-    }))
-}
-
-/// GET a small text document with a hard size limit and a short timeout.
-fn fetch_text(url: &str) -> Result<String> {
-    let out = sys::download(url, None, 256 * 1024)?;
-    Ok(out)
-}
-
 mod sys {
     use crate::error::{CamarelolError, ErrorCode, Result};
     use std::path::Path;
     use std::process::Stdio;
     use std::time::Duration;
 
-    /// Download `url` to a temporary file and return its contents.
+    /// Download `url` to a temporary file and return its bytes.
     ///
     /// `max_bytes` is enforced by curl so a hostile server cannot make us fill
     /// the disk. Only HTTPS is permitted, and only to the host named in the
     /// URL — a redirect elsewhere is refused rather than followed, because the
     /// manifest's checksum arrives over the same trust boundary as the payload.
-    pub fn download(url: &str, dest: Option<&Path>, max_bytes: u64) -> Result<String> {
+    pub fn download(url: &str, dest: Option<&Path>, max_bytes: u64) -> Result<Vec<u8>> {
         if !super::url_is_acceptable(url) {
             return Err(CamarelolError::new(
                 ErrorCode::UpdateUrlRefused,
@@ -331,7 +587,7 @@ mod sys {
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-        crate::sys::run_command(cmd, Duration::from_secs(90)).map_err(|e| {
+        let out = crate::sys::run_command(cmd, Duration::from_secs(90)).map_err(|e| {
             CamarelolError::new(
                 ErrorCode::UpdateDownloadFailed,
                 "could not download the update",
@@ -339,16 +595,34 @@ mod sys {
             .with_context(e.to_string())
             .with_remediation("check the network, then try again")
         })?;
+        if !out.success() {
+            // curl's own words are the useful part here: a proxy, a TLS
+            // problem and a 404 all look identical without them.
+            return Err(CamarelolError::new(
+                ErrorCode::UpdateDownloadFailed,
+                format!("could not download {url}"),
+            )
+            .with_context(out.stderr.trim().to_string()));
+        }
 
-        let body = std::fs::read_to_string(&path).unwrap_or_default();
+        // Bytes, not text: the payload is a compiled binary, and reading it as
+        // a string fails on the first non-UTF-8 byte and looks exactly like an
+        // empty download.
+        let body = std::fs::read(&path).unwrap_or_default();
         if dest.is_none() {
             let _ = std::fs::remove_file(&path);
         }
-        if body.trim().is_empty() {
+        if body.is_empty() {
             return Err(CamarelolError::new(
                 ErrorCode::UpdateDownloadFailed,
                 format!("the server sent an empty response for {url}"),
             )
+            .with_context(format!(
+                "curl exited {}: {} (saved to {})",
+                out.status,
+                out.stderr.trim(),
+                path.display()
+            ))
             .with_remediation("check the URL by hand with: curl -L <URL>"));
         }
         Ok(body)
@@ -748,6 +1022,196 @@ mod tests {
             "#!/bin/sh\nexit 0\n"
         );
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    fn index(trust: Trust) -> Index {
+        Index {
+            bytes: b"{}".to_vec(),
+            release: release("0.2.0"),
+            trust,
+        }
+    }
+
+    const SIGNED: &str = "[GNUPG:] GOODSIG 4494A98D562D89F2 someone\n\
+                         [GNUPG:] VALIDSIG 7F1843FF0D81CEE9338654DD4494A98D562D89F2 2026-10-14 1 0 4 0 22 10 00 7F1843FF0D81CEE9338654DD4494A98D562D89F2\n";
+
+    #[test]
+    fn a_good_signature_yields_the_signing_fingerprint() {
+        assert_eq!(
+            valid_signer(SIGNED).as_deref(),
+            Some("7F1843FF0D81CEE9338654DD4494A98D562D89F2")
+        );
+    }
+
+    #[test]
+    fn a_bad_or_missing_signature_yields_nothing() {
+        // Only GOODSIG, no VALIDSIG: the maths was never checked.
+        assert_eq!(valid_signer("[GNUPG:] GOODSIG 4494A98D562D89F2 x"), None);
+        assert_eq!(valid_signer(""), None);
+        assert_eq!(
+            valid_signer("[GNUPG:] BADSIG 4494A98D562D89F2 x\n[GNUPG:] GOODSIG y"),
+            None
+        );
+        // Expired keys are not acceptable even though the maths is fine.
+        assert_eq!(
+            valid_signer(&format!("[GNUPG:] EXPKEYSIG k\n{SIGNED}")),
+            None
+        );
+    }
+
+    #[test]
+    fn an_unsigned_index_is_never_installed_by_default() {
+        let idx = index(Trust::Unverified {
+            reason: "no key configured".into(),
+        });
+        let err = plan_from_index(&idx, "0.1.7", true, false, true, false).unwrap_err();
+        assert_eq!(err.code, ErrorCode::UpdateSignatureMissing);
+        assert!(
+            err.remediation.unwrap().contains("--allow-unsigned-update"),
+            "the error must say how to proceed"
+        );
+    }
+
+    #[test]
+    fn an_unsigned_index_can_be_installed_only_on_request() {
+        let idx = index(Trust::Unverified {
+            reason: "no key configured".into(),
+        });
+        assert!(matches!(
+            plan_from_index(&idx, "0.1.7", true, false, true, true).unwrap(),
+            Plan::Install(_)
+        ));
+    }
+
+    #[test]
+    fn a_signed_index_installs_without_being_asked_twice() {
+        let idx = index(Trust::Signed);
+        assert!(matches!(
+            plan_from_index(&idx, "0.1.7", true, false, true, false).unwrap(),
+            Plan::Install(_)
+        ));
+    }
+
+    #[test]
+    fn reporting_an_unsigned_index_is_always_allowed() {
+        // Checking is harmless: nothing is downloaded or replaced, so the
+        // signature rule does not apply to it.
+        let idx = index(Trust::Unverified {
+            reason: "no key configured".into(),
+        });
+        assert!(matches!(
+            plan_from_index(&idx, "0.1.7", false, false, true, false).unwrap(),
+            Plan::Available(_)
+        ));
+    }
+
+    #[test]
+    fn a_signed_index_installing_during_an_install_is_still_blocked() {
+        // Signature verification must not become a way past the safety rule.
+        let idx = index(Trust::Signed);
+        assert_eq!(
+            plan_from_index(&idx, "0.1.7", true, true, true, false).unwrap(),
+            Plan::Blocked {
+                release: idx.release.clone(),
+                reason: Block::InstallRunning
+            }
+        );
+    }
+
+    #[test]
+    fn trust_reasons_are_explained_not_just_flagged() {
+        assert!(Trust::Signed.reason().contains("signed"));
+        assert!(Trust::Unverified {
+            reason: "the index has no signature".into()
+        }
+        .reason()
+        .contains("no signature"));
+    }
+
+    /// Serve `body` once on a loopback port and return its URL.
+    ///
+    /// The updater is allowed to use plain HTTP on loopback precisely so this
+    /// can be tested without a network or a python dependency.
+    fn serve_once(body: Vec<u8>) -> (String, std::thread::JoinHandle<()>) {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let handle = std::thread::spawn(move || {
+            if let Ok((mut stream, _)) = listener.accept() {
+                use std::io::{Read, Write};
+                // Read the request before answering. Replying to a socket whose
+                // request is still in flight makes the peer reset the
+                // connection, which only shows up when the machine is busy.
+                let mut buf = [0u8; 1024];
+                let _ = stream.read(&mut buf);
+
+                let _ = stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: ");
+                let _ = stream.write_all(body.len().to_string().as_bytes());
+                let _ = stream.write_all(b"\r\nConnection: close\r\n\r\n");
+                let _ = stream.write_all(&body);
+                let _ = stream.flush();
+            }
+        });
+        (format!("http://127.0.0.1:{port}/payload"), handle)
+    }
+
+    #[test]
+    fn a_binary_payload_downloads_and_verifies() {
+        // Regression: the downloader read the response as a string, so any
+        // byte outside UTF-8 made it look like an empty file and the update
+        // was refused with "the server sent an empty response". Every real
+        // payload is an ELF binary, so the updater never worked.
+        let mut payload: Vec<u8> = vec![0x7f, 0x45, 0x4c, 0x46, 0xff, 0xfe, 0x00, 0x80];
+        payload.extend_from_slice(b"not utf-8: \xc3\x28 \xa0\xa1");
+
+        let (url, server) = serve_once(payload.clone());
+        let release = Release {
+            schema: MANIFEST_SCHEMA,
+            version: "0.2.0".into(),
+            url: url.clone(),
+            sha256: sha256_hex(&payload),
+            size: Some(payload.len() as u64),
+            notes: None,
+        };
+
+        let dest = std::env::temp_dir().join(format!("camarelol-dl-{}.bin", std::process::id()));
+        let _ = std::fs::remove_file(&dest);
+        let got = fetch_candidate(&release, &dest).expect("a binary payload must download");
+        let _ = std::fs::remove_file(&dest);
+        server.join().unwrap();
+
+        assert_eq!(got, payload, "the bytes must survive the round trip");
+    }
+
+    #[test]
+    fn a_tampered_payload_is_rejected_by_the_real_download_path() {
+        let payload = b"the genuine article".to_vec();
+        let (url, server) = serve_once(payload.clone());
+        let release = Release {
+            schema: MANIFEST_SCHEMA,
+            version: "0.2.0".into(),
+            url,
+            // A checksum for something else entirely.
+            sha256: "0".repeat(64),
+            size: None,
+            notes: None,
+        };
+
+        let dest =
+            std::env::temp_dir().join(format!("camarelol-tamper-{}.bin", std::process::id()));
+        let _ = std::fs::remove_file(&dest);
+        let err = fetch_candidate(&release, &dest).unwrap_err();
+        let _ = std::fs::remove_file(&dest);
+        server.join().unwrap();
+
+        assert_eq!(err.code, ErrorCode::UpdateChecksumMismatch);
+    }
+
+    fn sha256_hex(bytes: &[u8]) -> String {
+        use sha2::{Digest, Sha256};
+        Sha256::digest(bytes)
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect()
     }
 
     #[test]

@@ -108,7 +108,7 @@ jobs:
           staging="${RUNNER_TEMP}/${name}"
           mkdir -p "$staging"
           for item in Cargo.toml Cargo.lock rust-toolchain.toml PKGBUILD LICENSE README.md \
-                      core tui python java docs scripts .gitignore; do
+                      core tui python java docs scripts keys .gitignore; do
             cp -r "$GITHUB_WORKSPACE/$item" "$staging/" 2>/dev/null || true
           done
           rm -rf "$staging"/target "$staging"/*/target "$staging"/java/out
@@ -193,7 +193,7 @@ jobs:
           mkdir -p "$staging"
           # Ship exactly what the PKGBUILD expects to find.
           for item in Cargo.toml Cargo.lock rust-toolchain.toml PKGBUILD LICENSE README.md \
-                      core tui python java docs scripts .gitignore; do
+                      core tui python java docs scripts keys .gitignore; do
             cp -r "$GITHUB_WORKSPACE/$item" "$staging/" 2>/dev/null || true
           done
           rm -rf "$staging"/target "$staging"/*/target "$staging"/java/out
@@ -225,6 +225,25 @@ jobs:
           EOF
           # Fail the release rather than ship an index nothing can parse.
           python3 -c 'import json,sys; d=json.load(open("latest.json")); assert d["schema"]==1 and len(d["sha256"])==64'
+
+          # Sign the index when a signing key is configured. Without one the
+          # release still ships, but every camareLOL will refuse to install it
+          # unless the user passes --allow-unsigned-update, which is the
+          # honest outcome: an unsigned index proves nothing.
+          if [ -n "${CAMARELOL_SIGNING_KEY:-}" ]; then
+            keyid="${CAMARELOL_SIGNING_KEY_ID:-camarelol-release}"
+            printf '%s' "$CAMARELOL_SIGNING_KEY" > "$RUNNER_TEMP/signing.asc"
+            chmod 600 "$RUNNER_TEMP/signing.asc"
+            gpg --batch --quiet --import "$RUNNER_TEMP/signing.asc"
+            gpg --batch --yes --detach-sign --armor \
+              --local-user "$keyid" -o latest.json.sig latest.json
+            rm -f "$RUNNER_TEMP/signing.asc"
+            gpg --batch --verify latest.json.sig latest.json
+            echo "signed the update index"
+          else
+            echo "::warning::no CAMARELOL_SIGNING_KEY secret is set; the update index"
+            echo "::warning::will be published unsigned and camareLOL will refuse it"
+          fi
           cat latest.json
 
       - name: Upload assets
@@ -235,6 +254,7 @@ jobs:
             target/release/camarelol
             java/out/camarelol-catalog.jar
             latest.json
+            latest.json.sig
           generate_release_notes: true
           body: |
             ## camareLOL ${{ env.VERSION }}

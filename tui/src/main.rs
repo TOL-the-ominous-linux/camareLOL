@@ -32,6 +32,9 @@ struct Args {
     update: bool,
     rollback_update: bool,
     update_url: Option<String>,
+    update_key: Option<PathBuf>,
+    update_sig_url: Option<String>,
+    allow_unsigned_update: bool,
 }
 
 fn parse_args() -> Result<Args, String> {
@@ -52,6 +55,9 @@ fn parse_args() -> Result<Args, String> {
             "--update" => a.update = true,
             "--rollback-update" => a.rollback_update = true,
             "--update-url" => a.update_url = args.next(),
+            "--update-key" => a.update_key = args.next().map(PathBuf::from),
+            "--update-sig-url" => a.update_sig_url = args.next(),
+            "--allow-unsigned-update" => a.allow_unsigned_update = true,
             "-h" | "--help" => {
                 println!("{}", usage());
                 std::process::exit(0);
@@ -88,9 +94,15 @@ UPDATES:
     --update                  Download, verify and install it (needs write access)
     --rollback-update         Put the previous binary back
     --update-url <URL>        Use a different index (default: the project URL)
+    --update-key <FILE>       Pinned public key used to check the signature
+    --update-sig-url <URL>    Where the detached signature lives
+                              (default: the index URL plus .sig)
+    --allow-unsigned-update   Install even if the index carries no valid
+                              signature from the pinned key
 
-    Updates never happen on their own. --check-update only reports, and even
-    --update refuses while an installation is running. See docs/UPDATES.md.
+    Updates never happen on their own. --check-update only reports, --update
+    refuses while an installation is running, and it refuses an index that is
+    not signed unless you pass --allow-unsigned-update. See docs/UPDATES.md.
 
     -h, --help                Show this help
     -V, --version             Show version and commit
@@ -114,6 +126,9 @@ fn main() {
             args.update,
             args.rollback_update,
             args.update_url,
+            args.update_key,
+            args.update_sig_url,
+            args.allow_unsigned_update,
         ) {
             Ok(code) => std::process::exit(code),
             Err(e) => {
@@ -186,13 +201,18 @@ fn cmd_update(
     install: bool,
     rollback: bool,
     url_override: Option<String>,
+    key_path: Option<PathBuf>,
+    args_sig: Option<String>,
+    allow_unsigned: bool,
 ) -> Result<i32, CamarelolError> {
     use camarelol_core::update::{self, Plan};
 
     // Asking for both means the user wants to know first; report, never install.
     let install = install && !check_only;
 
-    let url = url_override.unwrap_or_else(|| update::DEFAULT_MANIFEST_URL.to_string());
+    let url = url_override
+        .clone()
+        .unwrap_or_else(|| update::DEFAULT_MANIFEST_URL.to_string());
     let target = std::env::current_exe().map_err(|e| {
         CamarelolError::new(
             ErrorCode::UpdateNotPrivileged,
@@ -209,6 +229,12 @@ fn cmd_update(
     }
 
     let can_write = is_writable(&target);
+    // By default the detached signature sits next to the index.
+    let sig_url = args_sig
+        .clone()
+        .or_else(|| url_override.as_ref().map(|u| format!("{u}.sig")));
+    let public_key = load_public_key(key_path.as_deref())?;
+
     println!("{}", version::banner());
     println!("index: {url}");
     println!("binary: {}", target.display());
@@ -216,7 +242,16 @@ fn cmd_update(
     // Nothing is running an install from this process, so the one hard stop
     // (an install in progress) cannot trigger here; a library caller has to
     // pass that flag itself, which is where the real protection lives.
-    let plan = update::check(&url, version::VERSION, install, false, can_write)?;
+    let index = update::fetch_index(&url, sig_url.as_deref(), public_key.as_deref())?;
+    println!("trust: {}", index.trust.reason());
+    let plan = update::plan_from_index(
+        &index,
+        version::VERSION,
+        install,
+        false,
+        can_write,
+        allow_unsigned,
+    )?;
 
     match &plan {
         Plan::UpToDate => {
@@ -277,6 +312,27 @@ fn restore_default_sigpipe() {
     unsafe {
         libc::signal(libc::SIGPIPE, libc::SIG_DFL);
     }
+}
+
+/// The pinned public key: the file the user named, else the one built in.
+///
+/// Building in `keys/camarelol.pub` means a key can never be swapped by a
+/// downloaded index — the trust anchor ships with the binary, not beside it.
+fn load_public_key(path: Option<&std::path::Path>) -> Result<Option<String>, CamarelolError> {
+    if let Some(p) = path {
+        return std::fs::read_to_string(p).map(Some).map_err(|e| {
+            CamarelolError::new(
+                ErrorCode::UpdateSignatureInvalid,
+                format!("could not read the public key {}", p.display()),
+            )
+            .with_context(e.to_string())
+        });
+    }
+    let embedded = env!("CAMARELOL_UPDATE_PUBKEY").trim();
+    if embedded.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(embedded.to_string()))
 }
 
 fn is_writable(path: &std::path::Path) -> bool {

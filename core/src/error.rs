@@ -55,6 +55,10 @@ pub enum ErrorCode {
     UpdateNotPrivileged,
     /// The previous binary could not be restored.
     UpdateRollbackFailed,
+    /// The update index carries no usable signature.
+    UpdateSignatureMissing,
+    /// A signature was present but did not verify against the pinned key.
+    UpdateSignatureInvalid,
     /// Feature is explicitly not implemented yet; must never be faked.
     NotSupported,
     /// Generic internal error.
@@ -87,6 +91,8 @@ impl fmt::Display for ErrorCode {
             ErrorCode::UpdateCandidateFailed => "update_candidate_failed",
             ErrorCode::UpdateNotPrivileged => "update_not_privileged",
             ErrorCode::UpdateRollbackFailed => "update_rollback_failed",
+            ErrorCode::UpdateSignatureMissing => "update_signature_missing",
+            ErrorCode::UpdateSignatureInvalid => "update_signature_invalid",
             ErrorCode::NotSupported => "not_supported",
             ErrorCode::Internal => "internal",
         };

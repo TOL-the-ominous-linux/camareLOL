@@ -65,6 +65,24 @@ fn main() {
     let dirty = git(&["status", "--porcelain"]).is_some();
     emit("CAMARELOL_GIT_DIRTY", if dirty { "yes" } else { "no" });
 
+    // Pin the update-signing key in the binary itself. Reading it from a file
+    // next to the index would let whoever serves the index choose the key that
+    // vouches for it.
+    // A build script runs with the package directory as its working
+    // directory, so the key lives at the workspace root, one level up.
+    let manifest = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_default();
+    let key_path = std::path::Path::new(&manifest)
+        .parent()
+        .map(|root| root.join("keys").join("camarelol.pub"));
+    let key = key_path
+        .as_deref()
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .unwrap_or_default();
+    println!(
+        "cargo:rustc-env=CAMARELOL_UPDATE_PUBKEY={}",
+        key.replace('\n', "\\n")
+    );
+
     // Reproducible builds prefer SOURCE_DATE_EPOCH (set by the CI tarball step).
     let built = std::env::var("SOURCE_DATE_EPOCH").ok();
     emit("CAMARELOL_BUILD_EPOCH", built.as_deref().unwrap_or("0"));

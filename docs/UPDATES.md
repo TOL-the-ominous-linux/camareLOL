@@ -49,15 +49,36 @@ Mỗi lần phát hành, CI sinh file này từ chính binary nó vừa build v�
 release. **Chưa** có bước tự đăng lên trang web: dùng `--update-url` trỏ tới nơi
 bạn đã đặt file, hoặc tự host nó.
 
-## Giới hạn đã biết, nói thẳng
+## Chữ ký
 
 SHA-256 phát hiện **file hỏng hoặc tải thiếu**. Nó *không* phát hiện máy chủ độc
 hại hay DNS bị chiếm — trong trường hợp đó, cả hash lẫn payload đều đến từ kẻ tấn
 công, nên chúng khớp nhau một cách vô nghĩa.
 
-Muốn chặn được điều đó phải **ký chữ ký** vào chỉ mục (minisign hoặc GPG). Việc này
-**chưa làm**. Đừng hiểu `sha256` là bảo đảm xác thực nguồn gốc — nó chỉ là bảo đảm
-tính toàn vẹn.
+Vì vậy chỉ mục còn được **ký tách rời** bằng GPG:
+
+| | |
+|---|---|
+| Chữ ký kiểm tra trên | đúng những byte thô của chỉ mục, **trước khi** phân tích |
+| Khoá tin cậy | `keys/camarelol.pub`, nhúng vào binary lúc build |
+| Kiểm tra khoá | vân tay khoá ký phải **bằng** khoá đã ghim, không phải "khoá nào gpg tìm được" |
+| Keyring của gpg | thư mục tạm, không đụng keyring thật của bạn |
+| `EXPKEYSIG`, `BADSIG` | từ chối |
+
+Chỉ mục không ký thì `--update` **từ chối cài**:
+
+```console
+$ camarelol --update
+error: [update_signature_missing] refusing to install an update index that is not signed
+  (no public key is configured, so the index cannot be authenticated)
+  → publish latest.json.sig and configure a pinned key (see docs/UPDATES.md),
+    or re-run with --allow-unsigned-update if you accept the risk
+```
+
+Chỉ khi bạn gõ `--allow-unsigned-update` thì nó mới đi tiếp. Đây là hành vi cố ý:
+một bản cập nhật không ký thì không nên tự cài vào công cụ xoá ổ đĩa.
+
+Xem `keys/README.md` để thiết lập khoá.
 
 ## Vì sao không tự cập nhật
 
