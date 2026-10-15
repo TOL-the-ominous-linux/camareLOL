@@ -86,6 +86,42 @@ class BuildCase(unittest.TestCase):
             sys.argv = argv
 
 
+class TestDocLinksPointAtRealPages(unittest.TestCase):
+    """A link to a .md file is right on GitHub and broken on the site.
+
+    The documents link to each other by repository path, and the site does not
+    serve Markdown — only the pages it was rendered into.
+    """
+
+    def test_a_docs_path_becomes_the_rendered_page(self):
+        self.assertEqual(render_site.rewrite_doc_link("docs/UPDATES.md"),
+                         "/docs/updates.html")
+
+    def test_a_sibling_link_from_inside_docs_works_too(self):
+        # docs/ARCHITECTURE.md links to IPC-PROTOCOL.md with no directory part.
+        self.assertEqual(render_site.rewrite_doc_link("IPC-PROTOCOL.md"),
+                         "/docs/ipc-protocol.html")
+
+    def test_the_readme_link_becomes_a_page(self):
+        self.assertEqual(render_site.rewrite_doc_link("README.md"),
+                         "/docs/readme.html")
+
+    def test_a_fragment_is_kept(self):
+        self.assertEqual(render_site.rewrite_doc_link("docs/TESTING.md#vm"),
+                         "/docs/testing.html#vm")
+
+    def test_absolute_and_external_links_are_left_alone(self):
+        for url in ("https://e.invalid/x.md", "/docs/a.html", "#top", "mailto:a@e.invalid"):
+            self.assertEqual(render_site.rewrite_doc_link(url), url)
+
+    def test_a_link_that_is_not_markdown_is_left_alone(self):
+        self.assertEqual(render_site.rewrite_doc_link("docs/x.txt"), "docs/x.txt")
+
+    def test_the_rewritten_target_is_the_case_the_files_are_written_in(self):
+        """The site writes them lower case; a mixed-case link would be a redirect."""
+        self.assertNotIn(".MD", render_site.rewrite_doc_link("docs/UPDATES.MD"))
+
+
 class TestRefusesToPublishIncompleteSites(BuildCase):
     def test_no_releases_means_failure(self):
         render_site.get_json = offline

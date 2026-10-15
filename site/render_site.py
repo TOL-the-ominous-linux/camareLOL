@@ -71,6 +71,26 @@ def fetch_source(path: str) -> str | None:
     return base64.b64decode(doc["content"]).decode("utf-8", "replace")
 
 
+def rewrite_doc_link(url: str) -> str:
+    """Point a link at a Markdown file to the page that file became.
+
+    The documents link to each other by their repository paths — `docs/UPDATES.md`
+    from the README, `IPC-PROTOCOL.md` from the architecture notes — and those
+    links are right on GitHub. The site does not serve the Markdown, so left
+    alone they resolve to a path that is not there. The doc pages are written in
+    lower case, so the target has to be lower-cased to match.
+    """
+    if url.startswith(("http://", "https://", "#", "mailto:", "/")):
+        return url
+    base, _, fragment = url.partition("#")
+    lowered = base.lower()
+    if not lowered.endswith(".md"):
+        return url
+    stem = lowered[:-3]
+    stem = stem[len("docs/"):] if stem.startswith("docs/") else stem
+    return f"/docs/{stem}.html" + (f"#{fragment}" if fragment else "")
+
+
 def render_markdown(text: str) -> str:
     """Render locally rather than through the GitHub API.
 
@@ -78,7 +98,7 @@ def render_markdown(text: str) -> str:
     with a valid token — and its output carries GitHub's class names, which do
     not match this site's stylesheet, so the tables would arrive unstyled.
     """
-    return markdown.render(text)
+    return markdown.render(text, rewrite=rewrite_doc_link)
 
 
 NAV = [

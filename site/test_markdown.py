@@ -75,6 +75,37 @@ class TestInline(unittest.TestCase):
         self.assertIn('href="#abc"', render("[x](#abc)"))
         self.assertIn('href="/docs/a.html"', render("[x](/docs/a.html)"))
 
+    def test_a_plain_relative_path_stays_a_link(self):
+        """Not '#'.
+
+        An earlier allow-list turned every ordinary relative path into href="#".
+        The README's own links — [docs/UPDATES.md](docs/UPDATES.md) and five
+        more — rendered as links that looked real and went nowhere.
+        """
+        out = render("[docs/UPDATES.md](docs/UPDATES.md)")
+        self.assertIn('href="docs/UPDATES.md"', out)
+        self.assertNotIn('href="#"', out)
+
+    def test_a_relative_path_inside_a_table_cell_survives(self):
+        self.assertNotIn('href="#"', render("| a |\n|---|\n| [x](y/z.md) |"))
+
+    def test_a_relative_path_inside_a_list_survives(self):
+        self.assertNotIn('href="#"', render("- [see](docs/TESTING.md)"))
+
+    def test_a_heading_link_survives(self):
+        self.assertNotIn('href="#"', render("# See [x](docs/TESTING.md)"))
+
+
+class TestRewriteHook(unittest.TestCase):
+    def test_targets_are_passed_through_the_hook(self):
+        out = render("[x](docs/UPDATES.md)", rewrite=lambda u: "/docs/updates.html")
+        self.assertIn('href="/docs/updates.html"', out)
+
+    def test_the_hook_does_not_touch_code_spans(self):
+        out = render("`docs/UPDATES.md`", rewrite=lambda u: "/nope.html")
+        self.assertIn("<code>docs/UPDATES.md</code>", out)
+        self.assertNotIn("/nope.html", out)
+
 
 class TestTables(unittest.TestCase):
     def test_header_and_rows(self):

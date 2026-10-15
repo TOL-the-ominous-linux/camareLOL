@@ -37,24 +37,36 @@ def escape(text: str) -> str:
 
 
 def safe_url(url: str) -> str:
-    """Only http, https and in-page anchors.
+    """Anything without a scheme, plus http, https and mailto.
 
-    The docs are ours, but a page that renders whatever a file contains should
-    not be able to carry `javascript:` through into a link just because
-    somebody pasted one. Anything else is rendered as inert text.
+    The rule is about the *scheme*, not about a list of prefixes that look
+    right. An earlier version allowed `/`, `./` and `../` and turned everything
+    else into `#` — which quietly broke every relative link in the repository's
+    own documents: `[docs/UPDATES.md](docs/UPDATES.md)` became a link that
+    looked real and went nowhere, on six of them in the README alone.
+
+    A scheme is the part before the first colon, when it appears before any
+    `/`, `?` or `#`. `docs/UPDATES.md` has none and is a plain relative path;
+    `javascript:alert(1)` has one and is refused.
     """
     candidate = url.strip()
-    lowered = candidate.lower()
-    if lowered.startswith(("http://", "https://", "#", "/")) or (
-        lowered.startswith("mailto:") or lowered.startswith("./") or lowered.startswith("../")
-    ):
-        return escape(candidate)
-    return "#"
+    if not candidate:
+        return "#"
+
+    head = re.split(r"[/?#]", candidate, maxsplit=1)[0]
+    if ":" in head:
+        if candidate.lower().startswith(("http://", "https://", "mailto:")):
+            return escape(candidate)
+        return "#"
+    return escape(candidate)
 
 
-def inline(text: str) -> str:
+def inline(text: str, rewrite=None) -> str:
     """Inline marks, with the text already escaped."""
     placeholders: list[str] = []
+
+    def target(url: str) -> str:
+        return safe_url(rewrite(url) if rewrite else url)
 
     def stash(fragment: str) -> str:
         placeholders.append(fragment)
@@ -64,13 +76,13 @@ def inline(text: str) -> str:
     text = _CODE.sub(lambda m: stash(f"<code>{escape(m.group(1))}</code>"), text)
     text = _IMAGE.sub(
         lambda m: stash(
-            f'<img src="{safe_url(m.group(2))}" alt="{escape(m.group(1))}" loading="lazy">'
+            f'<img src="{target(m.group(2))}" alt="{escape(m.group(1))}" loading="lazy">'
         ),
         text,
     )
     text = _LINK.sub(
         lambda m: stash(
-            f'<a href="{safe_url(m.group(2))}">{escape(m.group(1)) or escape(m.group(2))}</a>'
+            f'<a href="{target(m.group(2))}">{escape(m.group(1)) or escape(m.group(2))}</a>'
         ),
         text,
     )
@@ -101,7 +113,14 @@ def _split_row(line: str) -> list[str]:
     return [cell.strip() for cell in line.split("|")]
 
 
-def render(markdown: str) -> str:
+def render(markdown: str, rewrite=None) -> str:
+    """Render a document to HTML.
+
+    `rewrite` is given each link target before it is used and returns the one
+    to emit, or None to leave it alone. The site passes it to turn
+    `docs/UPDATES.md` into the rendered page, since the Markdown file itself is
+    not something the site serves.
+    """
     lines = markdown.replace("\r\n", "\n").split("\n")
     out: list[str] = []
     i = 0
@@ -136,7 +155,7 @@ def render(markdown: str) -> str:
         heading = _HEADING.match(line)
         if heading:
             level = len(heading.group(1))
-            out.append(f"<h{level}>{inline(heading.group(2))}</h{level}>")
+            out.append(f"<h{level}>{inline(heading.group(2), rewrite)}</h{level}>")
             i += 1
             continue
 
@@ -149,11 +168,11 @@ def render(markdown: str) -> str:
                 rows.append(_split_row(lines[i]))
                 i += 1
             out.append("<table><thead><tr>")
-            out += [f"<th>{inline(c)}</th>" for c in header]
+            out += [f"<th>{inline(c, rewrite)}</th>" for c in header]
             out.append("</tr></thead><tbody>")
             for row in rows:
                 cells = row + [""] * (len(header) - len(row))
-                out.append("<tr>" + "".join(f"<td>{inline(c)}</td>" for c in cells[: len(header)]) + "</tr>")
+                out.append("<tr>" + "".join(f"<td>{inline(c, rewrite)}</td>" for c in cells[: len(header)]) + "</tr>")
             out.append("</tbody></table>")
             continue
 
@@ -162,7 +181,7 @@ def render(markdown: str) -> str:
             while i < len(lines) and lines[i].lstrip().startswith(">"):
                 quoted.append(lines[i].lstrip().lstrip(">").strip())
                 i += 1
-            out.append(f"<blockquote>{render(chr(10).join(quoted))}</blockquote>")
+            out.append(f"<blockquote>{render(chr(10).join(quoted), rewrite)}</blockquote>")
             continue
 
         if _UL.match(line) or _OL.match(line):
@@ -187,7 +206,7 @@ def render(markdown: str) -> str:
                     done = " checked" if cb.group(1).lower() == "x" else ""
                     check = f'<input type="checkbox" disabled{done}> '
                     body = cb.group(2)
-                items.append(f"<li>{check}{inline(body)}</li>")
+                items.append(f"<li>{check}{inline(body, rewrite)}</li>")
                 i += 1
             out.append(f"<{tag}>" + "".join(items) + f"</{tag}>")
             continue
@@ -208,6 +227,6 @@ def render(markdown: str) -> str:
             para.append(nxt.strip())
             i += 1
         if para:
-            out.append("<p>" + "<br>".join(inline(p) for p in para) + "</p>")
+            out.append("<p>" + "<br>".join(inline(p, rewrite) for p in para) + "</p>")
 
     return "\n".join(out)
