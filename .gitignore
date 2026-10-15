@@ -1,31 +1,72 @@
-# build / test artifacts
+# Build output
 /target
 **/target
 *.rlib
 *.rmeta
 Cargo.lock.bak
+/tools/
+tools/
+__pycache__/
+*.pyc
+java/out/
+/out/
+/lol/site/
+site-preview/
 
-# local test artifacts (VM images, ISOs, logs)
+# Test artefacts
 /.test/*.iso
 /.test/*.vdi
 /.test/*.vmdk
 /.test/*.log
 /.test/*.json
 !/.test/.gitkeep
-
-# local toolchains installed without root
-/tools/
-tools/
 core/camarelol-*.log
 *.log
-*.log
-__pycache__/
-*.pyc
-java/out/
 
-# release artefacts from scripts/sign-release.sh
-/out/
+# ---------------------------------------------------------------- secrets
+#
+# Nothing below belongs in this repository. The signing key is a public key and
+# is tracked; the private half lives in ~/.gnupg and never enters a tree.
+#
+# The OAuth client secret is the case that matters most here. A static site is
+# served to everyone, so a secret in a tracked file — or in HTML, or in
+# JavaScript — is a secret published. These patterns exist so that dropping a
+# credential in the working tree does not also drop it in a commit.
 
-# generated update mirror content; lol_sync.py writes it
-/lol/site/
-site-preview/
+# Environment files, in any form
+.env
+.env.*
+!.env.example
+*.env
+
+# OAuth and provider credentials
+code.json
+client_secret*.json
+credentials.json
+*_secret.json
+service-account*.json
+*-credentials.json
+*.oauth
+gcloud*.json
+
+# Keys and certificates
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+id_rsa*
+id_ed25519*
+*.gpg
+*.pgp
+*.asc
+
+# Local deployment state, which carries deploy tokens
+.netlify/
+.vercel/
+
+# Scratch
+*.bak
+*.swp
+*~
