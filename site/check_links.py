@@ -46,6 +46,7 @@ def check(base: str) -> int:
     seen: set[str] = set()
     queue: deque[str] = deque(["/"])
     broken: list[tuple[str, str, int]] = []
+    skipped_api: set[str] = set()
     pages = 0
 
     while queue:
@@ -71,6 +72,13 @@ def check(base: str) -> int:
             clean = parts.path + (f"?{parts.query}" if parts.query else "")
             if clean.startswith("/latest.json"):
                 continue  # tệp chữ ký, đã kiểm riêng
+            if clean.startswith("/api/"):
+                # Served by Netlify functions, not by files. A static server
+                # returns 404 for every one of them, so checking here reports
+                # the local preview as broken rather than the site. Skip, and
+                # say so, rather than teaching the checker to guess.
+                skipped_api.add(clean)
+                continue
             name = parts.path.rsplit("/", 1)[-1]
             looks_like_page = (
                 clean.endswith((".html", "/"))
@@ -88,6 +96,9 @@ def check(base: str) -> int:
             queue.append(clean)
 
     print(f"  đã kiểm {pages} trang")
+    if skipped_api:
+        print(f"  bỏ qua {len(skipped_api)} đường dẫn /api/* (do function phục vụ, "
+              f"không phải tệp)")
     if not broken:
         print("  không có liên kết nội bộ hỏng")
         return 0

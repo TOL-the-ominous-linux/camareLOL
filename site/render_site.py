@@ -367,7 +367,7 @@ def copy_assets(out: Path) -> None:
     src = Path(__file__).resolve().parent / "assets"
     dst = out / "assets"
     dst.mkdir(parents=True, exist_ok=True)
-    for name in ("style.css", "logo.png"):
+    for name in ("style.css", "logo.png", "discuss.js"):
         s = src / name
         if not s.exists():
             raise SystemExit(f"missing asset: {s}")
@@ -464,19 +464,50 @@ chmod +x /root/camarelol
         '     lệch với mã nguồn.</p>\n'
         '  <ul class="docs">\n' + docs + "\n  </ul>", "docs.html"), encoding="utf-8")
 
-    (out / "discuss.html").write_text(page("Thảo luận", f"""  <h1>Thảo luận</h1>
-  <p class="lede">Bàn luận nằm trong GitHub Discussions của kho camareLOL — không có máy chủ
-  riêng, không có cơ sở dữ liệu riêng, và mọi bài đăng đều thuộc về kho mã nguồn công khai.</p>
-  <p class="cta">
-    <a class="btn" href="https://github.com/{OWNER}/{REPO}/discussions">Mở Discussions</a>
-    <a class="btn ghost" href="https://github.com/{OWNER}/{REPO}/issues/new">Báo lỗi</a>
-  </p>
+    (out / "discuss.html").write_text(page("Thảo luận", """  <h1>Thảo luận</h1>
+  <p class="lede">Đăng nhập bằng Google và viết ngay trên trang này. Bài viết vẫn nằm
+  trong GitHub Discussions của kho camareLOL, nên không có nơi nào lưu bàn luận
+  ngoài kho mã nguồn công khai.</p>
+
+  <div id="signin" class="panel">
+    <p>Chưa đăng nhập.</p>
+    <p class="cta">
+      <a class="btn" href="/api/auth-start">Đăng nhập bằng Google</a>
+      <a class="btn ghost" href="https://github.com/OWNER/REPO/discussions">Xem trên GitHub</a>
+    </p>
+  </div>
+
+  <form id="composer" hidden>
+    <h2>Viết bài mới</h2>
+    <p class="note" id="as-who"></p>
+    <label for="title">Tiêu đề</label>
+    <input id="title" name="title" maxlength="240" required
+           placeholder="Tóm tắt vấn đề trong một dòng">
+    <label for="body">Nội dung</label>
+    <textarea id="body" name="body" rows="8" required
+              placeholder="Càng cụ thể càng dễ có người trả lời."></textarea>
+    <p class="cta">
+      <button type="submit" class="btn">Đăng bài</button>
+      <a class="btn ghost" href="/api/auth-logout">Đăng xuất</a>
+    </p>
+    <p class="note">Bài đăng mang tên Google của bạn, do bot của kho đăng lên —
+    nên trên GitHub nó không hiện avatar GitHub của bạn.</p>
+  </form>
+
+  <p id="status" class="status" role="status" aria-live="polite"></p>
+
+  <h2>Bài mới nhất</h2>
+  <ul class="news" id="list"><li class="note">đang tải…</li></ul>
+
   <h2>Trước khi đăng</h2>
   <ul>
-    <li>Báo lỗi thì dùng Issues, có mẫu điền, dễ theo dõi hơn.</li>
+    <li>Báo lỗi thì dùng Issues — có mẫu điền, dễ theo dõi hơn thảo luận.</li>
     <li>Bản cài lỗi: ghi kèm phiên bản (<code>camarelol --version</code>) và ảnh chụp.</li>
     <li>Không dán khoá, mật khẩu hay token vào bài đăng.</li>
-  </ul>""", "discuss.html"), encoding="utf-8")
+  </ul>
+
+<script src="/assets/discuss.js" defer></script>""".replace("OWNER", OWNER).replace("REPO", REPO),
+        "discuss.html"), encoding="utf-8")
 
     try:
         count = write_doc_pages(out, Path(args.docs) if args.docs else None)

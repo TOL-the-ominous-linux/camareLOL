@@ -239,3 +239,39 @@ footer .langs a.on {
 /* A page that is mostly code should not wrap its samples at an arbitrary
    width; the horizontal scroll is easier to follow than a wrapped command. */
 article pre { overflow-x: auto; }
+/* ------------------------------------------------- discussion board */
+/* The sign-in panel and the composer share a shape: they are the two states of
+   one thing, and swapping between them should not move anything on the page. */
+.panel, #composer {
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 16px 18px;
+  margin: 18px 0;
+  max-width: 780px;
+}
+#composer label {
+  display: block;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--ink-soft);
+  margin: 14px 0 4px;
+}
+#composer input, #composer textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  font: inherit;
+  background: #fff;
+  color: var(--ink);
+}
+#composer textarea { resize: vertical; }
+/* A textarea whose height the browser picks from its content is unusable on a
+   phone; it has to be explicitly resizable or fixed. */
+#composer input:focus, #composer textarea:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.status { min-height: 1.4em; font-size: 14px; margin: 10px 0; }
+.status.bad { color: #a4262c; font-weight: 600; }
