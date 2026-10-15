@@ -70,8 +70,8 @@ note "đang build từ $TAG ($(git rev-parse --short HEAD))"
 # ------------------------------------------------------------------ binary
 # -j 2: máy này từng làm nghẽn với mức song song mặc định.
 cargo build --release -j 2 -p camarelol
-install -m 0755 target/release/camarelol "$OUT_DIR/camarelol" 2>/dev/null \
-    || { mkdir -p "$OUT_DIR"; install -m 0755 target/release/camarelol "$OUT_DIR/camarelol"; }
+mkdir -p "$OUT_DIR"
+install -m 0755 target/release/camarelol "$OUT_DIR/camarelol"
 
 # ------------------------------------------------------------- catalog Java
 # Không phải thứ binary cần, nhưng release nào cũng kèm, và dựng lại từ mã
@@ -113,9 +113,9 @@ EOF
 grep -q "$SHA" "$OUT_DIR/latest.json" || die "chỉ mục không khớp sha256"
 
 printf '\nXong. Kiểm tra lại trước khi phát hành:\n\n'
-note "phiên bản trong binary : $(./"$OUT_DIR/camarelol" --version | head -1)"
+note "phiên bản trong binary : $("$OUT_DIR/camarelol" --version | head -1)"
 note "sha256                : $SHA"
-note "kênh cập nhật         : $(./"$OUT_DIR/camarelol" --check-update 2>&1 | grep -o 'index: .*' | head -1)"
+note "kênh cập nhật         : $("$OUT_DIR/camarelol" --check-update 2>&1 | grep -o 'index: .*' | head -1)"
 printf '\nTiếp theo:\n\n'
 note "1. gh release create $TAG --title ... --notes ... $OUT_DIR/camarelol"
 note "2. $OUT_DIR/latest.json  $OUT_DIR/camarelol-$VERSION.tar.gz  $OUT_DIR/camarelol-catalog.jar"
