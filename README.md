@@ -58,9 +58,15 @@ $ ./build.sh lint             # clippy + rustfmt
 Each release ships a `PKGBUILD`:
 
 ```console
-$ tar xf camarelol-0.1.0.tar.gz && cd camarelol-0.1.0
+$ VERSION=0.1.10
+$ curl -sSLO "https://github.com/tamkogay9876-code/camareLOL/releases/download/v$VERSION/camarelol-$VERSION.tar.gz"
+$ tar xf "camarelol-$VERSION.tar.gz" && cd "camarelol-$VERSION"
 $ makepkg -si
 ```
+
+`releases/latest/download/` chỉ nhận **đúng tên tệp**, nên ở đây phải ghép
+`tên-tệp` từ `tên-thẻ`; không có cách nào dùng đường dẫn đó mà không biết
+trước phiên bản.
 
 The full VirtualBox acceptance test is documented in
 [docs/TESTING.md](docs/TESTING.md), and a hands-on guide for running it

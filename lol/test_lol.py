@@ -17,9 +17,11 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import urllib.error
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import lol_sync
 from lol_sync import check_shape, parse_version, verify_signature, publish, SERVABLE
 
 HAVE_GPG = subprocess.run(["which", "gpg"], capture_output=True).returncode == 0
@@ -186,6 +188,47 @@ class TestSignatureVerification(unittest.TestCase):
     def test_a_missing_key_file_is_refused(self):
         with self.assertRaises(RuntimeError):
             verify_signature(self.index, b"", Path(self.tmp.name) / "nope.pub")
+
+
+class TestWaitingForTheSignature(unittest.TestCase):
+    """A release is published before it is signed.
+
+    Anything triggered by `release: published` runs in the window where the
+    signature does not exist yet. It has to wait rather than report a broken
+    mirror.
+    """
+
+    def test_it_waits_for_a_signature_that_shows_up_late(self):
+        calls = []
+
+        def fake_fetch(url, accept=None):
+            calls.append(url)
+            if len(calls) < 3:
+                raise urllib.error.URLError("404")
+            return b"SIGNATURE"
+
+        saved_fetch, saved_sleep = lol_sync.fetch, lol_sync.time.sleep
+        lol_sync.fetch, lol_sync.time.sleep = fake_fetch, lambda _s: None
+        try:
+            self.assertEqual(lol_sync.fetch_signature("u", wait=0), b"SIGNATURE")
+        finally:
+            lol_sync.fetch, lol_sync.time.sleep = saved_fetch, saved_sleep
+        self.assertEqual(len(calls), 3)
+
+    def test_it_gives_up_with_a_message_that_says_why(self):
+        def always_missing(url, accept=None):
+            raise urllib.error.URLError("404")
+
+        saved_fetch, saved_sleep = lol_sync.fetch, lol_sync.time.sleep
+        lol_sync.fetch, lol_sync.time.sleep = always_missing, lambda _s: None
+        try:
+            with self.assertRaises(RuntimeError) as caught:
+                lol_sync.fetch_signature("https://e.invalid/sig", attempts=3, wait=0)
+        finally:
+            lol_sync.fetch, lol_sync.time.sleep = saved_fetch, saved_sleep
+        # A message that just says "404" sends the reader looking for a broken
+        # mirror rather than an unfinished release.
+        self.assertIn("being signed", str(caught.exception))
 
 
 if __name__ == "__main__":

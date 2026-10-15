@@ -12,6 +12,7 @@ a site that looks fine and says nothing.
 from __future__ import annotations
 
 import json
+import re
 import sys
 import tempfile
 import unittest
@@ -84,6 +85,43 @@ class BuildCase(unittest.TestCase):
             return render_site.main()
         finally:
             sys.argv = argv
+
+
+class TestDocumentsLinkToFilesThatExist(unittest.TestCase):
+    """A relative link in a document must resolve on GitHub and on the site.
+
+    Both are checked here rather than trusted: the path is correct on GitHub
+    only if the file is really there, and correct on the site only if it is
+    rewritten to the page that file became.
+    """
+
+    def files(self):
+        root = Path(__file__).resolve().parent.parent
+        return sorted(p for p in (root / "docs").glob("*.md")) + [root / "README.md"]
+
+    def test_every_relative_markdown_link_resolves(self):
+        broken = []
+        for path in self.files():
+            text = path.read_text(encoding="utf-8")
+            for target in re.findall(r"\]\(([^)#\s]+\.md)(?:#[^)]*)?\)", text):
+                if target.startswith(("http://", "https://")):
+                    continue
+                resolved = (path.parent / target).resolve()
+                if not resolved.exists():
+                    broken.append(f"{path.name} -> {target}")
+                elif not resolved.name.endswith(".md"):
+                    broken.append(f"{path.name} -> {target}")
+        self.assertEqual(broken, [], "links to files that are not there")
+
+    def test_every_one_of_them_becomes_a_page_that_gets_written(self):
+        for path in self.files():
+            text = path.read_text(encoding="utf-8")
+            for target in re.findall(r"\]\(([^)#\s]+\.md)(?:#[^)]*)?\)", text):
+                if target.startswith(("http://", "https://")):
+                    continue
+                page = render_site.rewrite_doc_link(target)
+                self.assertTrue(page.startswith("/docs/"), f"{target} -> {page}")
+                self.assertTrue(page.endswith(".html"), f"{target} -> {page}")
 
 
 class TestDocLinksPointAtRealPages(unittest.TestCase):

@@ -3,61 +3,50 @@
 Hai tệp này phục vụ tại:
 
 ```
-https://<tên-miền-của-bạn>/latest.json
-https://<tên-miền-của-bạn>/latest.json.sig
+https://camarelol.netlify.app/latest.json
+https://camarelol.netlify.app/latest.json.sig
 ```
 
-Trỏ chúng vào camareLOL bằng:
+Trỏ camareLOL vào bằng:
 
 ```console
-camarelol --check-update --update-url https://<tên-miền-của-bạn>/latest.json
+camarelol --check-update
 ```
 
-## Nhánh này được sinh ra tự động
+`latest.json` là địa chỉ mặc định, nên lệnh trên không cần tham số.
+
+## Nhánh này là bản dự phòng, mirror thật nằm ở kho riêng
+
+Mirror được phục vụ là kho **`camareLOL-mirror`**, không phải nhánh này:
+
+| | Nhánh `lol-site` (đây) | Kho `camareLOL-mirror` |
+|---|---|---|
+| Phục vụ tại | *không có* | `https://camarelol.netlify.app` |
+| Nội dung | hai tệp chỉ mục | hai tệp chỉ mục **và trang web** |
+| Cập nhật khi có bản phát hành | có | có |
+
+Nhánh này chỉ còn giữ như một đường dự phòng. Nếu Netlify lỡ tay, dựng một host
+tĩnh khác trỏ vào nhánh này là có mirror trở lại — công cụ hỗ trợ cả Netlify,
+Vercel, Cloudflare Pages và GitHub Pages.
+
+## Nhánh được sinh ra tự động
 
 Mỗi lần có bản phát hành mới, `lol-site.yml` chạy `lol_sync.py`, kiểm tra chữ
-ký bằng khoá công khai trong kho mã nguồn, rồi ghi đè hai tệp. Đừng sửa tay
-tại đây — lần chạy sau sẽ xoá.
+ký bằng khoá công khai trong kho mã nguồn, rồi ghi đè hai tệp. Đừng sửa tay tại
+đây — lần chạy sau sẽ xoá.
 
-## Trỏ host tĩnh vào nhánh này
-
-| Dịch vụ | Cách làm |
-|---|---|
-| **Vercel** | Xem bên dưới — dự án đã có sẵn `vercel.json` |
-| **Netlify** | Netlify → Add new site → Import an existing project → repo, branch `lol-site`. Publish directory: `.` |
-| **Cloudflare Pages** | Workers & Pages → Create → Pages → Connect to Git → repo, production branch `lol-site` |
-| **GitHub Pages** | Settings → Pages → Deploy from a branch → `lol-site` / `/ (root)` |
-
-## Vercel
-
-`vercel.json` nằm sẵn trong nhánh này: không framework, không build, phục vụ
-tĩnh, kèm header cache và `nosniff`.
-
-1. Vercel → **Add New → Project** → **Import** kho `tamkogay9876-code/camareLOL`
-2. **Framework Preset**: *Other* (đã khai báo trong `vercel.json`, nhưng chọn
-   *Other* cho chắc)
-3. **Build Command**: để trống — không có gì để build
-4. **Output Directory**: `.`
-5. **Install Command**: để trống
-
-Xong thì vào **Settings → Git → Production Branch** và đổi sang `lol-site`.
-**Bước này quan trọng**: mặc định Vercel lấy `main`, mà `main` chứa mã nguồn
-trình cài đặt chứ không phải mirror. Đổi sang `lol-site` thì mỗi lần có bản phát
-hành mới, Vercel tự deploy lại.
-
-Đợi lần deploy đầu tiên xong, URL sẽ có dạng `https://camareLOL.vercel.app`.
-Kiểm tra:
-
-```console
-$ curl -sS https://camareLOL.vercel.app/latest.json | head -2
-$ curl -sSI https://camareLOL.vercel.app/latest.json | head -4
-```
+Vì bản phát hành được đăng **trước** rồi mới ký, job phải chờ
+`latest.json.sig` xuất hiện. Nếu thấy thông báo "signature not there yet",
+đó là bình thường trong vài phút đầu.
 
 ## Không có gì đáng tin ở đây cả
 
-Chỉ mục **không** phải thứ được tin. Binary camareLOL tự kiểm tra chữ ký bằng khoá
-biên dịch sẵn vào nó. Sửa hai tệp trên nhánh này thì mọi máy đều từ chối — đã
+Chỉ mục **không** phải thứ được tin. Binary camareLOL tự kiểm tra chữ ký bằng
+khoá biên dịch sẵn vào nó. Sửa hai tệp ở đây thì mọi máy đều từ chối — đã
 kiểm chứng bằng cách sửa `sha256` và `url` trên một trạm đang chạy.
+
+Mirror không làm yếu đi niềm tin; nó chỉ giúp khi kho phát hành không trả lời.
+Khoá vẫn nằm trong binary, nên mirror bị sửa cũng không đổi được điều đó.
 
 Xem `lol/README.md` ở nhánh chính để biết trạm này làm được và không làm được
 gì.

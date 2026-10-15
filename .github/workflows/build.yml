@@ -85,6 +85,13 @@ jobs:
           python site/test_markdown.py
           python site/test_render_site.py
 
+      - name: The package recipe
+        # PKGBUILD said 0.1.3 while the release was 0.1.10, and its source
+        # pointed at a tarball that does not exist. Nothing notices that except
+        # someone running makepkg.
+        run: |
+          python scripts/check_pkgbuild.py
+
   java:
     name: Java catalog
     runs-on: ubuntu-latest

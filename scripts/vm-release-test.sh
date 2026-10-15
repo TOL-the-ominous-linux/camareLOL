@@ -15,7 +15,10 @@ VM_DIR="${HOME}/VirtualBox VMs/${VM_NAME}"
 ISO="${ISO:-$HOME/Tài liệu/carameLOL/.test/archlinux-x86_64.iso}"
 DISK_VDI="${VM_DIR}/${VM_NAME}.vdi"
 SHOTS="${SHOTS:-/tmp/opencode/vm-shots}"
-SERIES="${SERIES:-https://github.com/tamkogay9876-code/camareLOL/releases/download/v0.1.0}"
+# Mặc định là bản phát hành mới nhất, không phải một số bản ghim cứng. Ghim v0.1.0
+# ở đây khiến bài kiểm tra âm thầm dùng bản cũ nhất mà vẫn báo là đang kiểm tra
+# bản mới — và nó cứ thế vẫn xanh.
+SERIES="${SERIES:-https://github.com/tamkogay9876-code/camareLOL/releases/latest/download}"
 mkdir -p "$SHOTS"
 
 say() { printf '\n=== %s ===\n' "$*"; }

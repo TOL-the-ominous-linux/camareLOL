@@ -191,6 +191,34 @@ def publish(out_dir: Path, index: bytes, sig: bytes) -> None:
         shutil.rmtree(staging, ignore_errors=True)
 
 
+def fetch_signature(sig_url: str, attempts: int = 6, wait: float = 20.0) -> bytes:
+    """Wait for the signature, which is uploaded after the release appears.
+
+    A release is published first and signed afterwards — that is the whole
+    order, because the index cannot be signed until the release exists to
+    point at. Anything triggered by `release: published` therefore runs in the
+    window where the signature is not there yet, and fails with a 404 that
+    looks like a broken mirror rather than a release still being signed.
+
+    Retrying is the difference between a mirror that catches up on its own and
+    one that waits for tomorrow's scheduled run.
+    """
+    last = ""
+    for attempt in range(1, attempts + 1):
+        try:
+            return fetch(sig_url, accept="application/octet-stream")
+        except (urllib.error.URLError, OSError) as exc:
+            last = str(exc)
+            log(f"signature not there yet ({attempt}/{attempts}): {exc}")
+            if attempt < attempts:
+                time.sleep(wait)
+    raise RuntimeError(
+        f"no signature at {sig_url} after {attempts} attempts ({wait:g}s apart).\n"
+        f"This release is still being signed. If it is not, the signature upload failed\n"
+        f"and nothing should be mirrored from it."
+    )
+
+
 def sync(out_dir: Path, pubkey_path: Path, require_signature: bool = True) -> dict:
     release = newest_release()
     index_url, sig_url = index_urls(release)
@@ -200,7 +228,7 @@ def sync(out_dir: Path, pubkey_path: Path, require_signature: bool = True) -> di
     doc = check_shape(index)
 
     if require_signature:
-        sig = fetch(sig_url, accept="application/octet-stream")
+        sig = fetch_signature(sig_url)
         verify_signature(index, sig, pubkey_path)
     else:
         sig = b""

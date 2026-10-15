@@ -112,7 +112,26 @@ EOF
 # Chỉ mục phải tự mô tả được: số trong nó phải là số của chính binary này.
 grep -q "$SHA" "$OUT_DIR/latest.json" || die "chỉ mục không khớp sha256"
 
-# ------------------------------------------------ binary có đúng thẻ không
+# ------------------------------------------------------------- PKGBUILD
+# Sinh từ khuôn trong kho, với pkgver, URL nguồn và sha256 của chính tarball vừa
+# dựng. Không thể làm việc này trước khi tạo tarball: sha256 của tarball chỉ có
+# được sau khi tarball xong, mà PKGBUILD nằm trong repo.
+#
+# Vì vậy PKGBUILD đi kèm release như một tệp riêng, thay vì nằm trong tarball —
+# nơi nó sẽ là bản sao của chính nó, không bao giờ có thể ghim đúng.
+PKGBUILD_OUT="$OUT_DIR/PKGBUILD"
+TARBALL_SHA="$(sha256sum "$TARBALL" | cut -d' ' -f1)"
+python3 - "$REPO_DIR/PKGBUILD" "$PKGBUILD_OUT" "$VERSION" "$TARBALL_SHA" <<'PY'
+import re, sys
+src, dst, version, sha = sys.argv[1:5]
+text = open(src, encoding="utf-8").read()
+text, n1 = re.subn(r"^pkgver=.*$", f"pkgver={version}", text, count=1, flags=re.M)
+text, n2 = re.subn(r"^sha256sums=\(.*\)$", f"sha256sums=('{sha}')", text, count=1, flags=re.M)
+if not (n1 and n2):
+    raise SystemExit("PKGBUILD: could not find pkgver or sha256sums to replace")
+open(dst, "w", encoding="utf-8").write(text)
+PY
+note "PKGBUILD (pkgver $VERSION, sha256 đã ghim)"
 # Cargo có thể dựng lại mà không chạy lại build script, khiến nó trả về binary
 # của lần build trước — binary đó vẫn mang thẻ cũ. Thẻ trong tên tệp là ý
 # định; thẻ bên trong binary là sự thật, và hai thứ phải khớp trước khi phát
@@ -136,6 +155,6 @@ note "sha256                : $SHA"
 note "kênh cập nhật         : $("$OUT_DIR/camarelol" --check-update 2>&1 | grep -o 'index: .*' | head -1)"
 printf '\nTiếp theo:\n\n'
 note "1. gh release create $TAG --title ... --notes ... $OUT_DIR/camarelol"
-note "2. $OUT_DIR/latest.json  $OUT_DIR/camarelol-$VERSION.tar.gz  $OUT_DIR/camarelol-catalog.jar"
+note "2. $OUT_DIR/latest.json  $OUT_DIR/camarelol-$VERSION.tar.gz  $OUT_DIR/camarelol-catalog.jar  $PKGBUILD_OUT"
 note "3. ./scripts/sign-release.sh $VERSION"
 note "4. gh release upload $TAG $OUT_DIR/latest.json $OUT_DIR/latest.json.sig"

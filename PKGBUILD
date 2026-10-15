@@ -4,7 +4,10 @@
 # This PKGBUILD builds from the GitHub release tarball so that `makepkg` never
 # needs network access to a VCS host.
 pkgname=camarelol
-pkgver=0.1.3
+# Bản phát hành sinh PKGBUILD này từ khuôn ở trong kho: pkgver, URL nguồn và
+# sha256 đều lấy từ chính bản phát hành đang dựng. Sửa tay ở đây sẽ bị ghi đè,
+# và nếu sửa sai thì `makepkg` tải một tarball khác — hoặc không tải được gì.
+pkgver=0.1.10
 pkgrel=1
 pkgdesc="A modern, safety-first TUI installer for Arch Linux"
 arch=('x86_64')
@@ -26,8 +29,13 @@ optdepends=(
 # The binary must keep its panic messages and debug info useful, and we ship a
 # reproducible build via the release profile.
 options=('!strip' '!debug')
-source=("$pkgname-$pkgver.tar.gz")
-sha256sums=('SKIP')
+# URL đầy đủ, không phải tên tệp trần: `source` cho một tệp tải về từ mạng phải
+# là URL. Tên tệp trần khiến makepkg tìm trong thư mục hiện tại và hỏng.
+source=("https://github.com/tamkogay9876-code/camareLOL/releases/download/v$pkgver/$pkgname-$pkgver.tar.gz")
+# Không phải SKIP. Đây là dự án kiểm tra sha256 của chính nó trước khi cài bất
+# cứ thứ gì; để ngoại trừ nó ở đây thì việc kiểm tra đó chỉ còn đúng khi người
+# dùng tự làm, và im lặng sai khi không.
+sha256sums=('6fcd592747a91a9b14bac11c457bc812779d0505692fd5949f0c1f554aa4c1d2')
 
 _pkgdir() {
     # The release tarball is created from the repository root, so the directory
