@@ -11,34 +11,96 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+/// Words that mark the *name* of a secret rather than being one.
+///
+/// Compared against the name split on `-`, `_`, `.` and `:` so that `--api-key`
+/// matches while `monkey` and `keyboard` do not.
+const SENSITIVE_NAMES: &[&str] = &[
+    "password",
+    "passwd",
+    "passphrase",
+    "secret",
+    "secrets",
+    "token",
+    "tokens",
+    "key",
+    "keys",
+    "apikey",
+    "apisecret",
+    "credential",
+    "credentials",
+    "auth",
+    "authorization",
+    "bearer",
+    // "luks" on its own is prose — "unlocking luks volume 2" — and appears in
+    // most log lines this installer writes. The names that actually carry a
+    // secret (luks_key, luks-passphrase) already match on "key" or
+    // "passphrase".
+];
+
 /// Remove anything that could be a secret from a string before logging.
+///
+/// Best effort, and deliberately pessimistic: it would rather hide an innocent
+/// word than leave a LUKS passphrase in a file.
+///
+/// The previous version looked for `name=value` inside a single whitespace-
+/// separated word. That missed the two forms that actually occur in a command
+/// line — `--api-key sk-abc` and `password: hunter2` — and redacted the *name*
+/// while leaving the secret as the very next word, which is the one thing a
+/// redaction pass must not do.
 pub fn redact(input: &str) -> String {
-    // Best effort pass for obvious "password=..." / "token=..." style leaks.
+    let words: Vec<(String, &str)> = input
+        .split_inclusive(char::is_whitespace)
+        .map(|w| {
+            let t = w.trim_end();
+            (t.to_string(), &w[t.len()..])
+        })
+        .collect();
+
     let mut out = String::with_capacity(input.len());
-    for word in input.split_inclusive(char::is_whitespace) {
-        let trimmed = word.trim_end();
-        let ws = &word[trimmed.len()..];
-        let lower = trimmed.to_ascii_lowercase();
-        let sensitive = [
-            "password", "passwd", "secret", "token", "key", "luks", "apikey",
-        ]
-        .iter()
-        .any(|k| lower.contains(k));
-        if sensitive {
-            // Keep only the key part, drop the value entirely.
-            match trimmed.split_once('=') {
-                Some((k, _)) => {
-                    out.push_str(k);
-                    out.push_str("=<redacted>");
-                }
-                None => out.push_str("<redacted>"),
-            }
-        } else {
-            out.push_str(trimmed);
+    let mut hiding = false;
+
+    for (word, ws) in &words {
+        if hiding {
+            // Once a secret name has been seen the rest of the line goes. A
+            // passphrase is several words long, and there is no way to tell
+            // where it ends — so "correct horse battery" leaked two thirds of
+            // itself under any rule that stopped at the first space.
+            out.push_str("<redacted>");
+            out.push_str(ws);
+            continue;
         }
+
+        let lower = word.to_ascii_lowercase();
+        // Split "…" into name and inline value on the first = or :.
+        let split_at = word.find(['=', ':']);
+        let name = match split_at {
+            Some(at) => &lower[..at],
+            None => lower.as_str(),
+        };
+
+        if !is_sensitive_name(name) {
+            out.push_str(word);
+            out.push_str(ws);
+            continue;
+        }
+
+        // Keep the name, drop everything from the separator onwards.
+        match split_at {
+            Some(at) => out.push_str(&word[..at]),
+            None => out.push_str(word),
+        }
+        out.push_str("=<redacted>");
         out.push_str(ws);
+        hiding = true;
     }
     out
+}
+
+/// True when any dot-separated segment of `name` is a known secret name.
+fn is_sensitive_name(name: &str) -> bool {
+    name.split(['-', '_', '.', ':', '/'])
+        .any(|seg| SENSITIVE_NAMES.contains(&seg))
 }
 
 pub struct Logger {
@@ -95,6 +157,58 @@ impl Default for Logger {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The three that got through. Each one redacted the *name* and left the
+    /// secret as the following word.
+    #[test]
+    fn a_flag_and_its_value_do_not_leak_the_value() {
+        let out = redact("--api-key sk-abc123");
+        assert!(!out.contains("sk-abc123"), "{out}");
+    }
+
+    #[test]
+    fn a_colon_form_does_not_leak_the_value() {
+        let out = redact("password: hunter2");
+        assert!(!out.contains("hunter2"), "{out}");
+    }
+
+    #[test]
+    fn an_authorization_header_is_gone_entirely() {
+        // Assembled at run time rather than written out. A literal token in the
+        // source is a live credential the moment someone copies it into a test,
+        // and GitHub's push protection refuses the commit — which is the right
+        // answer and a confusing thing to trip over for no reason.
+        let token = format!("ghp_{}", "0".repeat(36));
+        let out = redact(&format!("Authorization: Bearer {token}"));
+        assert!(!out.contains(&token), "{out}");
+    }
+
+    #[test]
+    fn a_luks_passphrase_does_not_leak() {
+        let out = redact("unlocking luks-volume2 with luks_passphrase=correct horse battery");
+        assert!(!out.contains("battery"), "{out}");
+    }
+
+    #[test]
+    fn the_name_is_kept_so_the_line_still_reads() {
+        let out = redact("user=alice password=hunter2");
+        assert!(out.contains("password=<redacted>"), "{out}");
+        assert!(out.contains("alice"), "{out}");
+    }
+
+    /// Over-redaction has its own cost: a log where every line is <redacted>
+    /// cannot be used to work out what happened.
+    #[test]
+    fn ordinary_words_are_not_redacted() {
+        for line in [
+            "formatting /dev/nvme0n1p2",
+            "keyboard layout detected",
+            "monkey patching the bootloader",
+            "found 2 partitions",
+        ] {
+            assert_eq!(redact(line), line, "{line}");
+        }
+    }
 
     #[test]
     fn redacts_password_like_values() {
