@@ -22,8 +22,9 @@ process.env.GITHUB_REPO = "camareLOL";
 
 const shared = await import("./functions/_shared.js");
 
-function cookieFrom(response) {
-  return (response.headers["Set-Cookie"] || "").split(";")[0];
+// sessionCookie() trả về chuỗi Set-Cookie, không phải một response.
+function cookieFrom(setCookie) {
+  return setCookie.split(";")[0];
 }
 
 test("a session round-trips", () => {
@@ -34,7 +35,7 @@ test("a session round-trips", () => {
 });
 
 test("the cookie is httpOnly, Secure and SameSite", () => {
-  const raw = shared.sessionCookie({ name: "An" }).headers["Set-Cookie"];
+  const raw = shared.sessionCookie({ name: "An" });
   for (const flag of ["HttpOnly", "Secure", "SameSite=Lax", "Path=/"]) {
     assert.ok(raw.includes(flag), `thiếu ${flag}: ${raw}`);
   }
