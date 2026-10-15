@@ -106,7 +106,7 @@ UPDATES:
     Updates never happen on their own. --check-update only reports, --update
     refuses while an installation is running, and it refuses an index that is
     not signed unless you pass --allow-unsigned-update.
-    See https://camarelol.netlify.app/vi/docs/updates-signing.html
+    See https://tamkogay9876-code.github.io/camareLOL-mirror/vi/docs/updates-signing.html
 
     -h, --help                Show this help
     -V, --version             Show version and commit

@@ -31,7 +31,8 @@ use std::process::Stdio;
 ///
 /// A short URL on purpose: this string ends up in `curl` commands and in
 /// `--help`, and people read it and retype it.
-pub const FALLBACK_MANIFEST_URL: &str = "https://camarelol.netlify.app/latest.json";
+pub const FALLBACK_MANIFEST_URL: &str =
+    "https://tamkogay9876-code.github.io/camareLOL-mirror/latest.json";
 
 /// Bumped when the manifest layout changes incompatibly.
 pub const MANIFEST_SCHEMA: u32 = 1;

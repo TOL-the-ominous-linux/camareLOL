@@ -12,7 +12,7 @@ destructive operation.
 
 | | |
 |---|---|
-| Website | **<https://camarelol.netlify.app>** |
+| Website | **<https://tamkogay9876-code.github.io/camareLOL-mirror>** |
 | Releases | <https://github.com/tamkogay9876-code/camareLOL/releases> |
 | Discussions | <https://github.com/tamkogay9876-code/camareLOL/discussions> |
 | Issues | <https://github.com/tamkogay9876-code/camareLOL/issues> |
@@ -39,7 +39,7 @@ switcher is in the footer of the site.
 | Running it yourself | [vm-testing](docs/en/vm-testing.md) | [VI](docs/vi/vm-testing.md) | [ZH](docs/zh/vm-testing.md) |
 | What is not built yet | [roadmap](docs/en/roadmap.md) | [VI](docs/vi/roadmap.md) | [ZH](docs/zh/roadmap.md) |
 
-Read it on the site instead: <https://camarelol.netlify.app/en/docs/>
+Read it on the site instead: <https://tamkogay9876-code.github.io/camareLOL-mirror/en/docs/>
 
 ## Install
 

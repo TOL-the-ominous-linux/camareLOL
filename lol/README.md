@@ -3,8 +3,8 @@
 Một URL ngắn, dễ gõ, không phải biết GitHub đang ở đâu:
 
 ```console
-$ curl -sSL https://wow.pages.dev/latest.json
-$ camarelol --check-update --update-url https://wow.pages.dev/latest.json
+$ curl -sSL https://camarelol.github.io/latest.json
+$ camarelol --check-update --update-url https://camarelol.github.io/latest.json
 ```
 
 ## Điều quan trọng nhất: trạm này **không** làm yếu đi bảo mật
@@ -60,7 +60,7 @@ không có gì để dò đường dẫn tới. Token refresh so sánh bằng `h
 
 ## Triển khai
 
-`wow.pages.dev` là Cloudflare Pages — **chỉ phục vụ tệp tĩnh**, không chạy được
+`camarelol.github.io` là Cloudflare Pages — **chỉ phục vụ tệp tĩnh**, không chạy được
 Python. Nên:
 
 1. Cho GitHub Actions chạy `lol_sync.py` theo lịch (cron), rồi đẩy `lol/site`
@@ -75,7 +75,7 @@ VPS và đặt Cloudflare trước nó.
 
 1. **`expires` trong chỉ mục** — chặn rollback. Đánh đổi: máy offline lâu ngày
    sẽ không cập nhật được cho tới khi có mạng trở lại.
-2. **Mirror thứ hai** — `lol2.pages.dev`, client thử lần lượt. Tốn công gấp đôi.
+2. **Mirror thứ hai** — `camarelol.github.io-2`, client thử lần lượt. Tốn công gấp đôi.
 3. **`camarelol --update-url` mặc định trỏ LOL** — tiện hơn, nhưng làm mirror
    thành điểm chết duy nhất nếu nó hỏng. Tôi **không** đề xuất.
 4. **Làm `lol` chạy trong CI** để mỗi lần phát hành là tự động — hợp lý nhất.

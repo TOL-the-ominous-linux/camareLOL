@@ -5,8 +5,8 @@ Keeps the update index reachable at one short URL, so a user (or a curl in a
 script) does not have to know where in GitHub the newest release lives, and so
 the tool keeps working if github.com is slow or blocked.
 
-    https://wow.pages.dev/latest.json
-    https://wow.pages.dev/latest.json.sig
+    https://camarelol.github.io/latest.json
+    https://camarelol.github.io/latest.json.sig
 
 ## What a mirror can and cannot break
 
