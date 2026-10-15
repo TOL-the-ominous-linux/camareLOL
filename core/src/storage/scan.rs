@@ -51,7 +51,17 @@ pub fn scan_devices_from_survey(json: &str) -> Result<Vec<StorageDevice>> {
     })?;
     normalize_lists(&mut value);
     let devices: Vec<StorageDevice> = serde_json::from_value(value).map_err(|e| {
-        CamarelolError::new(ErrorCode::ParseFailed, format!("bad survey JSON: {e}"))
+        // "missing field `kernel_name`" is true and useless to somebody writing
+        // a survey by hand: it does not say where the shape comes from. The
+        // output of --scan is a template with every field already filled in.
+        CamarelolError::new(
+            ErrorCode::ParseFailed,
+            format!(
+                "bad survey JSON: {e}\n\
+                 A survey is what `camarelol --scan` prints: run it on the real machine,\n\
+                 save the output, and edit that file rather than writing one from scratch."
+            ),
+        )
     })?;
     if devices.is_empty() {
         return Err(CamarelolError::new(

@@ -187,6 +187,24 @@ fn main() {
         }
     }
 
+    // The TUI needs a terminal. Without this check ratatui panics from inside
+    // its own initialiser, and the message a user sees names a crate version
+    // and a registry path instead of what they should do. Running it over a
+    // pipe, from cron, or in CI all land here.
+    if !std::io::IsTerminal::is_terminal(&std::io::stdout()) {
+        eprintln!(
+            "camareLOL needs a terminal to draw its interface, and there is none here.\n\
+             \n\
+             Run it from a console — the Arch live ISO is the intended place:\n\
+             \x20   sudo camarelol\n\
+             \n\
+             For unattended runs there is no interface to draw, so use the scripted path:\n\
+             \x20   camarelol --scripted <config.toml>\n\
+             and add --allow-destructive --execute to actually write to a disk."
+        );
+        std::process::exit(1);
+    }
+
     match run_tui(args) {
         Ok(()) => {}
         Err(e) => {
