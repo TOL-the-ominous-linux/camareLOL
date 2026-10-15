@@ -13,13 +13,14 @@ import { createHmac } from "node:crypto";
 import test from "node:test";
 
 // Đặt ngoài functions/ có chủ đích: mọi tệp .js trong thư mục đó đều trở
-// thành một endpoint của Netlify, kể cả tệp không phải hàm.
+// thành một endpoint của Netlify, kể cả tệp không phải hàm. Nên đường dẫn
+// import là ./functions/_shared.js chứ không phải ./_shared.js.
 
 process.env.SESSION_SECRET = "test-secret-not-a-real-one";
 process.env.GITHUB_OWNER = "tamkogay9876-code";
 process.env.GITHUB_REPO = "camareLOL";
 
-const shared = await import("./_shared.js");
+const shared = await import("./functions/_shared.js");
 
 function cookieFrom(response) {
   return (response.headers["Set-Cookie"] || "").split(";")[0];
