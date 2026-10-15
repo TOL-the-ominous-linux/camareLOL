@@ -105,9 +105,19 @@ def main() -> int:
     diff = subprocess.run(["git", "-c", "safe.directory=*", "diff", "HEAD"],
                           cwd=ROOT, capture_output=True, timeout=60)
     if diff.returncode == 0 and diff.stdout:
-        print(f"  quét {len(diff.stdout)} byte thay đổi chưa commit")
-        if PATTERNS[0][1].search(diff.stdout) or PATTERNS[1][1].search(diff.stdout):
-            problems.append("thay đổi chưa commit chứa một mẫu bí mật")
+        # Chỉ dòng được thêm. Một dòng đang bị xoá là lần sửa, không phải
+        # lần thêm — và quét cả nó làm cho "xoá một bí mật khỏi tệp" thành
+        # việc phải làm qua hai lần commit trước khi sạch.
+        added = b"\n".join(
+            line for line in diff.stdout.split(b"\n")
+            if line.startswith(b"+") and not line.startswith(b"+++")
+        )
+        print(f"  quét {len(added)} byte dòng được thêm")
+        for index in (0, 1):
+            if PATTERNS[index][1].search(added):
+                problems.append(
+                    f"dòng mới thêm chứa một mẫu bí mật ({PATTERNS[index][0]})")
+                break
 
     if problems:
         print(f"\n  {len(problems)} vấn đề:")

@@ -43,14 +43,17 @@ giữ nó. Vì vậy:
 
 ### Thu hồi client secret cũ
 
-Secret `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` đã bị lộ. **Xoá client cũ**, đừng
-dùng lại:
+Một client secret đã bị lộ trong một cuộc trò chuyện. **Xoá client đó**, đừng dùng
+lại — kể cả khi bạn cho rằng nó chỉ nằm trong lịch sử tin nhắn:
 
 - Xoá trong Credentials, hoặc
-- vào **APIs & Services → OAuth consent screen → Publishing status** bấm
+- vào **APIs & Secrets → OAuth consent screen → Publishing status** bấm
   **Withdraw** nếu project chỉ dùng cho việc này.
 
 Cách nào cũng được, nhưng phải làm một trong hai trước khi tạo client mới.
+
+Secret cũ **không** được viết vào tệp nào trong kho này. `scripts/check_secrets.py`
+quét từng commit và sẽ chặn bản dựng — kể cả trong tài liệu.
 
 ## 2. Biến môi trường trên Netlify
 
