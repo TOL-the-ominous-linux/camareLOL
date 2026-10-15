@@ -56,10 +56,6 @@ $ camarelol --rollback-update  # 恢复上一个二进制文件
 
 | 主题 | English | Tiếng Việt | 中文 |
 |---|---|---|---|
-| 更新是如何签名的 | [updates-signing](updates-signing.md) | [VI](https://tamkogay9876-code.github.io/camareLOL-mirror/vi/docs/updates-signing.html) | [ZH](updates-signing.md) |
-| 为什么拒绝过旧的索引 | [updates-rollback](updates-rollback.md) | [VI](https://tamkogay9876-code.github.io/camareLOL-mirror/vi/docs/updates-rollback.html) | [ZH](updates-rollback.md) |
-| 构建你自己的软件包 | [updates-packaging](updates-packaging.md) | [VI](https://tamkogay9876-code.github.io/camareLOL-mirror/vi/docs/updates-packaging.html) | [ZH](updates-packaging.md) |
-| 什么时候更新会被拒绝 | [updates-troubleshooting](updates-troubleshooting.md) | [VI](https://tamkogay9876-code.github.io/camareLOL-mirror/vi/docs/updates-troubleshooting.html) | [ZH](updates-troubleshooting.md) |
 | 三个组件 | [architecture](architecture.md) | [VI](https://tamkogay9876-code.github.io/camareLOL-mirror/vi/docs/architecture.html) | [ZH](architecture.md) |
 | IPC 协议 | [ipc-protocol](ipc-protocol.md) | [VI](https://tamkogay9876-code.github.io/camareLOL-mirror/vi/docs/ipc-protocol.html) | [ZH](ipc-protocol.md) |
 | 测试了什么 | [testing](testing.md) | [VI](https://tamkogay9876-code.github.io/camareLOL-mirror/vi/docs/testing.html) | [ZH](testing.md) |

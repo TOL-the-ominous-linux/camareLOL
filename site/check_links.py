@@ -70,8 +70,6 @@ def check(base: str) -> int:
             if parts.netloc and parts.netloc != origin.netloc:
                 continue  # ra ngoài site, không thuộc phạm vi
             clean = parts.path + (f"?{parts.query}" if parts.query else "")
-            if clean.startswith("/latest.json"):
-                continue  # tệp chữ ký, đã kiểm riêng
             if clean.startswith("/api/"):
                 # Served by Netlify functions, not by files. A static server
                 # returns 404 for every one of them, so checking here reports

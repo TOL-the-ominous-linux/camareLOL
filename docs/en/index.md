@@ -55,10 +55,6 @@ refuses a download whose checksum or signature does not match.
 
 | Topic | English | Tiếng Việt | 中文 |
 |---|---|---|---|
-| How updates are signed | [updates-signing](updates-signing.md) | [VI](https://tamkogay9876-code.github.io/camareLOL-mirror/vi/docs/updates-signing.html) | [ZH](https://tamkogay9876-code.github.io/camareLOL-mirror/zh/docs/updates-signing.html) |
-| Why an old index is refused | [updates-rollback](updates-rollback.md) | [VI](https://tamkogay9876-code.github.io/camareLOL-mirror/vi/docs/updates-rollback.html) | [ZH](https://tamkogay9876-code.github.io/camareLOL-mirror/zh/docs/updates-rollback.html) |
-| Building your own package | [updates-packaging](updates-packaging.md) | [VI](https://tamkogay9876-code.github.io/camareLOL-mirror/vi/docs/updates-packaging.html) | [ZH](https://tamkogay9876-code.github.io/camareLOL-mirror/zh/docs/updates-packaging.html) |
-| When an update is refused | [updates-troubleshooting](updates-troubleshooting.md) | [VI](https://tamkogay9876-code.github.io/camareLOL-mirror/vi/docs/updates-troubleshooting.html) | [ZH](https://tamkogay9876-code.github.io/camareLOL-mirror/zh/docs/updates-troubleshooting.html) |
 | The three components | [architecture](architecture.md) | [VI](https://tamkogay9876-code.github.io/camareLOL-mirror/vi/docs/architecture.html) | [ZH](https://tamkogay9876-code.github.io/camareLOL-mirror/zh/docs/architecture.html) |
 | The IPC protocol | [ipc-protocol](ipc-protocol.md) | [VI](https://tamkogay9876-code.github.io/camareLOL-mirror/vi/docs/ipc-protocol.html) | [ZH](https://tamkogay9876-code.github.io/camareLOL-mirror/zh/docs/ipc-protocol.html) |
 | What gets tested | [testing](testing.md) | [VI](https://tamkogay9876-code.github.io/camareLOL-mirror/vi/docs/testing.html) | [ZH](https://tamkogay9876-code.github.io/camareLOL-mirror/zh/docs/testing.html) |

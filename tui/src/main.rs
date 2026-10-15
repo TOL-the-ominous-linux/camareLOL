@@ -2,8 +2,8 @@
 
 mod app;
 mod draw;
+mod keys;
 mod scripted;
-mod update;
 mod version;
 
 use crate::app::App;
@@ -28,14 +28,6 @@ struct Args {
     self_test: bool,
     scripted: Option<PathBuf>,
     language: Option<String>,
-    check_update: bool,
-    update: bool,
-    rollback_update: bool,
-    update_url: Option<String>,
-    update_key: Option<PathBuf>,
-    update_sig_url: Option<String>,
-    allow_unsigned_update: bool,
-    allow_expired_index: bool,
 }
 
 fn parse_args() -> Result<Args, String> {
@@ -52,14 +44,6 @@ fn parse_args() -> Result<Args, String> {
             "--self-test" => a.self_test = true,
             "--scripted" => a.scripted = args.next().map(PathBuf::from),
             "--lang" => a.language = args.next(),
-            "--check-update" => a.check_update = true,
-            "--update" => a.update = true,
-            "--rollback-update" => a.rollback_update = true,
-            "--update-url" => a.update_url = args.next(),
-            "--update-key" => a.update_key = args.next().map(PathBuf::from),
-            "--update-sig-url" => a.update_sig_url = args.next(),
-            "--allow-unsigned-update" => a.allow_unsigned_update = true,
-            "--allow-expired-index" => a.allow_expired_index = true,
             "-h" | "--help" => {
                 println!("{}", usage());
                 std::process::exit(0);
@@ -91,25 +75,23 @@ OPTIONS:
     --execute                 Really write to disk (default is dry-run)
     --lang <vi|en>            Installer language
 
-UPDATES:
-    --check-update            Ask the update index for a newer release and exit
-    --update                  Download, verify and install it (needs write access)
-    --rollback-update         Put the previous binary back
-    --update-url <URL>        Use a different index (default: the project URL)
-    --update-key <FILE>       Pinned public key used to check the signature
-    --update-sig-url <URL>    Where the detached signature lives
-                              (default: the index URL plus .sig)
-    --allow-unsigned-update   Install even if the index carries no valid
-                              signature from the pinned key
-    --allow-expired-index     Accept an index whose expiry has passed
-
-    Updates never happen on their own. --check-update only reports, --update
-    refuses while an installation is running, and it refuses an index that is
-    not signed unless you pass --allow-unsigned-update.
-    See https://tamkogay9876-code.github.io/camareLOL-mirror/vi/docs/updates-signing.html
-
     -h, --help                Show this help
     -V, --version             Show version and commit
+
+UPDATING:
+    camareLOL does not update itself. There is no updater, no index URL and
+    no code path that replaces this binary.
+
+    That is a decision, not an omission. This program erases disks; a component
+    whose job is to replace itself is the shortest path from a compromised
+    server to erased data. Install and update it the way every other Arch
+    package is updated:
+
+        sudo pacman -S camarelol        # from a repository or the AUR
+
+    Or download the release you want from
+    https://github.com/tamkogay9876-code/camareLOL/releases and replace the
+    binary by hand.
 "
 }
 
@@ -123,28 +105,6 @@ fn main() {
             std::process::exit(2);
         }
     };
-
-    if args.check_update || args.update || args.rollback_update {
-        match cmd_update(UpdateOptions {
-            check_only: args.check_update,
-            install: args.update,
-            rollback: args.rollback_update,
-            url_override: args.update_url,
-            key_path: args.update_key,
-            signature_url: args.update_sig_url,
-            allow_unsigned: args.allow_unsigned_update,
-            allow_expired: args.allow_expired_index,
-        }) {
-            Ok(code) => std::process::exit(code),
-            Err(e) => {
-                eprintln!("error: {e}");
-                if let Some(r) = &e.remediation {
-                    eprintln!("hint: {r}");
-                }
-                std::process::exit(1);
-            }
-        }
-    }
 
     if args.scan {
         if let Err(e) = cmd_scan(args.mock.clone()) {
@@ -215,171 +175,7 @@ fn main() {
     }
 }
 
-/// `--check-update`, `--update` and `--rollback-update`.
-///
-/// The exit code is 0 on success, 10 when a newer release exists but nothing
-/// was done. Scripts can use that to nag without failing.
-/// What the update sub-commands were asked to do.
-///
-/// A struct rather than eight flags: at the seventh one it stopped being
-/// possible to tell `allow_unsigned` from `allow_expired` at a call site.
-struct UpdateOptions {
-    check_only: bool,
-    install: bool,
-    rollback: bool,
-    url_override: Option<String>,
-    key_path: Option<PathBuf>,
-    signature_url: Option<String>,
-    allow_unsigned: bool,
-    allow_expired: bool,
-}
-
-fn cmd_update(opts: UpdateOptions) -> Result<i32, CamarelolError> {
-    let UpdateOptions {
-        check_only,
-        install,
-        rollback,
-        url_override,
-        key_path,
-        signature_url: args_sig,
-        allow_unsigned,
-        allow_expired,
-    } = opts;
-    use camarelol_core::update::{self, Plan};
-
-    // Asking for both means the user wants to know first; report, never install.
-    let install = install && !check_only;
-
-    let built_in = version::update_channel();
-    if built_in.is_none() && url_override.is_none() {
-        return Err(CamarelolError::new(
-            ErrorCode::UpdateUrlRefused,
-            "this build was packaged without an update channel",
-        )
-        .with_remediation(
-            "updates come from the package manager that built it, or pass --update-url",
-        ));
-    }
-    let url = url_override
-        .clone()
-        .unwrap_or_else(|| built_in.unwrap_or_default().to_string());
-    let target = std::env::current_exe().map_err(|e| {
-        CamarelolError::new(
-            ErrorCode::UpdateNotPrivileged,
-            "could not work out where this binary lives",
-        )
-        .with_context(e.to_string())
-    })?;
-
-    if rollback {
-        update::rollback(&target)?;
-        println!("restored the previous binary at {}", target.display());
-        println!("run {} --version to check it", target.display());
-        return Ok(0);
-    }
-
-    let can_write = is_writable(&target);
-    // By default the detached signature sits next to the index. This has to be
-    // derived from the URL actually in use: deriving it from --update-url alone
-    // meant the built-in default silently got no signature at all, which only
-    // showed up once there was a default to fall back to.
-    let sig_url = args_sig.clone().or_else(|| Some(format!("{url}.sig")));
-    let public_key = load_public_key(key_path.as_deref())?;
-
-    println!("{}", version::banner());
-    println!("index: {url}");
-    println!("binary: {}", target.display());
-
-    // Nothing is running an install from this process, so the one hard stop
-    // (an install in progress) cannot trigger here; a library caller has to
-    // pass that flag itself, which is where the real protection lives.
-    // With no explicit URL, try every mirror in order. A mirror that does not
-    // answer is an availability problem, not a trust one: whatever comes back
-    // still has to carry a signature from the pinned key.
-    let (index, index_url) = match (&sig_url, url_override.as_ref()) {
-        (Some(sig), Some(_)) => {
-            let i = update::fetch_index(&url, Some(sig), public_key.as_deref())?;
-            (i, url.clone())
-        }
-        _ => {
-            let urls: Vec<String> = if url_override.is_some() {
-                vec![url.clone()]
-            } else {
-                let list = version::mirrors();
-                if list.is_empty() {
-                    vec![url.clone()]
-                } else {
-                    list.to_vec()
-                }
-            };
-            println!("indexes to try: {}", urls.len());
-            update::fetch_any(&urls, &|u| format!("{u}.sig"), public_key.as_deref())?
-        }
-    };
-    println!("answered by: {index_url}");
-    println!("trust: {}", index.trust.reason());
-    let plan = update::plan_from_index(
-        &index,
-        version::VERSION,
-        install,
-        false,
-        can_write,
-        allow_unsigned,
-        allow_expired,
-    )?;
-
-    match &plan {
-        Plan::UpToDate => {
-            println!("up to date");
-            return Ok(0);
-        }
-        Plan::Blocked { release, reason } => {
-            println!(
-                "version {} is available, but not installing it:",
-                release.version
-            );
-            println!("  {}", reason.as_str());
-            return Ok(10);
-        }
-        Plan::Available(release) => {
-            println!("version {} is available.", release.version);
-            if let Some(n) = &release.notes {
-                println!("  {n}");
-            }
-            println!("nothing has been downloaded or changed.");
-            println!("re-run with --update to install it");
-            return Ok(10);
-        }
-        Plan::Install(release) => {
-            println!("installing version {}...", release.version);
-        }
-    }
-
-    let release = match plan {
-        Plan::Install(r) => r,
-        _ => unreachable!("only Install reaches this point"),
-    };
-
-    let staging = target.with_file_name(format!(
-        "{}.download",
-        target.file_name().unwrap_or_default().to_string_lossy()
-    ));
-    // Whatever happens, the half-downloaded file must not be left lying next
-    // to the real binary for someone else to find and run.
-    let result = update::fetch_candidate(&release, &staging)
-        .and_then(|_| update::install_candidate(&target, &staging));
-    let _ = std::fs::remove_file(&staging);
-    result?;
-
-    println!("installed version {}", release.version);
-    println!("the previous binary is kept at {}.prev", target.display());
-    println!("undo this with: camarelol --rollback-update");
-    println!("start the new binary with: {}", target.display());
-    Ok(0)
-}
-
 /// Rust ignores SIGPIPE and turns it into a panic on the next write, so
-/// `camarelol --check-update | head` dies with "failed printing to stdout"
 /// instead of stopping quietly like every other command-line tool.
 fn restore_default_sigpipe() {
     // SAFETY: setting a signal disposition to SIG_DFL is async-signal-safe and
@@ -389,51 +185,7 @@ fn restore_default_sigpipe() {
     }
 }
 
-/// The pinned public key: the file the user named, else the one built in.
-///
-/// Building in `keys/camarelol.pub` means a key can never be swapped by a
-/// downloaded index — the trust anchor ships with the binary, not beside it.
-fn load_public_key(path: Option<&std::path::Path>) -> Result<Option<String>, CamarelolError> {
-    if let Some(p) = path {
-        return std::fs::read_to_string(p).map(Some).map_err(|e| {
-            CamarelolError::new(
-                ErrorCode::UpdateSignatureInvalid,
-                format!("could not read the public key {}", p.display()),
-            )
-            .with_context(e.to_string())
-        });
-    }
-    Ok(crate::version::embedded_update_key())
-}
-
-fn is_writable(path: &std::path::Path) -> bool {
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        // Root can write almost anything; mode bits are a good enough answer
-        // for everyone else and never wrong in the dangerous direction.
-        std::fs::metadata(path)
-            .map(|m| m.permissions().mode() & 0o222 != 0)
-            .unwrap_or(false)
-            || nix_is_root()
-    }
-    #[cfg(not(unix))]
-    {
-        path.exists()
-    }
-}
-
 #[cfg(unix)]
-fn nix_is_root() -> bool {
-    std::fs::metadata("/proc/self").is_ok()
-        && std::fs::read_to_string("/proc/self/status")
-            .map(|s| {
-                s.lines()
-                    .any(|l| l.starts_with("Uid:") && l.split_whitespace().nth(1) == Some("0"))
-            })
-            .unwrap_or(false)
-}
-
 fn cmd_scan(mock: Option<PathBuf>) -> Result<(), CamarelolError> {
     let devices = match mock {
         Some(p) => camarelol_core::storage::load_survey(p.to_str().unwrap_or_default())?,
@@ -582,7 +334,6 @@ fn run_tui(args: Args) -> Result<(), CamarelolError> {
             terminal
                 .draw(|f| draw::draw(f, &mut app))
                 .map_err(|e| CamarelolError::new(ErrorCode::Internal, e.to_string()))?;
-            app.poll_update_check();
             if app.quit {
                 break;
             }

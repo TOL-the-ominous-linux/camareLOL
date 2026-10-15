@@ -75,11 +75,6 @@ jobs:
           python -m unittest discover -s tests -v
 
       - name: The update mirror
-        # lol_sync.py is what stands between a signed release and a reachable
-        # one, so its signature check is tested here rather than trusted.
-        run: |
-          python -m py_compile lol/lol_sync.py lol/lol_server.py
-          python lol/test_lol.py
 
       - name: The site
         # The renderer turns repository documentation into HTML. A bug here
@@ -128,7 +123,7 @@ jobs:
 
       - name: Shell scripts parse
         run: |
-          for f in build.sh install.sh scripts/vm-test.sh scripts/make-data-iso.sh scripts/make-signing-key.sh scripts/sign-release.sh java/build.sh; do
+          for f in build.sh install.sh scripts/vm-test.sh scripts/make-data-iso.sh java/build.sh; do
             bash -n "$f" || { echo "syntax error in $f"; exit 1; }
           done
           echo "all shell scripts parse"
@@ -149,7 +144,7 @@ jobs:
           staging="${RUNNER_TEMP}/${name}"
           mkdir -p "$staging"
           for item in Cargo.toml Cargo.lock rust-toolchain.toml PKGBUILD LICENSE README.md \
-                      core tui python java docs scripts keys .gitignore; do
+                      core tui python java docs scripts .gitignore; do
             cp -r "$GITHUB_WORKSPACE/$item" "$staging/" 2>/dev/null || true
           done
           rm -rf "$staging"/target "$staging"/*/target "$staging"/java/out
@@ -222,24 +217,6 @@ jobs:
           # so the job can clean up after itself.
           sudo chown -R "$(id -u):$(id -g)" "$pkgdir"
 
-  mirrors:
-    name: Mirror health
-    # A mirror that dies should be noticed by the maintainer, not by whoever
-    # next tries to update and fails.
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Check every configured mirror
-        run: |
-          set -euo pipefail
-          python lol/check_mirrors.py --json > mirror-status.json || true
-          cat mirror-status.json
-          python lol/report_mirror_status.py mirror-status.json
 
   functions:
     name: Netlify functions
@@ -265,165 +242,3 @@ jobs:
       - name: A forged session is refused
         run: node site/test_functions.mjs
 
-  release:
-    name: Release (tag only)
-    needs: [rust, python, java, functions]
-    if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v5
-
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - name: Install Rust
-        run: rustup toolchain install stable --profile minimal && rustup default stable
-
-      - name: Build release binary
-        run: cargo build --release --locked --manifest-path tui/Cargo.toml
-
-      - name: Build the Java catalog jar
-        run: java/build.sh
-
-      - name: Create the source tarball
-        run: |
-          set -euo pipefail
-          version="${GITHUB_REF_NAME#v}"
-          name="camarelol-${version}"
-          staging="${RUNNER_TEMP}/${name}"
-          mkdir -p "$staging"
-          # Ship exactly what the PKGBUILD expects to find.
-          for item in Cargo.toml Cargo.lock rust-toolchain.toml PKGBUILD LICENSE README.md \
-                      core tui python java docs scripts keys .gitignore; do
-            cp -r "$GITHUB_WORKSPACE/$item" "$staging/" 2>/dev/null || true
-          done
-          rm -rf "$staging"/target "$staging"/*/target "$staging"/java/out
-          # The tarball is named after the tag; keep pkgver in step with it so
-          # makepkg looks for the file we just produced.
-          sed -i "s/^pkgver=.*/pkgver=${version}/" "$staging/PKGBUILD"
-          tar -czf "${RUNNER_TEMP}/${name}.tar.gz" -C "${RUNNER_TEMP}" "$name"
-          echo "SHA256=$(sha256sum "${RUNNER_TEMP}/${name}.tar.gz" | cut -d' ' -f1)" >> "$GITHUB_ENV"
-          echo "VERSION=${version}" >> "$GITHUB_ENV"
-
-      - name: Build the update index
-        run: |
-          set -euo pipefail
-          # The index carries the checksum of the binary we just built, so the
-          # updater can verify what it downloads. It is an asset, not a
-          # silently published page: hosting it is a deliberate deployment step
-          # and the URL is configurable with --update-url.
-          sha="$(sha256sum target/release/camarelol | cut -d' ' -f1)"
-          size="$(stat -c%s target/release/camarelol)"
-          # The signature proves who signed, not how fresh it is. This stops a
-          # mirror that has been taken over from replaying a valid old index to
-          # keep clients on a release with known problems. The mirror refreshes
-          # every few hours, so this resets long before it matters.
-          expires="$(( $(date +%s) + 7*86400 ))"
-          cat > latest.json <<EOF
-          {
-            "schema": 1,
-            "version": "${VERSION}",
-            "url": "https://github.com/tamkogay9876-code/camareLOL/releases/download/v${VERSION}/camarelol",
-            "sha256": "${sha}",
-            "size": ${size},
-            "expires": ${expires},
-            "notes": "camareLOL ${VERSION}"
-          }
-          EOF
-          # Fail the release rather than ship an index nothing can parse.
-          python3 -c 'import json,sys; d=json.load(open("latest.json")); assert d["schema"]==1 and len(d["sha256"])==64 and d["expires"] > 0'
-
-          # Sign the index when a signing key is configured. Without one the
-          # release still ships, but every camareLOL will refuse to install it
-          # unless the user passes --allow-unsigned-update, which is the
-          # honest outcome: an unsigned index proves nothing.
-          # The length, never the value: an empty or whitespace-only secret is
-          # indistinguishable from a missing one at the -n test, and the release
-          # that results looks perfectly normal until every updater refuses it.
-          # Bind first, then measure. Under `set -u` a bare ${#VAR} aborts the
-          # job with "unbound variable" before the check below can explain
-          # anything, and ${#VAR:-} is not valid shell at all.
-          signing_key="${CAMARELOL_SIGNING_KEY:-}"
-          echo "signing key length: ${#signing_key}"
-          if [ -n "$signing_key" ]; then
-            printf '%s' "$signing_key" > "$RUNNER_TEMP/signing.asc"
-            chmod 600 "$RUNNER_TEMP/signing.asc"
-            gpg --batch --quiet --import "$RUNNER_TEMP/signing.asc"
-            # No second secret needed: with one key imported, that is the key.
-            keyid="${CAMARELOL_SIGNING_KEY_ID:-}"
-            if [ -z "$keyid" ]; then
-              keyid="$(gpg --batch --with-colons --list-secret-keys | awk -F: '/^sec/{print $5; exit}')"
-            fi
-            if [ -z "$keyid" ]; then
-              echo "::error::the signing secret contains no private key"
-              exit 1
-            fi
-            # A passphrase-protected key needs loopback pinentry, otherwise
-            # batch mode has no way to ask for it.
-            sign_args=(--batch --yes --detach-sign --armor --local-user "$keyid")
-            if [ -n "${CAMARELOL_SIGNING_PASSPHRASE:-}" ]; then
-              sign_args+=(--pinentry-mode loopback --passphrase "$CAMARELOL_SIGNING_PASSPHRASE")
-            fi
-            gpg "${sign_args[@]}" -o latest.json.sig latest.json
-            rm -f "$RUNNER_TEMP/signing.asc"
-            gpg --batch --verify latest.json.sig latest.json
-            echo "signed the update index"
-          else
-            # Failing beats warning. A warning here shipped v0.1.9 unsigned:
-            # the release looked fine, and every camareLOL refused to install
-            # it with no hint that the maintainer had simply not set the secret.
-            # A file in the tree, not a repository variable: publishing an
-            # unsigned release should be visible in the diff, and deletable the
-            # moment it has served its purpose.
-            if [ -f .github/allow-unsigned-release ]; then
-              echo "::warning::.github/allow-unsigned-release is present"
-              echo "::warning::sign it afterwards with: scripts/sign-release.sh ${VERSION}"
-            else
-              echo "::error::CAMARELOL_SIGNING_KEY is missing or empty, so this release"
-              echo "::error::would ship an unsigned update index that camareLOL refuses"
-              echo "::error::to install. Either set the secret, or set the repository"
-              echo "::error::file .github/allow-unsigned-release, and sign afterwards with"
-              echo "::error::scripts/sign-release.sh ${VERSION}"
-              exit 1
-            fi
-          fi
-          cat latest.json
-
-      - name: Upload assets
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            ${{ runner.temp }}/camarelol-${{ env.VERSION }}.tar.gz
-            target/release/camarelol
-            java/out/camarelol-catalog.jar
-            latest.json
-            latest.json.sig
-          generate_release_notes: true
-          body: |
-            ## camareLOL ${{ env.VERSION }}
-
-            A modern, safety-first TUI installer for Arch Linux.
-
-            ### Install
-
-            Download the binary and run it from the Arch live ISO:
-
-            ```console
-            # chmod +x camarelol && ./camarelol --self-test
-            # sudo ./camarelol
-            ```
-
-            Or from the tarball, which contains the `PKGBUILD` for a
-            reproducible `makepkg` build.
-
-            ### Warning
-
-            Installing an operating system and partitioning disks can destroy
-            data. camareLOL asks before every irreversible step and re-checks
-            the disk identity immediately before writing.
-
-            Source tarball SHA256: `${{ env.SHA256 }}`

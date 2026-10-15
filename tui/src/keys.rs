@@ -1,12 +1,16 @@
-//! Key handling / navigation for the camareLOL TUI.
+//! Keyboard handling and screen navigation for the installer.
+//!
+//! Tệp này từng tên là `update.rs`, vì phần kiểm tra bản cập nhật được viết
+//! trước và mọi thứ sau đó cứ nối vào đó. Nó không liên quan gì tới cập nhật.
+//! `handle_key` — toàn bộ bàn phím của giao diện — nằm ở đây, và xoá tệp kia
+//! để bỏ updater đã xoá luôn bàn phím. Tên mới nói đúng nội dung.
 
-use super::app::{App, Field, Screen, UpdateStatus};
+use super::app::{App, Field, Screen};
 use camarelol_core::error::ErrorCode;
 use camarelol_core::install::execute::RealSystemRunner;
 use camarelol_core::install::{run_install, Outcome, PhaseState, ProgressEvent, ProgressSink};
 use camarelol_core::safety::{required_phrase, Operation};
 use camarelol_core::storage::RiskLevel;
-use camarelol_core::update::Plan;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 /// A sink that streams events into the App so the UI can render them.
@@ -99,14 +103,11 @@ impl App {
         }
 
         match self.screen {
-            Screen::Welcome => match key.code {
-                KeyCode::Enter => self.go_next(),
-                // Check for a newer release. Reporting only: replacing the
-                // binary is a deliberate `--update` on the command line, never
-                // something a keypress inside the installer does for you.
-                KeyCode::Char('u') => self.start_update_check(),
-                _ => {}
-            },
+            Screen::Welcome => {
+                if key.code == KeyCode::Enter {
+                    self.go_next();
+                }
+            }
             Screen::Language
             | Screen::Keyboard
             | Screen::Timezone
@@ -251,80 +252,6 @@ impl App {
                 self.quit = true;
             }
             _ => {}
-        }
-    }
-
-    /// Kick off the update check on a background thread.
-    pub fn start_update_check(&mut self) {
-        if self.update_status == UpdateStatus::Checking {
-            return;
-        }
-        let (tx, rx) = std::sync::mpsc::channel();
-        self.update_rx = Some(rx);
-        self.update_status = UpdateStatus::Checking;
-
-        // A build with no update channel says so rather than reaching for a
-        // default it was not given.
-        let Some(manifest_url) = crate::version::update_channel().map(str::to_string) else {
-            self.update_status = UpdateStatus::Failed(
-                "this build has no update channel (packaged from source)".into(),
-            );
-            return;
-        };
-        let sig_url = format!("{manifest_url}.sig");
-        let key = crate::version::embedded_update_key();
-
-        std::thread::spawn(move || {
-            let outcome = match camarelol_core::update::fetch_index(
-                &manifest_url,
-                Some(sig_url.as_str()),
-                key.as_deref(),
-            ) {
-                Ok(index) => {
-                    let trust = if index.trust.is_signed() {
-                        String::new()
-                    } else {
-                        format!(" ({})", index.trust.reason())
-                    };
-                    // Reporting only, so the signature rule does not apply.
-                    match camarelol_core::update::plan_from_index(
-                        &index,
-                        crate::version::VERSION,
-                        false,
-                        false,
-                        false,
-                        true,
-                        true,
-                    ) {
-                        Ok(Plan::UpToDate) => UpdateStatus::UpToDate,
-                        Ok(Plan::Available(r)) => {
-                            UpdateStatus::Available(format!("{}{trust}", r.version))
-                        }
-                        Ok(Plan::Blocked { release, reason }) => {
-                            UpdateStatus::Blocked(release.version, reason.as_str().to_string())
-                        }
-                        Ok(Plan::Install(_)) => UpdateStatus::UpToDate,
-                        Err(e) => UpdateStatus::Failed(e.message),
-                    }
-                }
-                Err(e) => UpdateStatus::Failed(e.message),
-            };
-            // The status is plain owned data, so it moves across the channel
-            // without any formatting games.
-            let _ = tx.send(outcome);
-        });
-    }
-
-    /// Pick up the background result, if it has arrived. Cheap to call every
-    /// tick, so the UI updates the moment the check finishes.
-    pub fn poll_update_check(&mut self) {
-        let ready = match self.update_rx.as_ref() {
-            Some(rx) => rx.try_recv().ok(),
-            None => None,
-        };
-        if let Some(status) = ready {
-            self.update_rx = None;
-            self.update_status = status;
         }
     }
 

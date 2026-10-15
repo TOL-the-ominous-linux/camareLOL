@@ -8,12 +8,10 @@
 #   camarelol                 binary, build từ thẻ đúng phiên bản này
 #   camarelol-X.Y.Z.tar.gz    mã nguồn, để PKGBUILD dựng lại
 #   camarelol-catalog.jar     catalog Java
-#   latest.json               chỉ mục cập nhật, kèm sha256 của binary
 #
-# Rồi tạo release trên GitHub, chạy scripts/sign-release.sh, và tải
-# latest.json.sig lên. Ba bước đó cố ý không nằm ở đây: bước đầu cần mạng,
-# bước sau cần khoá bí mật, và gộp chúng vào một script sẽ khiến việc "chỉ
-# build" trở thành việc "phát hành thật" chỉ vì gõ sai một tham số.
+# Rồi tạo release trên GitHub từ các tệp này. Bước đó cố ý không nằm ở đây:
+# nó cần mạng và tài khoản, và gộp vào đây sẽ khiến việc "chỉ build" trở
+# thành việc "phát hành thật" chỉ vì gõ sai một tham số.
 #
 # Chỉ dùng trên máy của bạn. Không chạy trên máy dùng thật — xoá ổ đĩa không
 # phải thứ để thử ở đây.
@@ -95,23 +93,6 @@ tar -czf "$TARBALL" -C "$STAGE" "camarelol-$VERSION"
 rm -rf "$STAGE"
 note "tarball $(basename "$TARBALL")"
 
-# ------------------------------------------------------------ latest.json
-# Chỉ mục trỏ vào URL tải trên release, nên nó chỉ đúng sau khi release tồn
-# tại. sha256 là của binary trong chính release này — số ở đây phải khớp với
-# số tải về, nếu không client sẽ từ chối bản cập nhật.
-SHA="$(sha256sum "$OUT_DIR/camarelol" | cut -d' ' -f1)"
-cat > "$OUT_DIR/latest.json" <<EOF
-{
-  "schema": 1,
-  "version": "$VERSION",
-  "url": "$BASE_URL/camarelol",
-  "sha256": "$SHA"
-}
-EOF
-
-# Chỉ mục phải tự mô tả được: số trong nó phải là số của chính binary này.
-grep -q "$SHA" "$OUT_DIR/latest.json" || die "chỉ mục không khớp sha256"
-
 # ------------------------------------------------------------- PKGBUILD
 # Sinh từ khuôn trong kho, với pkgver, URL nguồn và sha256 của chính tarball vừa
 # dựng. Không thể làm việc này trước khi tạo tarball: sha256 của tarball chỉ có
@@ -151,10 +132,7 @@ grep -q "dirty working tree" <<<"$BUILT" \
 
 printf '\nXong. Kiểm tra lại trước khi phát hành:\n\n'
 note "phiên bản trong binary : $("$OUT_DIR/camarelol" --version | head -1)"
-note "sha256                : $SHA"
-note "kênh cập nhật         : $("$OUT_DIR/camarelol" --check-update 2>&1 | grep -o 'index: .*' | head -1)"
 printf '\nTiếp theo:\n\n'
 note "1. gh release create $TAG --title ... --notes ... $OUT_DIR/camarelol"
-note "2. $OUT_DIR/latest.json  $OUT_DIR/camarelol-$VERSION.tar.gz  $OUT_DIR/camarelol-catalog.jar  $PKGBUILD_OUT"
-note "3. ./scripts/sign-release.sh $VERSION"
+note "2. $OUT_DIR/camarelol-$VERSION.tar.gz  $OUT_DIR/camarelol-catalog.jar  $PKGBUILD_OUT"
 note "4. gh release upload $TAG $OUT_DIR/latest.json $OUT_DIR/latest.json.sig"

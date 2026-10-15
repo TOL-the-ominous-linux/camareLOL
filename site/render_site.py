@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the camareLOL site: docs, release news, mirror status.
+"""Build the camareLOL site: documentation and release news.
 
     python tools/render_site.py --out .
 
@@ -8,10 +8,7 @@ disagree with the code. Markdown is rendered by GitHub's own GFM renderer rather
 than a local parser: no dependency to keep current, and the result is exactly
 what people already read on GitHub.
 
-This writes into the repository root because that is what Netlify publishes.
-It never touches latest.json or latest.json.sig — those two files are the
-update mirror, and a site build that clobbered them would break every client
-that uses the default update URL.
+This writes into the repository root because that is what GitHub Pages publishes.
 """
 
 from __future__ import annotations
@@ -37,10 +34,6 @@ BRANCH = "main"
 TIMEOUT = 30
 
 SITE_NAME = "camareLOL"
-
-#: Never written by the site build. These are the mirror.
-MIRROR_FILES = ("latest.json", "latest.json.sig")
-
 
 def log(msg: str) -> None:
     print(f"[site] {msg}", flush=True)
@@ -110,7 +103,6 @@ def render_markdown(text: str, lang: str = "en") -> str:
 NAV = [
     ("index.html", "Trang chủ"),
     ("news.html", "Cập nhật"),
-    ("status.html", "Trạng thái"),
     ("docs.html", "Tài liệu"),
     ("discuss.html", "Thảo luận"),
 ]
@@ -216,27 +208,6 @@ def render_news(rels: list[dict]) -> str:
     if not rows:
         rows.append('    <li><div class="note">chưa đọc được danh sách phát hành</div></li>')
     return "\n".join(rows)
-
-
-def render_status(path: Path) -> str:
-    if not path.exists():
-        return ('    <p class="warn">Chưa có dữ liệu trạng thái. Chạy '
-                '<code>python tools/check_mirrors.py --json</code> để tạo.</p>')
-    data = json.loads(path.read_text())
-    rows = []
-    for m in data.get("mirrors", []):
-        ok = m.get("ok")
-        mark = '<span class="tag ok">đang sống</span>' if ok else '<span class="tag bad">hỏng</span>'
-        detail = f"v{m['version']}" if ok and m.get("version") else html.escape(m.get("detail", ""))
-        rows.append(f'    <tr><td>{mark}</td><td>{html.escape(m["url"])}</td><td>{detail}</td></tr>')
-    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    return (
-        '  <table>\n'
-        '    <thead><tr><th>Trạng thái</th><th>Địa chỉ</th><th>Chi tiết</th></tr></thead>\n'
-        "    <tbody>\n" + "\n".join(rows) + "\n    </tbody>\n  </table>\n"
-        f'  <p class="note">Kiểm tra lúc {stamp}. Một mirror hỏng không phải là hỏi: client thử '
-        "lần lượt các địa chỉ còn lại, và bản nào trả lời được đều phải có chữ ký đúng.</p>"
-    )
 
 
 def doc_list() -> str:
@@ -377,7 +348,6 @@ def copy_assets(out: Path) -> None:
 def main() -> int:
     ap = argparse.ArgumentParser(description="Build the camareLOL site")
     ap.add_argument("--out", default=".")
-    ap.add_argument("--status", default="mirror-status.json")
     ap.add_argument(
         "--docs",
         default=str(Path(__file__).resolve().parent.parent / "docs"),
@@ -400,7 +370,6 @@ def main() -> int:
         return 1
     newest = rels[0]["tag_name"]
     log(f"{len(rels)} published releases; newest {newest}")
-    status = render_status(Path(args.status))
     docs = doc_list()
 
     (out / "index.html").write_text(page("Trang chủ", f"""  <section class="hero">
@@ -425,10 +394,6 @@ chmod +x /root/camarelol
     <p class="note">Chạy từ ISO Arch sống. Xoá ổ đĩa không phải thứ để thử trên máy thật.</p>
   </section>
 
-  <section>
-    <h2>Tình trạng mirror</h2>
-{status}
-  </section>
 
   <section>
     <h2>Tài liệu</h2>
@@ -444,19 +409,6 @@ chmod +x /root/camarelol
         '\n  </ol>\n  <p class="note">Mỗi bản có <code>latest.json</code> kèm chữ ký GPG. Client kiểm\n'
         '  chữ ký bằng khoá nhúng trong binary, nên mirror không thể đưa nhầm bản.</p>',
         "news.html"), encoding="utf-8")
-
-    (out / "status.html").write_text(page("Trạng thái", f"""  <h1>Trạng thái</h1>
-{status}
-  <h2>Đường dẫn cập nhật</h2>
-  <table>
-    <thead><tr><th>Dùng để</th><th>Địa chỉ</th></tr></thead>
-    <tbody>
-      <tr><td>Mặc định</td><td><code>https://tamkogay9876-code.github.io/camareLOL-mirror/latest.json</code></td></tr>
-      <tr><td>Dự phòng</td><td><code>https://github.com/{OWNER}/{REPO}/releases/latest/download/latest.json</code></td></tr>
-    </tbody>
-  </table>
-  <p class="note">Client thử lần lượt. Xem <a href="/vi/docs/updates-signing.html">cách ký chỉ mục</a>.</p>""",
-        "status.html"), encoding="utf-8")
 
     (out / "docs.html").write_text(page("Tài liệu",
         '  <h1>Tài liệu</h1>\n'
@@ -519,14 +471,6 @@ chmod +x /root/camarelol
         log("no documentation was rendered; refusing to publish a site with no docs")
         return 1
 
-    missing = [f for f in MIRROR_FILES if not (out / f).exists()]
-    if missing:
-        # Fatal, not a warning. The site is served from the directory these two
-        # files live in, so a build that published the pages without them would
-        # replace the project's front door with a site whose own update URL 404s.
-        log(f"ERROR: mirror files missing: {missing} — refusing to publish; every "
-            f"client using the default update URL needs these")
-        return 1
     return 0
 
 

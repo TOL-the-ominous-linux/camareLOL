@@ -11,7 +11,6 @@ a site that looks fine and says nothing.
 
 from __future__ import annotations
 
-import json
 import re
 import sys
 import tempfile
@@ -52,17 +51,11 @@ class BuildCase(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.out = Path(self.tmp.name)
         self.addCleanup(self.tmp.cleanup)
-        self._saved = (render_site.get_json, render_site.fetch_source, render_site.render_status)
-        render_site.render_status = lambda _p: "<p>ok</p>"
+        self._saved = (render_site.get_json, render_site.fetch_source)
         self.addCleanup(self._restore)
 
     def _restore(self):
-        render_site.get_json, render_site.fetch_source, render_site.render_status = self._saved
-
-    def put_mirror(self, signature: bool = True):
-        (self.out / "latest.json").write_text(json.dumps({"version": "9.9.9"}))
-        if signature:
-            (self.out / "latest.json.sig").write_text("SIGNATURE")
+        render_site.get_json, render_site.fetch_source = self._saved
 
     def stub_repository(self, rels=None, docs=("index.md", "testing.md")):
         """Answer both API shapes the build asks for."""
@@ -87,7 +80,7 @@ class BuildCase(unittest.TestCase):
         docs_dir = Path(docs) if docs else self.out / "nodocs"
         argv = sys.argv
         sys.argv = ["render_site.py", "--out", str(self.out),
-                    "--status", str(self.out / "s.json"), "--docs", str(docs_dir)]
+                    "--docs", str(docs_dir)]
         try:
             return render_site.main()
         finally:
@@ -223,7 +216,6 @@ class TestRefusesToPublishIncompleteSites(BuildCase):
     def test_no_releases_means_failure(self):
         render_site.get_json = offline
         render_site.fetch_source = offline
-        self.put_mirror()
         self.assertEqual(self.run_build(), 1)
 
     def test_no_docs_means_failure(self):
@@ -236,7 +228,6 @@ class TestRefusesToPublishIncompleteSites(BuildCase):
         """
         import shutil
         self.stub_repository()
-        self.put_mirror()
         for lang in render_site.LANGS:
             self.write_docs(lang)
         shutil.rmtree(self.out / "nodocs" / "zh")
@@ -245,27 +236,15 @@ class TestRefusesToPublishIncompleteSites(BuildCase):
         render_site.get_json = lambda url: [] if "/contents/docs/zh" in url else saved(url)
         self.assertEqual(self.run_build(), 1)
 
-    def test_a_missing_mirror_file_means_failure(self):
-        """The pages and the index share a directory.
-
-        Publishing the pages while the signature is absent would replace the
-        update URL every camareLOL uses with a 404.
-        """
-        self.stub_repository()
-        self.put_mirror(signature=False)
-        self.assertEqual(self.run_build(), 1)
-
     def test_an_unusable_release_entry_means_failure_not_a_crash(self):
         """A response entry with no tag is noise; the build should say so."""
         self.stub_repository(rels=[{"name": "no tag here"}, "not even an object"])
-        self.put_mirror()
         self.write_docs_for_every_language()
         self.assertEqual(self.run_build(), 1)
 
     def test_a_listing_entry_without_a_name_does_not_abort(self):
         """A listing entry with no usable name is skipped, not fatal."""
         self.stub_repository(docs=("updates-signing.md", "no-name-entry"))
-        self.put_mirror()
         self.write_docs_for_every_language(("updates-signing.md",))
         self.assertEqual(self.run_build(), 0)
         self.assertTrue((self.out / "vi" / "docs" / "updates-signing.html").exists())
@@ -274,18 +253,17 @@ class TestRefusesToPublishIncompleteSites(BuildCase):
 class TestBuildsWhenItHasWhatItNeeds(BuildCase):
     def test_succeeds_and_writes_every_page(self):
         self.stub_repository()
-        self.put_mirror()
         self.write_docs_for_every_language()
         self.assertEqual(self.run_build(), 0)
-        for name in ("index.html", "news.html", "status.html", "docs.html", "discuss.html",
+        for name in ("index.html", "news.html", "docs.html", "discuss.html",
                      "assets/style.css", "assets/logo.png",
                      "en/docs/index.html", "vi/docs/index.html", "zh/docs/index.html",
                      "en/docs/testing.html", "vi/docs/testing.html", "zh/docs/testing.html"):
+        
             self.assertTrue((self.out / name).exists(), f"missing {name}")
 
     def test_every_language_gets_its_own_directory(self):
         self.stub_repository()
-        self.put_mirror()
         self.write_docs_for_every_language()
         self.run_build()
         for lang in render_site.LANGS:
@@ -298,7 +276,6 @@ class TestBuildsWhenItHasWhatItNeeds(BuildCase):
         link written in the original case only works by accident.
         """
         self.stub_repository()
-        self.put_mirror()
         self.write_docs_for_every_language()
         self.run_build()
         listed = (self.out / "docs.html").read_text(encoding="utf-8")
@@ -312,7 +289,6 @@ class TestBuildsWhenItHasWhatItNeeds(BuildCase):
         """Three identical links are not a switch; a reader cannot tell where
         they are."""
         self.stub_repository()
-        self.put_mirror()
         self.write_docs_for_every_language()
         self.run_build()
         for lang in render_site.LANGS:
@@ -320,21 +296,10 @@ class TestBuildsWhenItHasWhatItNeeds(BuildCase):
             self.assertIn('<html lang="%s"' % lang, body)
             self.assertIn('class="on"', body)
 
-    def test_the_mirror_files_are_left_exactly_as_they_were(self):
-        self.stub_repository()
-        self.put_mirror()
-        self.write_docs_for_every_language()
-        before = ((self.out / "latest.json").read_bytes(),
-                  (self.out / "latest.json.sig").read_bytes())
-        self.run_build()
-        self.assertEqual(before[0], (self.out / "latest.json").read_bytes())
-        self.assertEqual(before[1], (self.out / "latest.json.sig").read_bytes())
-
     def test_release_text_cannot_inject_markup(self):
         self.stub_repository(rels=[dict(TWO_RELEASES[0],
                                         name="<script>alert(1)</script>",
                                         body="<img onerror=alert(1)>")])
-        self.put_mirror()
         self.assertEqual(self.run_build(), 0)
         news = (self.out / "news.html").read_text(encoding="utf-8")
         # The payload must survive as visible text, not as markup. Searching for

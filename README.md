@@ -18,8 +18,7 @@ destructive operation.
 | Issues | <https://github.com/tamkogay9876-code/camareLOL/issues> |
 
 The website is generated from this repository, so it cannot disagree with the
-code. It is also the update mirror: it serves `/latest.json`, which is the
-default update address, with GitHub Releases as a fallback.
+code.
 
 ## Documentation
 
@@ -29,10 +28,6 @@ switcher is in the footer of the site.
 | Topic | English | Tiếng Việt | 中文 |
 |---|---|---|---|
 | Overview | [index](docs/en/index.md) | [VI](docs/vi/index.md) | [ZH](docs/zh/index.md) |
-| How updates are signed | [updates-signing](docs/en/updates-signing.md) | [VI](docs/vi/updates-signing.md) | [ZH](docs/zh/updates-signing.md) |
-| Why an old index is refused | [updates-rollback](docs/en/updates-rollback.md) | [VI](docs/vi/updates-rollback.md) | [ZH](docs/zh/updates-rollback.md) |
-| Building your own package | [updates-packaging](docs/en/updates-packaging.md) | [VI](docs/vi/updates-packaging.md) | [ZH](docs/zh/updates-packaging.md) |
-| When an update is refused | [updates-troubleshooting](docs/en/updates-troubleshooting.md) | [VI](docs/vi/updates-troubleshooting.md) | [ZH](docs/zh/updates-troubleshooting.md) |
 | The three components | [architecture](docs/en/architecture.md) | [VI](docs/vi/architecture.md) | [ZH](docs/zh/architecture.md) |
 | The IPC protocol | [ipc-protocol](docs/en/ipc-protocol.md) | [VI](docs/vi/ipc-protocol.md) | [ZH](docs/zh/ipc-protocol.md) |
 | What gets tested | [testing](docs/en/testing.md) | [VI](docs/vi/testing.md) | [ZH](docs/zh/testing.md) |
@@ -62,18 +57,22 @@ $ git clone https://github.com/tamkogay9876-code/camareLOL
 $ cd camareLOL && sudo ./install.sh --binary
 ```
 
-Staying current — the updater reports by default and installs only when you ask:
+### Updating
+
+camareLOL does not update itself. There is no updater, no index URL, and no
+code path in the binary that replaces it.
+
+That is a decision, not an unfinished feature. This program erases disks; a
+component whose job is to replace itself is the shortest path from a compromised
+server to erased data. Update it the way every other Arch package is updated:
 
 ```console
-$ camarelol --check-update     # reports, downloads nothing
-$ camarelol --update           # download, verify signature and SHA-256, install
-$ camarelol --rollback-update  # put the previous binary back
+$ sudo pacman -S camarelol        # from a repository or the AUR
 ```
 
-It never replaces itself on its own, never while an install is running, and
-refuses a download whose signature or checksum does not match. See
-[docs/en/updates-signing.md](docs/en/updates-signing.md) and
-[docs/en/updates-rollback.md](docs/en/updates-rollback.md).
+Or download the release you want from
+[Releases](https://github.com/tamkogay9876-code/camareLOL/releases) and replace
+the binary by hand.
 
 ### From source
 
@@ -117,7 +116,6 @@ yourself is in [docs/en/vm-testing.md](docs/en/vm-testing.md).
   phrases (`ERASE`, `ERASE AND WIPE`) arm it; `--execute` is required to write.
 - Configuration profiles: save/load, schema-versioned, **never containing
   passwords**.
-- Signed self-updater with mirror fallback.
 - Logs everything with secret redaction; diagnostics report for bug reports.
 
 ## What it deliberately does not do yet
@@ -151,7 +149,7 @@ Packages → Review (type the confirmation phrase) → Progress → Result
 ```
 
 Keyboard only: `↑↓` move, `Enter` select, `Space` toggle, `Tab` next field,
-`Esc` back, `F1` help, `F5` re-scan, `F10` review, `Ctrl-C` quit, `u` updates.
+`Esc` back, `F1` help, `F5` re-scan, `F10` review, `Ctrl-C` quit.
 
 ## Testing
 
