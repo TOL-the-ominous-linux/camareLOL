@@ -57,15 +57,15 @@ không khớp.
 
 | Chủ đề | English | Tiếng Việt | 中文 |
 |---|---|---|---|
-| Cách ký bản cập nhật | [updates-signing](updates-signing.md) | [VI](updates-signing.md) | [ZH](https://tamkogay9876-code.github.io/camareLOL-mirror/zh/docs/updates-signing.html) |
-| Vì sao chỉ mục cũ bị từ chối | [updates-rollback](updates-rollback.md) | [VI](updates-rollback.md) | [ZH](https://tamkogay9876-code.github.io/camareLOL-mirror/zh/docs/updates-rollback.html) |
-| Tự đóng gói bản của riêng bạn | [updates-packaging](updates-packaging.md) | [VI](updates-packaging.md) | [ZH](https://tamkogay9876-code.github.io/camareLOL-mirror/zh/docs/updates-packaging.html) |
-| Khi nào bản cập nhật bị từ chối | [updates-troubleshooting](updates-troubleshooting.md) | [VI](updates-troubleshooting.md) | [ZH](https://tamkogay9876-code.github.io/camareLOL-mirror/zh/docs/updates-troubleshooting.html) |
-| Ba thành phần | [architecture](architecture.md) | [VI](architecture.md) | [ZH](https://tamkogay9876-code.github.io/camareLOL-mirror/zh/docs/architecture.html) |
-| Giao thức IPC | [ipc-protocol](ipc-protocol.md) | [VI](ipc-protocol.md) | [ZH](https://tamkogay9876-code.github.io/camareLOL-mirror/zh/docs/ipc-protocol.html) |
-| Những gì được kiểm thử | [testing](testing.md) | [VI](testing.md) | [ZH](https://tamkogay9876-code.github.io/camareLOL-mirror/zh/docs/testing.html) |
-| Tự chạy thử | [vm-testing](vm-testing.md) | [VI](vm-testing.md) | [ZH](https://tamkogay9876-code.github.io/camareLOL-mirror/zh/docs/vm-testing.html) |
-| Những gì chưa làm | [roadmap](roadmap.md) | [VI](roadmap.md) | [ZH](https://tamkogay9876-code.github.io/camareLOL-mirror/zh/docs/roadmap.html) |
+| Cách ký bản cập nhật | [EN](https://tamkogay9876-code.github.io/CAMARELOL-MIRROR/en/docs/updates-signing.html) | [VI](updates-signing.md) | [ZH](https://tamkogay9876-code.github.io/camareLOL-mirror/zh/docs/updates-signing.html) |
+| Vì sao chỉ mục cũ bị từ chối | [EN](https://tamkogay9876-code.github.io/CAMARELOL-MIRROR/en/docs/updates-rollback.html) | [VI](updates-rollback.md) | [ZH](https://tamkogay9876-code.github.io/camareLOL-mirror/zh/docs/updates-rollback.html) |
+| Tự đóng gói bản của riêng bạn | [EN](https://tamkogay9876-code.github.io/CAMARELOL-MIRROR/en/docs/updates-packaging.html) | [VI](updates-packaging.md) | [ZH](https://tamkogay9876-code.github.io/camareLOL-mirror/zh/docs/updates-packaging.html) |
+| Khi nào bản cập nhật bị từ chối | [EN](https://tamkogay9876-code.github.io/CAMARELOL-MIRROR/en/docs/updates-troubleshooting.html) | [VI](updates-troubleshooting.md) | [ZH](https://tamkogay9876-code.github.io/camareLOL-mirror/zh/docs/updates-troubleshooting.html) |
+| Ba thành phần | [EN](https://tamkogay9876-code.github.io/CAMARELOL-MIRROR/en/docs/architecture.html) | [VI](architecture.md) | [ZH](https://tamkogay9876-code.github.io/camareLOL-mirror/zh/docs/architecture.html) |
+| Giao thức IPC | [EN](https://tamkogay9876-code.github.io/CAMARELOL-MIRROR/en/docs/ipc-protocol.html) | [VI](ipc-protocol.md) | [ZH](https://tamkogay9876-code.github.io/camareLOL-mirror/zh/docs/ipc-protocol.html) |
+| Những gì được kiểm thử | [EN](https://tamkogay9876-code.github.io/CAMARELOL-MIRROR/en/docs/testing.html) | [VI](testing.md) | [ZH](https://tamkogay9876-code.github.io/camareLOL-mirror/zh/docs/testing.html) |
+| Tự chạy thử | [EN](https://tamkogay9876-code.github.io/CAMARELOL-MIRROR/en/docs/vm-testing.html) | [VI](vm-testing.md) | [ZH](https://tamkogay9876-code.github.io/camareLOL-mirror/zh/docs/vm-testing.html) |
+| Những gì chưa làm | [EN](https://tamkogay9876-code.github.io/CAMARELOL-MIRROR/en/docs/roadmap.html) | [VI](roadmap.md) | [ZH](https://tamkogay9876-code.github.io/camareLOL-mirror/zh/docs/roadmap.html) |
 
 ## Hiện nó làm được gì
 

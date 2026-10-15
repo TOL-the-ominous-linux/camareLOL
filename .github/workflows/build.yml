@@ -89,6 +89,9 @@ jobs:
           python -m py_compile site/*.py
           python site/test_markdown.py
           python site/test_render_site.py
+          # A reader clicking "English" must land on the English page. In the
+          # Vietnamese table it landed back on Vietnamese, silently.
+          python site/check_lang_table.py
 
       - name: No secrets in the tree
         # .gitignore stops accidents. This catches the rest: a file added with
