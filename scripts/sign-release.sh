@@ -61,6 +61,10 @@ curl --silent --show-error --fail --location --proto '=https' --proto-redir '=ht
 grep -q '"sha256"' "$INDEX" || die "file tải về không phải một chỉ mục cập nhật"
 
 printf 'Đang ký bằng khoá %s...\n' "${FPR: -16}"
+# GPG từ chối ghi đè một chữ ký đã có, nên chữ ký của lần phát hành trước còn
+# nằm trong out/ sẽ dừng bản này lại với "File exists" — một thông báo không
+# nói rõ mình đang làm sai ở đâu.
+rm -f "$SIG"
 if gpg --batch --quiet --pinentry-mode loopback --passphrase "${CAMARELOL_SIGNING_PASSPHRASE:-}" \
         --local-user "$FPR" --detach-sign --armor -o "$SIG" "$INDEX" 2>/dev/null; then
     :
