@@ -83,6 +83,7 @@ jobs:
         run: |
           python -m py_compile site/*.py
           python site/test_markdown.py
+          python site/test_render_site.py
 
   java:
     name: Java catalog

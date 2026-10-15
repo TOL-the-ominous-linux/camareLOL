@@ -37,7 +37,6 @@ BRANCH = "main"
 TIMEOUT = 30
 
 SITE_NAME = "camareLOL"
-FALLBACK_VERSION = "0.1.9"
 
 #: Never written by the site build. These are the mirror.
 MIRROR_FILES = ("latest.json", "latest.json.sig")
@@ -142,7 +141,9 @@ def releases() -> list[dict]:
     except (urllib.error.URLError, OSError, json.JSONDecodeError) as exc:
         log(f"could not read releases ({exc})")
         return []
-    return [r for r in rels if isinstance(r, dict) and not r.get("draft")]
+    # An entry with no tag cannot be linked to, dated or labelled, so it is not
+    # a release as far as this page is concerned.
+    return [r for r in rels if isinstance(r, dict) and not r.get("draft") and r.get("tag_name")]
 
 
 def fmt_size(n: int | None) -> str:
@@ -200,13 +201,21 @@ def render_status(path: Path) -> str:
 
 
 def doc_list() -> str:
-    items = ['    <li><a href="/docs/README.html">README.md</a></li>']
+    items = ['    <li><a href="/docs/readme.html">README.md</a></li>']
     try:
         listing = get_json(f"{API}/contents/docs?ref={BRANCH}")
     except (urllib.error.URLError, OSError, json.JSONDecodeError):
         return items[0] + '\n    <li class="note">không đọc được danh sách tài liệu</li>'
-    for f in sorted((x for x in listing if x["name"].endswith(".md")), key=lambda x: x["name"]):
-        items.append(f'    <li><a href="/docs/{f["name"][:-3]}.html">{html.escape(f["name"])}</a></li>')
+    # .get, not x["name"]: a listing entry without a usable name is a response
+    # to skip, not a reason to abort the whole build with a traceback.
+    for f in sorted((x for x in listing if str(x.get("name", "")).endswith(".md")),
+                    key=lambda x: x.get("name", "")):
+        name = f["name"]
+        # Lower case: the static host normalises a mixed-case name into a
+        # redirect, so links that are already lowercase avoid the extra hop.
+        items.append(
+            f'    <li><a href="/docs/{name[:-3].lower()}.html">{html.escape(name)}</a></li>'
+        )
     return "\n".join(items)
 
 
@@ -216,8 +225,8 @@ def write_doc_pages(out: Path) -> int:
     targets = ["README.md"]
     try:
         listing = get_json(f"{API}/contents/docs?ref={BRANCH}")
-        targets += [f"docs/{f['name']}" for f in sorted(listing, key=lambda x: x["name"])
-                    if f["name"].endswith(".md")]
+        targets += [f"docs/{name}" for name in sorted(
+            f["name"] for f in listing if str(f.get("name", "")).endswith(".md"))]
     except (urllib.error.URLError, OSError, json.JSONDecodeError):
         pass
 
@@ -227,7 +236,9 @@ def write_doc_pages(out: Path) -> int:
         if text is None:
             log(f"skipped {path}: could not read it")
             continue
-        slug = Path(path).stem
+        # Lower case: the static host normalises a mixed-case name into a
+        # redirect, so links that are already lowercase avoid the extra hop.
+        slug = Path(path).stem.lower()
         title = slug.replace("-", " ").replace("_", " ").capitalize()
         rendered = render_markdown(text)
         (docs / f"{slug}.html").write_text(
@@ -264,7 +275,14 @@ def main() -> int:
     out.mkdir(parents=True, exist_ok=True)
     copy_assets(out)
     rels = releases()
-    newest = rels[0]["tag_name"] if rels else FALLBACK_VERSION
+    if not rels:
+        # Fail rather than publish. An empty news page and an empty docs section
+        # look like a working site to a reader, and the build still reports
+        # success — the front page quietly stops telling the truth. GitHub rate
+        # limits unauthenticated calls, so this is reachable in normal use.
+        log("could not read the release list; refusing to publish an empty site")
+        return 1
+    newest = rels[0]["tag_name"]
     log(f"{len(rels)} published releases; newest {newest}")
     status = render_status(Path(args.status))
     docs = doc_list()
@@ -319,7 +337,7 @@ chmod +x /root/camarelol
       <tr><td>Dự phòng</td><td><code>https://github.com/{OWNER}/{REPO}/releases/latest/download/latest.json</code></td></tr>
     </tbody>
   </table>
-  <p class="note">Client thử lần lượt. Xem <a href="/docs/UPDATES.html">UPDATES.md</a>.</p>""",
+  <p class="note">Client thử lần lượt. Xem <a href="/docs/updates.html">UPDATES.md</a>.</p>""",
         "status.html"), encoding="utf-8")
 
     (out / "docs.html").write_text(page("Tài liệu",
@@ -342,11 +360,18 @@ chmod +x /root/camarelol
 
     count = write_doc_pages(out)
     log(f"wrote {count} doc pages")
+    if not count:
+        log("no documentation was rendered; refusing to publish a site with no docs")
+        return 1
 
     missing = [f for f in MIRROR_FILES if not (out / f).exists()]
     if missing:
-        log(f"WARNING: mirror files missing: {missing} — the site is served from this "
-            f"directory, and a client using the default update URL needs them")
+        # Fatal, not a warning. The site is served from the directory these two
+        # files live in, so a build that published the pages without them would
+        # replace the project's front door with a site whose own update URL 404s.
+        log(f"ERROR: mirror files missing: {missing} — refusing to publish; every "
+            f"client using the default update URL needs these")
+        return 1
     return 0
 
 
