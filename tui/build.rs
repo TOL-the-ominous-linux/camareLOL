@@ -47,9 +47,13 @@ fn git_dir(root: &std::path::Path) -> Option<std::path::PathBuf> {
         let text = std::fs::read_to_string(&dot).ok()?;
         let rest = text.trim().strip_prefix("gitdir:")?.trim();
         let path = std::path::PathBuf::from(rest);
-        return Some(if path.is_absolute() { path } else { root.join(path) });
+        return Some(if path.is_absolute() {
+            path
+        } else {
+            root.join(path)
+        });
     }
-    dot.is_dir().then(|| dot)
+    dot.is_dir().then_some(dot)
 }
 
 fn main() {
@@ -128,9 +132,16 @@ fn main() {
     // quietly updates from the upstream project instead. Both of these have
     // already been written in camareLOL's own documentation, so they are worth
     // naming rather than guessing at.
-    for wrong in ["CARAMELOL_UPDATE_URL", "CAMAMELOL_UPDATE_URL", "CAMARELOL_NO_UPDATE", "CAMAMELOL_NO_UPDATE"] {
+    for wrong in [
+        "CARAMELOL_UPDATE_URL",
+        "CAMAMELOL_UPDATE_URL",
+        "CAMARELOL_NO_UPDATE",
+        "CAMAMELOL_NO_UPDATE",
+    ] {
         if std::env::var(wrong).is_ok() {
-            let intended = wrong.replace("CARAMELOL", "CAMARELOL").replace("CAMAMELOL", "CAMARELOL");
+            let intended = wrong
+                .replace("CARAMELOL", "CAMARELOL")
+                .replace("CAMAMELOL", "CAMARELOL");
             println!(
                 "cargo:warning={wrong} is set but this build reads {intended}. \
                  The misspelled one is ignored, and the binary keeps the upstream update channel."
