@@ -28,3 +28,4 @@ java/out/
 
 # generated update mirror content; lol_sync.py writes it
 /lol/site/
+site-preview/

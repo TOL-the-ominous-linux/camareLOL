@@ -1,0 +1,209 @@
+/* camareLOL — Hacker News density, Arch Linux's blue. */
+
+/* Arch's blue reads as "system software"; Hacker News's orange is why people
+   read every line. Orange marks the few things that matter, blue carries the
+   structure, and neither has to shout over the other. */
+:root {
+  --ink: #1b1b1b;
+  --ink-soft: #5c6670;
+  --paper: #ffffff;
+  --wash: #f6f8fa;
+  --rule: #d8dee4;
+  --blue: #1793d1;
+  --blue-dark: #0f6b9e;
+  --orange: #ff6600;
+  --green: #1a7f37;
+  --red: #b42318;
+  --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  font: 15px/1.6 var(--sans);
+  color: var(--ink);
+  background: var(--paper);
+}
+
+.wrap { max-width: 880px; margin: 0 auto; padding: 0 18px; }
+
+/* ---------------------------------------------------------------- header */
+header {
+  background: var(--blue-dark);
+  border-bottom: 3px solid var(--orange);
+}
+header .wrap {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding-top: 12px;
+  padding-bottom: 12px;
+  flex-wrap: wrap;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #fff;
+  text-decoration: none;
+  font-size: 20px;
+  letter-spacing: -0.01em;
+}
+.brand img { display: block; }
+.brand strong { color: var(--orange); }
+
+nav { display: flex; gap: 4px; flex-wrap: wrap; }
+nav a {
+  color: #d7ecf8;
+  text-decoration: none;
+  padding: 6px 11px;
+  border-radius: 4px;
+  font-size: 14px;
+}
+nav a:hover { background: rgba(255, 255, 255, 0.14); color: #fff; }
+nav a.on { background: var(--orange); color: #fff; font-weight: 600; }
+
+/* ------------------------------------------------------------------ main */
+main { padding: 26px 18px 40px; max-width: 880px; margin: 0 auto; }
+
+h1 { font-size: 26px; line-height: 1.25; margin: 0 0 16px; letter-spacing: -0.02em; }
+h2 {
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-soft);
+  border-bottom: 1px solid var(--rule);
+  padding-bottom: 6px;
+  margin: 30px 0 14px;
+}
+
+a { color: var(--blue-dark); }
+a:hover { color: var(--orange); }
+
+.lede { font-size: 17px; color: var(--ink); margin: 10px 0 16px; }
+.note { font-size: 13px; color: var(--ink-soft); }
+.warn {
+  border-left: 3px solid var(--orange);
+  background: var(--wash);
+  padding: 10px 12px;
+  font-size: 14px;
+}
+
+/* ------------------------------------------------------------------ hero */
+.hero {
+  display: flex;
+  gap: 22px;
+  align-items: flex-start;
+  background: var(--wash);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 22px;
+  margin-bottom: 8px;
+}
+.hero img { flex: 0 0 auto; }
+.hero h1 { margin: 0 0 8px; }
+.sub2 { font-size: 17px; font-weight: 400; color: var(--ink-soft); }
+@media (max-width: 620px) {
+  .hero { flex-direction: column; }
+  .hero img { margin: 0 auto; }
+}
+
+.cta { display: flex; gap: 10px; flex-wrap: wrap; margin: 18px 0 0; }
+.btn {
+  display: inline-block;
+  background: var(--orange);
+  color: #fff !important;
+  text-decoration: none;
+  padding: 9px 16px;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 14px;
+}
+.btn:hover { background: #e05500; }
+.btn.ghost {
+  background: transparent;
+  color: var(--blue-dark) !important;
+  border: 1px solid var(--blue-dark);
+}
+.btn.ghost:hover { background: rgba(23, 147, 209, 0.08); color: var(--blue-dark) !important; }
+
+/* ------------------------------------------------------------------- code */
+pre {
+  background: #0f1b24;
+  color: #e6edf3;
+  padding: 14px 16px;
+  border-radius: 6px;
+  overflow-x: auto;
+  font: 13px/1.55 var(--mono);
+}
+code { font: 0.92em var(--mono); }
+p code, li code, td code {
+  background: var(--wash);
+  border: 1px solid var(--rule);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+pre code { background: none; border: 0; padding: 0; }
+
+/* ------------------------------------------------------------------- news
+   Hacker News' ranked list: a small metric on the left, the headline, then a
+   quiet line of provenance. Dense, scannable, no cards. */
+.news { list-style: none; margin: 0; padding: 0; counter-reset: n; }
+.news li { padding: 9px 0; border-bottom: 1px solid var(--rule); }
+.score {
+  display: inline-block;
+  min-width: 64px;
+  color: var(--ink-soft);
+  font: 12px/1.6 var(--mono);
+  text-align: right;
+  padding-right: 10px;
+}
+.news > li > a { font-size: 16px; font-weight: 600; }
+.sub { font-size: 13px; color: var(--ink-soft); }
+.sub a { color: var(--ink-soft); text-decoration: underline; }
+.news .note { margin-top: 3px; }
+
+.tag {
+  font: 11px/1 var(--sans);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 3px 7px;
+  border-radius: 3px;
+  border: 1px solid var(--rule);
+  color: var(--ink-soft);
+}
+.tag.ok { color: var(--green); border-color: var(--green); }
+.tag.bad { color: var(--red); border-color: var(--red); }
+.tag.pre { color: var(--orange); border-color: var(--orange); }
+
+/* ----------------------------------------------------------------- table */
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-soft); }
+td { word-break: break-word; }
+
+/* ------------------------------------------------------------------ docs */
+ul.docs { list-style: none; padding: 0; margin: 0; }
+ul.docs li { padding: 7px 0; border-bottom: 1px solid var(--rule); }
+article h1 { font-size: 24px; margin-top: 0; }
+article h2 { margin-top: 28px; }
+article table { margin: 14px 0; font-size: 14px; }
+article blockquote {
+  margin: 14px 0;
+  padding: 2px 0 2px 14px;
+  border-left: 3px solid var(--rule);
+  color: var(--ink-soft);
+}
+article img { max-width: 100%; }
+
+/* ---------------------------------------------------------------- footer */
+footer {
+  border-top: 1px solid var(--rule);
+  padding: 20px 18px 34px;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+footer p { max-width: 880px; margin: 6px auto; }

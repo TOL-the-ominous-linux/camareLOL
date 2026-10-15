@@ -76,6 +76,14 @@ jobs:
           python -m py_compile lol/lol_sync.py lol/lol_server.py
           python lol/test_lol.py
 
+      - name: The site
+        # The renderer turns repository documentation into HTML. A bug here
+        # publishes a broken page to the project's front door, so it is tested
+        # against the real docs rather than only toy input.
+        run: |
+          python -m py_compile site/*.py
+          python site/test_markdown.py
+
   java:
     name: Java catalog
     runs-on: ubuntu-latest
