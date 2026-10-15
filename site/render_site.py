@@ -237,6 +237,23 @@ def write_doc_pages(out: Path) -> int:
     return count
 
 
+def copy_assets(out: Path) -> None:
+    """Put the stylesheet and logo next to the pages.
+
+    They have to be copied rather than assumed to be there: the pages link to
+    /assets/style.css, and a build that generated every HTML file while leaving
+    that path empty would publish an unstyled site and still look successful.
+    """
+    src = Path(__file__).resolve().parent / "assets"
+    dst = out / "assets"
+    dst.mkdir(parents=True, exist_ok=True)
+    for name in ("style.css", "logo.png"):
+        s = src / name
+        if not s.exists():
+            raise SystemExit(f"missing asset: {s}")
+        (dst / name).write_bytes(s.read_bytes())
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Build the camareLOL site")
     ap.add_argument("--out", default=".")
@@ -245,6 +262,7 @@ def main() -> int:
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
+    copy_assets(out)
     rels = releases()
     newest = rels[0]["tag_name"] if rels else FALLBACK_VERSION
     log(f"{len(rels)} published releases; newest {newest}")
