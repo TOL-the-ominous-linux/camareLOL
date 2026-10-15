@@ -85,6 +85,20 @@ fn main() {
     // changed, and a distribution's setting silently has no effect.
     println!("cargo:rerun-if-env-changed=CAMARELOL_UPDATE_URL");
     println!("cargo:rerun-if-env-changed=CAMARELOL_NO_UPDATE");
+    // A misspelled variable is worse than an unset one: the build succeeds, the
+    // packager believes their mirror is configured, and every binary they ship
+    // quietly updates from the upstream project instead. Both of these have
+    // already been written in camareLOL's own documentation, so they are worth
+    // naming rather than guessing at.
+    for wrong in ["CARAMELOL_UPDATE_URL", "CAMAMELOL_UPDATE_URL", "CAMARELOL_NO_UPDATE", "CAMAMELOL_NO_UPDATE"] {
+        if std::env::var(wrong).is_ok() {
+            let intended = wrong.replace("CARAMELOL", "CAMARELOL").replace("CAMAMELOL", "CAMARELOL");
+            println!(
+                "cargo:warning={wrong} is set but this build reads {intended}. \
+                 The misspelled one is ignored, and the binary keeps the upstream update channel."
+            );
+        }
+    }
     if let Ok(url) = std::env::var("CAMARELOL_UPDATE_URL") {
         if !url.trim().is_empty() {
             println!("cargo:rustc-env=CAMARELOL_UPDATE_URL={}", url.trim());

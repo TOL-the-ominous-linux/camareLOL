@@ -106,8 +106,8 @@ chính bạn — **binary nên dùng kênh cập nhật của bạn, không ph�
 gốc**:
 
 ```console
-$ CARAMELOL_UPDATE_URL="https://mirror.cua-ban.vn/camarelol/latest.json" cargo build --release
-$ CAMAMELOL_NO_UPDATE=1 cargo build --release    # hoặc tắt hẳn
+$ CAMARELOL_UPDATE_URL="https://mirror.cua-ban.vn/camarelol/latest.json" cargo build --release
+$ CAMARELOL_NO_UPDATE=1 cargo build --release    # hoặc tắt hẳn
 ```
 
 Vì sao:
