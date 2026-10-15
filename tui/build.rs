@@ -36,6 +36,22 @@ fn emit(key: &str, value: &str) {
     println!("cargo:rustc-env={key}={value}");
 }
 
+/// Where the git directory is, if this is a git checkout at all.
+///
+/// A tarball has none, and that is fine: the identity fields fall back to
+/// "unknown" rather than failing a build that has no git to consult.
+fn git_dir(root: &std::path::Path) -> Option<std::path::PathBuf> {
+    let dot = root.join(".git");
+    if dot.is_file() {
+        // A worktree or a submodule: .git holds "gitdir: <path>".
+        let text = std::fs::read_to_string(&dot).ok()?;
+        let rest = text.trim().strip_prefix("gitdir:")?.trim();
+        let path = std::path::PathBuf::from(rest);
+        return Some(if path.is_absolute() { path } else { root.join(path) });
+    }
+    dot.is_dir().then(|| dot)
+}
+
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
 
@@ -50,6 +66,21 @@ fn main() {
         "cargo:rerun-if-changed={}",
         root.join("mirrors.toml").display()
     );
+
+    // The git state is read below and baked into the binary, so a change to it
+    // has to rebuild. Without this, checking out another tag leaves cargo
+    // thinking the crate is up to date and hands back the previous binary —
+    // still carrying the previous tag and commit. That is the exact failure
+    // this file exists to prevent: a release named 0.1.10 that reports itself
+    // as 0.1.9, built from code that was never tagged.
+    if let Some(git_dir) = git_dir(&root) {
+        for watched in ["HEAD", "packed-refs", "refs/tags"] {
+            let path = git_dir.join(watched);
+            if path.exists() {
+                println!("cargo:rerun-if-changed={}", path.display());
+            }
+        }
+    }
 
     // The tag is the version of record. Cargo.toml drifted from it once (a
     // release tagged 0.1.6 still printed 0.1.5), and a stale version is worse

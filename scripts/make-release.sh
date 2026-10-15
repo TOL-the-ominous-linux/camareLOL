@@ -112,6 +112,24 @@ EOF
 # Chỉ mục phải tự mô tả được: số trong nó phải là số của chính binary này.
 grep -q "$SHA" "$OUT_DIR/latest.json" || die "chỉ mục không khớp sha256"
 
+# ------------------------------------------------ binary có đúng thẻ không
+# Cargo có thể dựng lại mà không chạy lại build script, khiến nó trả về binary
+# của lần build trước — binary đó vẫn mang thẻ cũ. Thẻ trong tên tệp là ý
+# định; thẻ bên trong binary là sự thật, và hai thứ phải khớp trước khi phát
+# hành. Đây là chốt cuối, không phải kiểm tra cho đẹp: nó bắt được đúng lỗi khiến
+# một bản phát hành mang tên 0.1.10 nhưng chạy code của 0.1.9.
+BUILT="$("$OUT_DIR/camarelol" --version | head -1)"
+case "$BUILT" in
+    *"tag $TAG"*) : ;;
+    *) die "binary vừa dựng không tự nhận là $TAG:
+    $BUILT
+    Nó là binary của lần build trước. Xoá target/ rồi dựng lại:
+        rm -rf target && $0 $VERSION" ;;
+esac
+grep -q "dirty working tree" <<<"$BUILT" \
+    && die "binary tự báo cây làm việc bẩn:
+    $BUILT"
+
 printf '\nXong. Kiểm tra lại trước khi phát hành:\n\n'
 note "phiên bản trong binary : $("$OUT_DIR/camarelol" --version | head -1)"
 note "sha256                : $SHA"
