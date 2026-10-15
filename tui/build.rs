@@ -104,8 +104,15 @@ fn main() {
         "CAMARELOL_GIT_TAG",
         &git(&["describe", "--tags", "--abbrev=0"]).unwrap_or_else(|| "unknown".into()),
     );
-    // "yes" only when the tree actually had uncommitted changes.
-    let dirty = git(&["status", "--porcelain"]).is_some();
+    // "yes" only when the tree actually had uncommitted changes to tracked files.
+    //
+    // Untracked files are excluded on purpose. A build leaves output behind,
+    // and an older tag's .gitignore may not cover the directory this version
+    // writes to — so building v0.1.9 reported a dirty tree purely because of
+    // this release's out/. Nothing untracked reaches the binary: everything
+    // compiled in is a named file, and mirrors.toml and the public key are
+    // tracked and watched above.
+    let dirty = git(&["status", "--porcelain", "--untracked-files=no"]).is_some();
     emit("CAMARELOL_GIT_DIRTY", if dirty { "yes" } else { "no" });
 
     // Where the bundled updater looks. A distribution packaging camareLOL from
