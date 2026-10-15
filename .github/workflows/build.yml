@@ -90,7 +90,12 @@ jobs:
         # A step with neither run: nor uses: is valid YAML and invalid to
         # GitHub, which then starts no job at all. The run reports failure
         # with no log to read, which is how a whole workflow went dark.
-        run: python scripts/check_workflows.py
+        run: |
+          # PyYAML ships with the interpreter on a developer machine and not
+          # on a runner. Installed here rather than assumed, which is the same
+          # mistake in a different place.
+          python -m pip install --quiet pyyaml
+          python scripts/check_workflows.py
 
       - name: No secrets in the tree
         # .gitignore stops accidents. This catches the rest: a file added with
