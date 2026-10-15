@@ -10,6 +10,19 @@ exactly what it is about to do, and only writes to a disk after you confirm it.
 plan → review → confirm → execute → verify, with a safety gate in front of every
 destructive operation.
 
+| | |
+|---|---|
+| Trang web, tài liệu, tin phát hành | **<https://camarelol.netlify.app>** |
+| Tài liệu | <https://camarelol.netlify.app/docs.html> |
+| Trạng thái mirror | <https://camarelol.netlify.app/status.html> |
+| Bản phát hành | <https://github.com/tamkogay9876-code/camareLOL/releases> |
+| Bàn luận | <https://github.com/tamkogay9876-code/camareLOL/discussions> |
+| Báo lỗi | <https://github.com/tamkogay9876-code/camareLOL/issues> |
+
+The website is generated from this repository, so it cannot disagree with the
+code. It is also the update mirror: it serves `/latest.json`, which is the
+default update address, with GitHub Releases as a fallback.
+
 ## Install
 
 ### From a release (fastest)

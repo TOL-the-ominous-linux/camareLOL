@@ -2,6 +2,10 @@
 
 Trang này nói rõ bộ cập nhật làm gì, và — quan trọng hơn — **không** làm gì.
 
+Trên trang web: [tin phát hành](https://camarelol.netlify.app/news.html) ·
+[trạng thái mirror](https://camarelol.netlify.app/status.html) ·
+[trang chủ](https://camarelol.netlify.app)
+
 ## Nguyên tắc
 
 camareLOL xoá ổ đĩa. Một trình cập nhật tự thay thế chính nó là đường đi thẳng từ

@@ -60,6 +60,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          # The whole history, because check_pkgbuild compares pkgver against
+          # the newest tag. Without tags it found none and reported "matches" —
+          # a check that passes because it could not look.
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -138,9 +143,18 @@ jobs:
             cp -r "$GITHUB_WORKSPACE/$item" "$staging/" 2>/dev/null || true
           done
           rm -rf "$staging"/target "$staging"/*/target "$staging"/java/out
+          find "$staging" -name '*.log' -delete
           # Keep pkgver in step with the tarball name.
           sed -i "s/^pkgver=.*/pkgver=${version}/" "$staging/PKGBUILD"
           tar -czf "${RUNNER_TEMP}/${name}.tar.gz" -C "${RUNNER_TEMP}" "$name"
+          # Pin the checksum of the tarball built here, the same way
+          # make-release.sh pins the one it ships. Leaving the released hash in
+          # place made every run fail the validity check against a tarball that
+          # is not the released one — and 'SKIP' would have passed while checking
+          # nothing.
+          sha="$(sha256sum "${RUNNER_TEMP}/${name}.tar.gz" | cut -d' ' -f1)"
+          sed -i "s|^sha256sums=.*|sha256sums=('${sha}')|" "$staging/PKGBUILD"
+          grep -E '^(pkgver|sha256sums)=' "$staging/PKGBUILD"
 
       - name: makepkg the package in an Arch container
         run: |
