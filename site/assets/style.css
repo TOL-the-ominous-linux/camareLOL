@@ -207,3 +207,35 @@ footer {
   color: var(--ink-soft);
 }
 footer p { max-width: 880px; margin: 6px auto; }
+
+/* ------------------------------------------------------ language switcher */
+/* In the footer, not the header: a reader who wants a different language is
+   already reading, while the header is where they are deciding what to read.
+   The current language is marked, so the control never reads as a row of three
+   identical links. */
+footer .langs {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  margin: 0 auto 14px;
+}
+footer .langs a {
+  display: inline-block;
+  padding: 4px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  font-size: 12px;
+  text-decoration: none;
+  color: var(--ink-soft);
+}
+footer .langs a:hover { border-color: var(--accent); color: var(--ink); }
+footer .langs a.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+/* A page that is mostly code should not wrap its samples at an arbitrary
+   width; the horizontal scroll is easier to follow than a wrapped command. */
+article pre { overflow-x: auto; }

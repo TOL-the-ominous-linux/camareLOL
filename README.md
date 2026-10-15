@@ -12,16 +12,34 @@ destructive operation.
 
 | | |
 |---|---|
-| Trang web, tài liệu, tin phát hành | **<https://camarelol.netlify.app>** |
-| Tài liệu | <https://camarelol.netlify.app/docs.html> |
-| Trạng thái mirror | <https://camarelol.netlify.app/status.html> |
-| Bản phát hành | <https://github.com/tamkogay9876-code/camareLOL/releases> |
-| Bàn luận | <https://github.com/tamkogay9876-code/camareLOL/discussions> |
-| Báo lỗi | <https://github.com/tamkogay9876-code/camareLOL/issues> |
+| Website | **<https://camarelol.netlify.app>** |
+| Releases | <https://github.com/tamkogay9876-code/camareLOL/releases> |
+| Discussions | <https://github.com/tamkogay9876-code/camareLOL/discussions> |
+| Issues | <https://github.com/tamkogay9876-code/camareLOL/issues> |
 
 The website is generated from this repository, so it cannot disagree with the
 code. It is also the update mirror: it serves `/latest.json`, which is the
 default update address, with GitHub Releases as a fallback.
+
+## Documentation
+
+Written in three languages. Every page exists in all three; the language
+switcher is in the footer of the site.
+
+| Topic | English | Tiếng Việt | 中文 |
+|---|---|---|---|
+| Overview | [index](docs/en/index.md) | [VI](docs/vi/index.md) | [ZH](docs/zh/index.md) |
+| How updates are signed | [updates-signing](docs/en/updates-signing.md) | [VI](docs/vi/updates-signing.md) | [ZH](docs/zh/updates-signing.md) |
+| Why an old index is refused | [updates-rollback](docs/en/updates-rollback.md) | [VI](docs/vi/updates-rollback.md) | [ZH](docs/zh/updates-rollback.md) |
+| Building your own package | [updates-packaging](docs/en/updates-packaging.md) | [VI](docs/vi/updates-packaging.md) | [ZH](docs/zh/updates-packaging.md) |
+| When an update is refused | [updates-troubleshooting](docs/en/updates-troubleshooting.md) | [VI](docs/vi/updates-troubleshooting.md) | [ZH](docs/zh/updates-troubleshooting.md) |
+| The three components | [architecture](docs/en/architecture.md) | [VI](docs/vi/architecture.md) | [ZH](docs/zh/architecture.md) |
+| The IPC protocol | [ipc-protocol](docs/en/ipc-protocol.md) | [VI](docs/vi/ipc-protocol.md) | [ZH](docs/zh/ipc-protocol.md) |
+| What gets tested | [testing](docs/en/testing.md) | [VI](docs/vi/testing.md) | [ZH](docs/zh/testing.md) |
+| Running it yourself | [vm-testing](docs/en/vm-testing.md) | [VI](docs/vi/vm-testing.md) | [ZH](docs/zh/vm-testing.md) |
+| What is not built yet | [roadmap](docs/en/roadmap.md) | [VI](docs/vi/roadmap.md) | [ZH](docs/zh/roadmap.md) |
+
+Read it on the site instead: <https://camarelol.netlify.app/en/docs/>
 
 ## Install
 
@@ -33,7 +51,7 @@ from the Arch live ISO:
 
 ```console
 $ chmod +x camarelol
-$ ./camarelol --self-test      # non-destructive checks
+$ ./camarelol --self-test      # non-destructive checks; safe on a real machine
 $ sudo ./camarelol             # the TUI
 ```
 
@@ -48,14 +66,14 @@ Staying current — the updater reports by default and installs only when you as
 
 ```console
 $ camarelol --check-update     # reports, downloads nothing
-$ camarelol --update           # download, verify SHA-256, install
+$ camarelol --update           # download, verify signature and SHA-256, install
 $ camarelol --rollback-update  # put the previous binary back
 ```
 
 It never replaces itself on its own, never while an install is running, and
-refuses a download whose checksum does not match. See
-[docs/UPDATES.md](docs/UPDATES.md), including what the checksum does *not*
-protect against.
+refuses a download whose signature or checksum does not match. See
+[docs/en/updates-signing.md](docs/en/updates-signing.md) and
+[docs/en/updates-rollback.md](docs/en/updates-rollback.md).
 
 ### From source
 
@@ -77,13 +95,13 @@ $ tar xf "camarelol-$VERSION.tar.gz" && cd "camarelol-$VERSION"
 $ makepkg -si
 ```
 
-`releases/latest/download/` chỉ nhận **đúng tên tệp**, nên ở đây phải ghép
-`tên-tệp` từ `tên-thẻ`; không có cách nào dùng đường dẫn đó mà không biết
-trước phiên bản.
+`releases/latest/download/` takes **the exact file name**, so it has to be built
+from the tag name; there is no way to use that path without knowing the version
+in advance.
 
 The full VirtualBox acceptance test is documented in
-[docs/TESTING.md](docs/TESTING.md), and a hands-on guide for running it
-yourself is in [docs/VM-TESTING.md](docs/VM-TESTING.md).
+[docs/en/testing.md](docs/en/testing.md), and a hands-on guide for running it
+yourself is in [docs/en/vm-testing.md](docs/en/vm-testing.md).
 
 ## What it does today
 
@@ -99,6 +117,7 @@ yourself is in [docs/VM-TESTING.md](docs/VM-TESTING.md).
   phrases (`ERASE`, `ERASE AND WIPE`) arm it; `--execute` is required to write.
 - Configuration profiles: save/load, schema-versioned, **never containing
   passwords**.
+- Signed self-updater with mirror fallback.
 - Logs everything with secret redaction; diagnostics report for bug reports.
 
 ## What it deliberately does not do yet
@@ -106,7 +125,7 @@ yourself is in [docs/VM-TESTING.md](docs/VM-TESTING.md).
 - Format a disk just because you selected it in a menu.
 - Install AUR packages without an explicit opt-in and a normal-user build.
 - Resize NTFS (the acceptance criteria for it are documented but the feature is
-  deferred — see [docs/ROADMAP.md](docs/ROADMAP.md)).
+  deferred — see [docs/en/roadmap.md](docs/en/roadmap.md)).
 - Dual-boot: detection and preservation rules are implemented; the layout UI for
   reusing an existing ESP comes in Stage 3.
 
@@ -120,8 +139,8 @@ Three components, one protocol:
 | **Python** (`python/`) | validation, recommendations, diagnostics, tests |
 | **Java** (`java/`) | package catalog, desktop profiles, plugin interface, JSON-RPC |
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and
-[docs/IPC-PROTOCOL.md](docs/IPC-PROTOCOL.md).
+See [docs/en/architecture.md](docs/en/architecture.md) and
+[docs/en/ipc-protocol.md](docs/en/ipc-protocol.md).
 
 ## Installer flow
 
@@ -132,7 +151,7 @@ Packages → Review (type the confirmation phrase) → Progress → Result
 ```
 
 Keyboard only: `↑↓` move, `Enter` select, `Space` toggle, `Tab` next field,
-`Esc` back, `F1` help, `F5` re-scan, `F10` review, `Ctrl-C` quit.
+`Esc` back, `F1` help, `F5` re-scan, `F10` review, `Ctrl-C` quit, `u` updates.
 
 ## Testing
 
@@ -140,11 +159,14 @@ Keyboard only: `↑↓` move, `Enter` select, `Space` toggle, `Tab` next field,
 ./build.sh test                                # everything (Rust + Python + Java)
 cd python && python3 -m unittest discover -s tests -v
 cd java && ./build.sh
+python site/test_markdown.py                   # site renderer
+python site/test_render_site.py                # site build, offline
+python scripts/check_pkgbuild.py               # PKGBUILD matches the newest tag
 cargo clippy --workspace --all-targets -- -D warnings
 ```
 
-Current status: 92 Rust tests, 19 Python tests, 22 Java tests, plus a full
-install verified in a VirtualBox VM (see [docs/TESTING.md](docs/TESTING.md)).
+A full install is verified in a VirtualBox VM — see
+[docs/en/testing.md](docs/en/testing.md).
 
 ## License
 

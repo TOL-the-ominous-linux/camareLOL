@@ -7,7 +7,7 @@ Automation layer around the Rust core:
 | `config_validate` | strict, opinionated validation of installation profiles (incl. rejecting secrets) |
 | `package_recommend` | package/dependency suggestions, groups, AUR policy |
 | `diagnostics` | secret-free diagnostics reports for bug reports |
-| `ipc_client` | JSON IPC client for the Rust core (`docs/IPC-PROTOCOL.md`) |
+| `ipc_client` | JSON IPC client for the Rust core (`docs/en/ipc-protocol.md`) |
 | `hw_info` | CPU/RAM/GPU/firmware processing, zram sizing |
 | `testutil` | device surveys for the acceptance scenarios |
 

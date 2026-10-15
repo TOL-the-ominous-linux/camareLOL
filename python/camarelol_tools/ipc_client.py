@@ -1,6 +1,6 @@
 """JSON IPC client for the camareLOL core.
 
-Speaks the newline-delimited JSON protocol from docs/IPC-PROTOCOL.md:
+Speaks the newline-delimited JSON protocol from docs/en/ipc-protocol.md:
 
     {"id":1,"protocol_version":1,"method":"scan_devices","params":{},...}
     {"id":1,"protocol_version":1,"status":"ok","result":{...},"duration_ms":3}

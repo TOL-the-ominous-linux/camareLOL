@@ -459,7 +459,7 @@ pub fn plan_from_index(
         )
         .with_context(index.trust.reason())
         .with_remediation(
-            "publish latest.json.sig and configure a pinned key (see docs/UPDATES.md), \
+            "publish latest.json.sig and configure a pinned key (\n             see https://camarelol.netlify.app/vi/docs/updates-signing.html), \
              or re-run with --allow-unsigned-update if you accept the risk",
         ));
     }

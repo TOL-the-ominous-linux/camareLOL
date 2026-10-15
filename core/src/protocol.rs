@@ -10,7 +10,7 @@
 //!   the safety layer
 //!
 //! The wire format is newline-delimited JSON: one [`Request`] per line, one
-//! [`Response`] per line. See `docs/IPC-PROTOCOL.md` for the full spec.
+//! [`Response`] per line. See `docs/en/ipc-protocol.md` for the full spec.
 
 use crate::error::ErrorCode;
 use serde::{Deserialize, Serialize};

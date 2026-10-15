@@ -156,14 +156,36 @@ class TestRealDocs(unittest.TestCase):
         docs = Path(__file__).resolve().parent.parent / "docs"
         if not docs.is_dir():
             self.skipTest("no docs directory")
+        # Every language, not just the top level: the docs moved into
+        # docs/<lang>/, and a glob that stopped at the top found nothing at all
+        # and quietly reported success.
+        files = sorted(docs.glob("*/*.md"))
+        if not files:
+            files = sorted(docs.glob("*.md"))
         rendered = 0
-        for md in sorted(docs.glob("*.md")):
+        for md in files:
             out = render(md.read_text(encoding="utf-8"))
             self.assertNotIn("&lt;h2&gt;", out, f"{md.name}: headings left unrendered")
             self.assertTrue(out.strip(), f"{md.name}: rendered to nothing")
             self.assertNotIn("<script>", out, f"{md.name}: injected a script tag")
             rendered += 1
         self.assertGreater(rendered, 0, "no docs found to test")
+
+    def test_every_language_is_covered(self):
+        """The renderer has to survive the Chinese and Vietnamese files too.
+
+        Text in a script the renderer's regexes were not written against is
+        exactly where an unescaped fragment or a dropped character shows up.
+        """
+        docs = Path(__file__).resolve().parent.parent / "docs"
+        langs = sorted(p.name for p in docs.iterdir() if p.is_dir()) if docs.is_dir() else []
+        for lang in langs:
+            files = sorted((docs / lang).glob("*.md"))
+            self.assertTrue(files, f"{lang} has no pages")
+            for md in files:
+                out = render(md.read_text(encoding="utf-8"))
+                self.assertTrue(out.strip(), f"{lang}/{md.name} rendered to nothing")
+                self.assertNotIn("<script>", out, f"{lang}/{md.name}")
 
 
 if __name__ == "__main__":

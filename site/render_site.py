@@ -71,14 +71,20 @@ def fetch_source(path: str) -> str | None:
     return base64.b64decode(doc["content"]).decode("utf-8", "replace")
 
 
-def rewrite_doc_link(url: str) -> str:
+def rewrite_doc_link(url: str, lang: str = "en") -> str:
     """Point a link at a Markdown file to the page that file became.
 
-    The documents link to each other by their repository paths — `docs/UPDATES.md`
-    from the README, `IPC-PROTOCOL.md` from the architecture notes — and those
-    links are right on GitHub. The site does not serve the Markdown, so left
-    alone they resolve to a path that is not there. The doc pages are written in
-    lower case, so the target has to be lower-cased to match.
+    The documents link to each other by their repository paths — `testing.md`
+    from the index page, `ipc-protocol.md` from the architecture notes — and
+    those links are right on GitHub. The site does not serve the Markdown, so
+    left alone they resolve to a path that is not there.
+
+    Two details that are easy to get wrong and produce a page that looks fine:
+
+    - the target keeps the language of the page it appears on, so a reader who
+      arrived in Vietnamese does not land in English halfway through;
+    - pages are written in lower case, because the static host normalises a
+      mixed-case name into a redirect.
     """
     if url.startswith(("http://", "https://", "#", "mailto:", "/")):
         return url
@@ -88,17 +94,17 @@ def rewrite_doc_link(url: str) -> str:
         return url
     stem = lowered[:-3]
     stem = stem[len("docs/"):] if stem.startswith("docs/") else stem
-    return f"/docs/{stem}.html" + (f"#{fragment}" if fragment else "")
+    return f"/{lang_dir(lang)}/{stem}.html" + (f"#{fragment}" if fragment else "")
 
 
-def render_markdown(text: str) -> str:
+def render_markdown(text: str, lang: str = "en") -> str:
     """Render locally rather than through the GitHub API.
 
     The API route is gone — /repos/{owner}/{repo}/markdown now answers 404 even
     with a valid token — and its output carries GitHub's class names, which do
     not match this site's stylesheet, so the tables would arrive unstyled.
     """
-    return markdown.render(text, rewrite=rewrite_doc_link)
+    return markdown.render(text, rewrite=lambda u: rewrite_doc_link(u, lang))
 
 
 NAV = [
@@ -110,15 +116,25 @@ NAV = [
 ]
 
 
-def page(title: str, body: str, active: str) -> str:
-    items = "\n".join(
+def page(title: str, body: str, active: str, lang: str = "vi") -> str:
+    nav_items = "\n".join(
         '      <a href="/{href}"{on}>{label}</a>'.format(
             href=href, label=label, on=' class="on"' if href == active else ""
         )
         for href, label in NAV
     )
+    switcher = "".join(
+        '        <a href="/{href}"{on}>{label}</a>'.format(
+            href=lang_dir(code),
+            label=html.escape(name),
+            on=' class="on"' if code == lang else "",
+        )
+        for code, name in sorted(LANGS.items())
+    )
+    # html lang must match the document, or a screen reader is told to read
+    # Chinese text with Vietnamese pronunciation rules.
     return f"""<!doctype html>
-<html lang="vi">
+<html lang="{html.escape(lang)}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -135,7 +151,7 @@ def page(title: str, body: str, active: str) -> str:
       <span>camare<strong>LOL</strong></span>
     </a>
     <nav>
-{items}
+{nav_items}
     </nav>
   </div>
 </header>
@@ -143,6 +159,9 @@ def page(title: str, body: str, active: str) -> str:
 {body}
 </main>
 <footer class="wrap">
+  <nav class="langs" aria-label="Language">
+{switcher}
+  </nav>
   <p>camareLOL là trình cài đặt Arch Linux dựa trên Rust. Mọi bản cập nhật đều
      được ký bằng GPG và kiểm tra bằng khoá nhúng trong chính binary — kể cả khi
      tải qua mirror này.</p>
@@ -221,51 +240,121 @@ def render_status(path: Path) -> str:
 
 
 def doc_list() -> str:
-    items = ['    <li><a href="/docs/readme.html">README.md</a></li>']
-    try:
-        listing = get_json(f"{API}/contents/docs?ref={BRANCH}")
-    except (urllib.error.URLError, OSError, json.JSONDecodeError):
-        return items[0] + '\n    <li class="note">không đọc được danh sách tài liệu</li>'
-    # .get, not x["name"]: a listing entry without a usable name is a response
-    # to skip, not a reason to abort the whole build with a traceback.
-    for f in sorted((x for x in listing if str(x.get("name", "")).endswith(".md")),
-                    key=lambda x: x.get("name", "")):
-        name = f["name"]
-        # Lower case: the static host normalises a mixed-case name into a
-        # redirect, so links that are already lowercase avoid the extra hop.
-        items.append(
-            f'    <li><a href="/docs/{name[:-3].lower()}.html">{html.escape(name)}</a></li>'
-        )
-    return "\n".join(items)
+    """Links to each language's documentation index.
+
+    Not a flat file list. The documentation now exists in three languages, and
+    listing every page three times on one page would be unreadable and would
+    imply the translations are page-for-page identical — they are not, and the
+    entry pages differ by design.
+    """
+    items = "\n".join(
+        f'    <li><a href="/{lang_dir(code)}/">{html.escape(name)}</a></li>'
+        for code, name in sorted(LANGS.items())
+    )
+    return items
 
 
-def write_doc_pages(out: Path) -> int:
-    docs = out / "docs"
-    docs.mkdir(parents=True, exist_ok=True)
-    targets = ["README.md"]
-    try:
-        listing = get_json(f"{API}/contents/docs?ref={BRANCH}")
-        targets += [f"docs/{name}" for name in sorted(
-            f["name"] for f in listing if str(f.get("name", "")).endswith(".md"))]
-    except (urllib.error.URLError, OSError, json.JSONDecodeError):
-        pass
+class Unpublishable(Exception):
+    """The build cannot produce a site it is willing to put in front of anyone.
 
+    Raised rather than logged-and-continued, because every way this can happen
+    produces a page that looks finished and says nothing. It is caught in
+    main() and turned into exit code 1, so it fails the step in CI the same way
+    any other check does.
+    """
+
+
+#: Documentation languages, and how each is named in its own index page.
+LANGS = {"en": "English", "vi": "Tiếng Việt", "zh": "中文"}
+
+
+def lang_dir(lang: str) -> str:
+    return f"{lang}/docs"
+
+
+def write_doc_pages(out: Path, source_dir: Path | None = None) -> int:
+    """Render every documentation page, one directory per language.
+
+    Layout: `<lang>/docs/<page>.html`, so a page is at
+    `https://camarelol.netlify.app/vi/docs/updates-signing.html`.
+
+    Language first, because the language is the thing that changes when a page
+    does not. A `docs/vi/` prefix would bury the part that varies under the part
+    that never does, and makes every future language a new branch of the tree
+    rather than a new directory beside the existing ones.
+    """
     count = 0
-    for path in targets:
-        text = fetch_source(path)
-        if text is None:
-            log(f"skipped {path}: could not read it")
-            continue
-        # Lower case: the static host normalises a mixed-case name into a
-        # redirect, so links that are already lowercase avoid the extra hop.
-        slug = Path(path).stem.lower()
-        title = slug.replace("-", " ").replace("_", " ").capitalize()
-        rendered = render_markdown(text)
-        (docs / f"{slug}.html").write_text(
-            page(title, f"  <article>{rendered}</article>", ""), encoding="utf-8"
-        )
-        count += 1
+    for lang in sorted(LANGS):
+        docs = out / lang_dir(lang)
+        docs.mkdir(parents=True, exist_ok=True)
+
+        local = source_dir / lang if source_dir else None
+        if local and local.is_dir():
+            names = sorted(p.name for p in local.glob("*.md"))
+        else:
+            try:
+                listing = get_json(f"{API}/contents/docs/{lang}?ref={BRANCH}")
+                names = sorted(f["name"] for f in listing
+                               if str(f.get("name", "")).endswith(".md"))
+            except (urllib.error.URLError, OSError, json.JSONDecodeError) as exc:
+                log(f"could not list docs/{lang}: {exc}")
+                raise Unpublishable(f"docs/{lang} could not be read")
+
+        if not names:
+            # The language switcher offers this language on every page. Landing
+            # on one that has no content is worse than it not being offered.
+            raise Unpublishable(f"docs/{lang} is empty")
+
+        for name in names:
+            if local and local.is_dir():
+                text = (local / name).read_text(encoding="utf-8")
+            else:
+                text = fetch_source(f"docs/{lang}/{name}")
+            if text is None:
+                log(f"skipped {path}: could not read it")
+                continue
+            slug = Path(name).stem.lower()
+            title = slug.replace("-", " ").replace("_", " ").capitalize()
+            rendered = render_markdown(text, lang)
+            (docs / f"{slug}.html").write_text(
+                page(title, f"  <article>{rendered}</article>", "", lang=lang),
+                encoding="utf-8",
+            )
+            # Only real content counts. An index of contents is not a page of
+            # documentation, and letting it count here would make the "no docs
+            # were rendered" check below impossible to reach.
+            count += 1
+
+        log(f"{lang}: {len(names)} pages")
+        _write_lang_index(out, lang, names)
     return count
+
+
+def _write_lang_index(out: Path, lang: str, names: list[str]) -> None:
+    """A table of contents for one language."""
+    # Relative on disk, absolute in the hrefs. Joining an out/ with a string
+    # starting in "/" discards out/ entirely — the build wrote to /en/docs/.
+    rel = lang_dir(lang)
+    href_base = f"/{rel}/"
+    items = "\n".join(
+        f'    <li><a href="{href_base}{Path(n).stem.lower()}.html">{html.escape(n)}</a></li>'
+        for n in names
+    )
+    others = " · ".join(
+        f'<a href="/{lang_dir(o)}/">{html.escape(LANGS[o])}</a>'
+        for o in sorted(LANGS) if o != lang
+    )
+    (out / rel / "index.html").write_text(
+        page(
+            LANGS[lang],
+            f'  <h1>{html.escape(LANGS[lang])}</h1>\n'
+            f'  <p class="note">Xem ngôn ngữ khác: {others}</p>\n'
+            f'  <ul class="docs">\n{items}\n  </ul>',
+            href_base + "index.html",
+            lang=lang,
+        ),
+        encoding="utf-8",
+    )
 
 
 def copy_assets(out: Path) -> None:
@@ -289,6 +378,13 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Build the camareLOL site")
     ap.add_argument("--out", default=".")
     ap.add_argument("--status", default="mirror-status.json")
+    ap.add_argument(
+        "--docs",
+        default=str(Path(__file__).resolve().parent.parent / "docs"),
+        help="Read documentation from this directory instead of the GitHub API, "
+             "so a local build reflects the working tree rather than the last "
+             "commit. CI has no docs/ and reads the API.",
+    )
     args = ap.parse_args()
 
     out = Path(args.out)
@@ -339,6 +435,8 @@ chmod +x /root/camarelol
     <ul class="docs">
 {docs}
     </ul>
+    <p class="note">Tài liệu được sinh tự động từ kho mã nguồn, nên không bao giờ lệch với
+    mã. Mỗi trang có bản tiếng Việt, tiếng Anh và tiếng Trung.</p>
   </section>""", "index.html"), encoding="utf-8")
 
     (out / "news.html").write_text(page("Cập nhật",
@@ -357,11 +455,13 @@ chmod +x /root/camarelol
       <tr><td>Dự phòng</td><td><code>https://github.com/{OWNER}/{REPO}/releases/latest/download/latest.json</code></td></tr>
     </tbody>
   </table>
-  <p class="note">Client thử lần lượt. Xem <a href="/docs/updates.html">UPDATES.md</a>.</p>""",
+  <p class="note">Client thử lần lượt. Xem <a href="/vi/docs/updates-signing.html">cách ký chỉ mục</a>.</p>""",
         "status.html"), encoding="utf-8")
 
     (out / "docs.html").write_text(page("Tài liệu",
-        '  <h1>Tài liệu</h1>\n  <p>Sinh tự động từ kho camareLOL, nên không bao giờ lệch với mã nguồn.</p>\n'
+        '  <h1>Tài liệu</h1>\n'
+        '  <p>Chọn ngôn ngữ. Mỗi bản được sinh tự động từ kho camareLOL, nên không bao giờ\n'
+        '     lệch với mã nguồn.</p>\n'
         '  <ul class="docs">\n' + docs + "\n  </ul>", "docs.html"), encoding="utf-8")
 
     (out / "discuss.html").write_text(page("Thảo luận", f"""  <h1>Thảo luận</h1>
@@ -378,7 +478,11 @@ chmod +x /root/camarelol
     <li>Không dán khoá, mật khẩu hay token vào bài đăng.</li>
   </ul>""", "discuss.html"), encoding="utf-8")
 
-    count = write_doc_pages(out)
+    try:
+        count = write_doc_pages(out, Path(args.docs) if args.docs else None)
+    except Unpublishable as exc:
+        log(f"refusing to publish: {exc}")
+        return 1
     log(f"wrote {count} doc pages")
     if not count:
         log("no documentation was rendered; refusing to publish a site with no docs")
