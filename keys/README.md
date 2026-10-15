@@ -63,4 +63,4 @@ Các bản phát hành hiện tại chưa có `keys/camarelol.pub`, nên chỉ m
 truyền `--allow-unsigned-update`. Đó là hành vi đúng: một chỉ mục không ký thì
 không chứng minh được điều gì.
 
-Xem https://camarelol.netlify.app/vi/docs/updates-signing.html
+Xem https://tamkogay9876-code.github.io/camareLOL-mirror/vi/docs/updates-signing.html

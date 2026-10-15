@@ -276,7 +276,7 @@ def write_doc_pages(out: Path, source_dir: Path | None = None) -> int:
     """Render every documentation page, one directory per language.
 
     Layout: `<lang>/docs/<page>.html`, so a page is at
-    `https://camarelol.netlify.app/vi/docs/updates-signing.html`.
+    `https://tamkogay9876-code.github.io/camareLOL-mirror/vi/docs/updates-signing.html`.
 
     Language first, because the language is the thing that changes when a page
     does not. A `docs/vi/` prefix would bury the part that varies under the part
@@ -451,7 +451,7 @@ chmod +x /root/camarelol
   <table>
     <thead><tr><th>Dùng để</th><th>Địa chỉ</th></tr></thead>
     <tbody>
-      <tr><td>Mặc định</td><td><code>https://camarelol.netlify.app/latest.json</code></td></tr>
+      <tr><td>Mặc định</td><td><code>https://tamkogay9876-code.github.io/camareLOL-mirror/latest.json</code></td></tr>
       <tr><td>Dự phòng</td><td><code>https://github.com/{OWNER}/{REPO}/releases/latest/download/latest.json</code></td></tr>
     </tbody>
   </table>

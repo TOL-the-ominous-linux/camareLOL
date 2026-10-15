@@ -2,13 +2,18 @@
 
 Tài liệu cho người duy trì. Người đọc bình thường không cần đọc tệp này.
 
-Trang thảo luận dùng hai phần: trang tĩnh từ kho `camareLOL`, và bốn Netlify
-Function lấy từ `site/functions/` trong cùng kho đó. Bài viết vẫn nằm trong
+> **Chưa chạy.** Trang thảo luận hiện trỏ sang GitHub Discussions. Phần đăng
+> nhập dưới đây đã viết xong nhưng chưa được bật: nơi phục vụ trang tĩnh
+> (GitHub Pages) không chạy được mã máy chủ, và Netlify đã hết hạn mức tài
+> khoản miễn phí.
+
+Trang thảo luận dùng hai phần: trang tĩnh từ kho `camareLOL`, và bốn hàm máy chủ
+lấy từ `site/functions/` trong cùng kho đó. Bài viết vẫn nằm trong
 GitHub Discussions.
 
 ```
-https://camarelol.netlify.app/discuss.html   ← giao diện
-https://camarelol.netlify.app/api/*           ← bốn function
+https://tamkogay9876-code.github.io/camareLOL-mirror/discuss.html   ← giao diện
+https://tamkogay9876-code.github.io/camareLOL-mirror/api/*           ← bốn function
 ```
 
 ## Vì sao cần phần máy chủ
@@ -32,13 +37,13 @@ giữ nó. Vì vậy:
 4. **Authorized redirect URIs** — đúng một dòng, không có dấu `/` cuối:
 
    ```
-   https://camarelol.netlify.app/api/auth-callback
+   https://tamkogay9876-code.github.io/camareLOL-mirror/api/auth-callback
    ```
 
 5. **Authorized JavaScript origins**:
 
    ```
-   https://camarelol.netlify.app
+   https://tamkogay9876-code.github.io/camareLOL-mirror
    ```
 
 ### Thu hồi client secret cũ
@@ -57,14 +62,14 @@ quét từng commit và sẽ chặn bản dựng — kể cả trong tài liệu
 
 ## 2. Biến môi trường trên Netlify
 
-**Site settings → Environment variables**. Không đặt trong kho, không đặt
-trong `netlify.toml`.
+Đặt bằng cơ chế secret của nơi chạy hàm, **không** đặt trong kho và không
+đặt trong tệp cấu hình nào được theo dõi.
 
 | biến | lấy ở đâu |
 |---|---|
 | `GOOGLE_CLIENT_ID` | Google Cloud Console |
 | `GOOGLE_CLIENT_SECRET` | Google Cloud Console |
-| `GOOGLE_REDIRECT_URI` | `https://camarelol.netlify.app/api/auth-callback` |
+| `GOOGLE_REDIRECT_URI` | `https://tamkogay9876-code.github.io/camareLOL-mirror/api/auth-callback` |
 | `SESSION_SECRET` | tự sinh, xem bên dưới |
 | `GITHUB_BOT_TOKEN` | token của bot, xem bên dưới |
 | `GITHUB_REPO_ID` | GraphQL node id của kho |
@@ -114,13 +119,13 @@ Trang thảo luận nói rõ điều này với người đọc — nó không n
 Sau khi cấu hình xong:
 
 ```console
-$ curl -sS https://camarelol.netlify.app/api/discussions | head -c 200
+$ curl -sS https://tamkogay9876-code.github.io/camareLOL-mirror/api/discussions | head -c 200
 ```
 
 Báo danh sách bài thảo luận là đúng. Nếu báo `không liên hệ được máy chủ
 GitHub`, kiểm tra `GITHUB_BOT_TOKEN`.
 
-Mở `https://camarelol.netlify.app/discuss.html`, bấm đăng nhập, và kiểm tra
+Mở `https://tamkogay9876-code.github.io/camareLOL-mirror/discuss.html`, bấm đăng nhập, và kiểm tra
 vòng về trang có giữ phiên.
 
 ## Khi có sự cố

@@ -24,7 +24,7 @@ them.
 Every mirror was unreachable, or a proxy returned an error page.
 
 ```console
-$ curl -sI https://camarelol.netlify.app/latest.json
+$ curl -sI https://tamkogay9876-code.github.io/camareLOL-mirror/latest.json
 $ camarelol --check-update --update-url https://example.org/latest.json
 ```
 
@@ -153,15 +153,15 @@ camarelol --check-update || [ $? = 10 ] || exit 1
 Check each step by hand:
 
 ```console
-$ curl -sS https://camarelol.netlify.app/latest.json | head -3
-$ curl -sSI https://camarelol.netlify.app/latest.json.sig | head -1
+$ curl -sS https://tamkogay9876-code.github.io/camareLOL-mirror/latest.json | head -3
+$ curl -sSI https://tamkogay9876-code.github.io/camareLOL-mirror/latest.json.sig | head -1
 $ camarelol --check-update --update-url https://… --update-key ./keys/camarelol.pub
 ```
 
 If a mirror is wrong, say so — a dead mirror should be noticed by whoever runs
 it, not by whoever next tries to update.
 
-- <https://camarelol.netlify.app/status.html> — live mirror status
+- <https://tamkogay9876-code.github.io/camareLOL-mirror/status.html> — live mirror status
 - <https://github.com/tamkogay9876-code/camareLOL/issues> — report it
 
 ## Next

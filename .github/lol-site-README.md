@@ -3,8 +3,8 @@
 Hai tệp này phục vụ tại:
 
 ```
-https://camarelol.netlify.app/latest.json
-https://camarelol.netlify.app/latest.json.sig
+https://tamkogay9876-code.github.io/camareLOL-mirror/latest.json
+https://tamkogay9876-code.github.io/camareLOL-mirror/latest.json.sig
 ```
 
 Trỏ camareLOL vào bằng:
@@ -21,7 +21,7 @@ Mirror được phục vụ là kho **`camareLOL-mirror`**, không phải nhánh
 
 | | Nhánh `lol-site` (đây) | Kho `camareLOL-mirror` |
 |---|---|---|
-| Phục vụ tại | *không có* | `https://camarelol.netlify.app` |
+| Phục vụ tại | *không có* | `https://tamkogay9876-code.github.io/camareLOL-mirror` |
 | Nội dung | hai tệp chỉ mục | hai tệp chỉ mục **và trang web** |
 | Cập nhật khi có bản phát hành | có | có |
 

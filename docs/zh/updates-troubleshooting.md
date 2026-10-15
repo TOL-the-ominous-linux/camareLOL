@@ -26,7 +26,7 @@ error: [update_download_failed] could not download https://…
 所有镜像都无法访问，或者某个代理返回了一个错误页面。
 
 ```console
-$ curl -sI https://camarelol.netlify.app/latest.json
+$ curl -sI https://tamkogay9876-code.github.io/camareLOL-mirror/latest.json
 $ camarelol --check-update --update-url https://example.org/latest.json
 ```
 
@@ -152,15 +152,15 @@ camarelol --check-update || [ $? = 10 ] || exit 1
 逐步手动检查：
 
 ```console
-$ curl -sS https://camarelol.netlify.app/latest.json | head -3
-$ curl -sSI https://camarelol.netlify.app/latest.json.sig | head -1
+$ curl -sS https://tamkogay9876-code.github.io/camareLOL-mirror/latest.json | head -3
+$ curl -sSI https://tamkogay9876-code.github.io/camareLOL-mirror/latest.json.sig | head -1
 $ camarelol --check-update --update-url https://… --update-key ./keys/camarelol.pub
 ```
 
 如果某个镜像有问题，就说出来——一个失效的镜像应该由运行它的人
 来发现，而不是由下一个尝试更新的人。
 
-- <https://camarelol.netlify.app/status.html> — 实时镜像状态
+- <https://tamkogay9876-code.github.io/camareLOL-mirror/status.html> — 实时镜像状态
 - <https://github.com/tamkogay9876-code/camareLOL/issues> — 报告问题
 
 ## 下一篇

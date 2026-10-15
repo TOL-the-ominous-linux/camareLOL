@@ -24,7 +24,7 @@ chúng ổn định qua các bản phát hành, nên một script có thể kh�
 Mọi mirror đều không truy cập được, hoặc một proxy trả về trang lỗi.
 
 ```console
-$ curl -sI https://camarelol.netlify.app/latest.json
+$ curl -sI https://tamkogay9876-code.github.io/camareLOL-mirror/latest.json
 $ camarelol --check-update --update-url https://example.org/latest.json
 ```
 
@@ -154,15 +154,15 @@ camarelol --check-update || [ $? = 10 ] || exit 1
 Kiểm tra từng bước bằng tay:
 
 ```console
-$ curl -sS https://camarelol.netlify.app/latest.json | head -3
-$ curl -sSI https://camarelol.netlify.app/latest.json.sig | head -1
+$ curl -sS https://tamkogay9876-code.github.io/camareLOL-mirror/latest.json | head -3
+$ curl -sSI https://tamkogay9876-code.github.io/camareLOL-mirror/latest.json.sig | head -1
 $ camarelol --check-update --update-url https://… --update-key ./keys/camarelol.pub
 ```
 
 Nếu một mirror có vấn đề, hãy nói ra — một mirror chết phải được người vận
 hành nó phát hiện, chứ không phải người lần sau cố cập nhật.
 
-- <https://camarelol.netlify.app/status.html> — trạng thái mirror trực tiếp
+- <https://tamkogay9876-code.github.io/camareLOL-mirror/status.html> — trạng thái mirror trực tiếp
 - <https://github.com/tamkogay9876-code/camareLOL/issues> — báo cáo
 
 ## Tiếp theo

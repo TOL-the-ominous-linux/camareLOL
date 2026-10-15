@@ -12,7 +12,7 @@ destructive operation.
 
 | | |
 |---|---|
-| Website | **<https://camarelol.netlify.app>** |
+| Website | **<https://tamkogay9876-code.github.io/camareLOL-mirror>** |
 | Releases | <https://github.com/tamkogay9876-code/camareLOL/releases> |
 | Discussions | <https://github.com/tamkogay9876-code/camareLOL/discussions> |
 | Issues | <https://github.com/tamkogay9876-code/camareLOL/issues> |
@@ -21,9 +21,9 @@ destructive operation.
 
 | Language | Documentation |
 |---|---|
-| English | <https://camarelol.netlify.app/en/docs/> |
-| Tiếng Việt | <https://camarelol.netlify.app/vi/docs/> |
-| 中文 | <https://camarelol.netlify.app/zh/docs/> |
+| English | <https://tamkogay9876-code.github.io/camareLOL-mirror/en/docs/> |
+| Tiếng Việt | <https://tamkogay9876-code.github.io/camareLOL-mirror/vi/docs/> |
+| 中文 | <https://tamkogay9876-code.github.io/camareLOL-mirror/zh/docs/> |
 
 The installer itself speaks Vietnamese and English (`--lang vi|en`).
 
@@ -55,15 +55,15 @@ refuses a download whose checksum or signature does not match.
 
 | Topic | English | Tiếng Việt | 中文 |
 |---|---|---|---|
-| How updates are signed | [updates-signing](updates-signing.md) | [VI](https://camarelol.netlify.app/vi/docs/updates-signing.html) | [ZH](https://camarelol.netlify.app/zh/docs/updates-signing.html) |
-| Why an old index is refused | [updates-rollback](updates-rollback.md) | [VI](https://camarelol.netlify.app/vi/docs/updates-rollback.html) | [ZH](https://camarelol.netlify.app/zh/docs/updates-rollback.html) |
-| Building your own package | [updates-packaging](updates-packaging.md) | [VI](https://camarelol.netlify.app/vi/docs/updates-packaging.html) | [ZH](https://camarelol.netlify.app/zh/docs/updates-packaging.html) |
-| When an update is refused | [updates-troubleshooting](updates-troubleshooting.md) | [VI](https://camarelol.netlify.app/vi/docs/updates-troubleshooting.html) | [ZH](https://camarelol.netlify.app/zh/docs/updates-troubleshooting.html) |
-| The three components | [architecture](architecture.md) | [VI](https://camarelol.netlify.app/vi/docs/architecture.html) | [ZH](https://camarelol.netlify.app/zh/docs/architecture.html) |
-| The IPC protocol | [ipc-protocol](ipc-protocol.md) | [VI](https://camarelol.netlify.app/vi/docs/ipc-protocol.html) | [ZH](https://camarelol.netlify.app/zh/docs/ipc-protocol.html) |
-| What gets tested | [testing](testing.md) | [VI](https://camarelol.netlify.app/vi/docs/testing.html) | [ZH](https://camarelol.netlify.app/zh/docs/testing.html) |
-| Running it yourself | [vm-testing](vm-testing.md) | [VI](https://camarelol.netlify.app/vi/docs/vm-testing.html) | [ZH](https://camarelol.netlify.app/zh/docs/vm-testing.html) |
-| What is not built yet | [roadmap](roadmap.md) | [VI](https://camarelol.netlify.app/vi/docs/roadmap.html) | [ZH](https://camarelol.netlify.app/zh/docs/roadmap.html) |
+| How updates are signed | [updates-signing](updates-signing.md) | [VI](https://tamkogay9876-code.github.io/camareLOL-mirror/vi/docs/updates-signing.html) | [ZH](https://tamkogay9876-code.github.io/camareLOL-mirror/zh/docs/updates-signing.html) |
+| Why an old index is refused | [updates-rollback](updates-rollback.md) | [VI](https://tamkogay9876-code.github.io/camareLOL-mirror/vi/docs/updates-rollback.html) | [ZH](https://tamkogay9876-code.github.io/camareLOL-mirror/zh/docs/updates-rollback.html) |
+| Building your own package | [updates-packaging](updates-packaging.md) | [VI](https://tamkogay9876-code.github.io/camareLOL-mirror/vi/docs/updates-packaging.html) | [ZH](https://tamkogay9876-code.github.io/camareLOL-mirror/zh/docs/updates-packaging.html) |
+| When an update is refused | [updates-troubleshooting](updates-troubleshooting.md) | [VI](https://tamkogay9876-code.github.io/camareLOL-mirror/vi/docs/updates-troubleshooting.html) | [ZH](https://tamkogay9876-code.github.io/camareLOL-mirror/zh/docs/updates-troubleshooting.html) |
+| The three components | [architecture](architecture.md) | [VI](https://tamkogay9876-code.github.io/camareLOL-mirror/vi/docs/architecture.html) | [ZH](https://tamkogay9876-code.github.io/camareLOL-mirror/zh/docs/architecture.html) |
+| The IPC protocol | [ipc-protocol](ipc-protocol.md) | [VI](https://tamkogay9876-code.github.io/camareLOL-mirror/vi/docs/ipc-protocol.html) | [ZH](https://tamkogay9876-code.github.io/camareLOL-mirror/zh/docs/ipc-protocol.html) |
+| What gets tested | [testing](testing.md) | [VI](https://tamkogay9876-code.github.io/camareLOL-mirror/vi/docs/testing.html) | [ZH](https://tamkogay9876-code.github.io/camareLOL-mirror/zh/docs/testing.html) |
+| Running it yourself | [vm-testing](vm-testing.md) | [VI](https://tamkogay9876-code.github.io/camareLOL-mirror/vi/docs/vm-testing.html) | [ZH](https://tamkogay9876-code.github.io/camareLOL-mirror/zh/docs/vm-testing.html) |
+| What is not built yet | [roadmap](roadmap.md) | [VI](https://tamkogay9876-code.github.io/camareLOL-mirror/vi/docs/roadmap.html) | [ZH](https://tamkogay9876-code.github.io/camareLOL-mirror/zh/docs/roadmap.html) |
 
 ## What it does today
 

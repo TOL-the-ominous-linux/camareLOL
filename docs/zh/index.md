@@ -13,7 +13,7 @@ camareLOL 从终端安装 Arch Linux。它会检测你的硬件、提出一个�
 
 | | |
 |---|---|
-| 网站 | **<https://camarelol.netlify.app>** |
+| 网站 | **<https://tamkogay9876-code.github.io/camareLOL-mirror>** |
 | 发布版本 | <https://github.com/tamkogay9876-code/camareLOL/releases> |
 | 讨论 | <https://github.com/tamkogay9876-code/camareLOL/discussions> |
 | 问题 | <https://github.com/tamkogay9876-code/camareLOL/issues> |
@@ -22,9 +22,9 @@ camareLOL 从终端安装 Arch Linux。它会检测你的硬件、提出一个�
 
 | 语言 | 文档 |
 |---|---|
-| English | <https://camarelol.netlify.app/en/docs/> |
-| Tiếng Việt | <https://camarelol.netlify.app/vi/docs/> |
-| 中文 | <https://camarelol.netlify.app/zh/docs/> |
+| English | <https://tamkogay9876-code.github.io/camareLOL-mirror/en/docs/> |
+| Tiếng Việt | <https://tamkogay9876-code.github.io/camareLOL-mirror/vi/docs/> |
+| 中文 | <https://tamkogay9876-code.github.io/camareLOL-mirror/zh/docs/> |
 
 安装器本身支持越南语和英语（`--lang vi|en`）。
 
@@ -56,15 +56,15 @@ $ camarelol --rollback-update  # 恢复上一个二进制文件
 
 | 主题 | English | Tiếng Việt | 中文 |
 |---|---|---|---|
-| 更新是如何签名的 | [updates-signing](updates-signing.md) | [VI](https://camarelol.netlify.app/vi/docs/updates-signing.html) | [ZH](updates-signing.md) |
-| 为什么拒绝过旧的索引 | [updates-rollback](updates-rollback.md) | [VI](https://camarelol.netlify.app/vi/docs/updates-rollback.html) | [ZH](updates-rollback.md) |
-| 构建你自己的软件包 | [updates-packaging](updates-packaging.md) | [VI](https://camarelol.netlify.app/vi/docs/updates-packaging.html) | [ZH](updates-packaging.md) |
-| 什么时候更新会被拒绝 | [updates-troubleshooting](updates-troubleshooting.md) | [VI](https://camarelol.netlify.app/vi/docs/updates-troubleshooting.html) | [ZH](updates-troubleshooting.md) |
-| 三个组件 | [architecture](architecture.md) | [VI](https://camarelol.netlify.app/vi/docs/architecture.html) | [ZH](architecture.md) |
-| IPC 协议 | [ipc-protocol](ipc-protocol.md) | [VI](https://camarelol.netlify.app/vi/docs/ipc-protocol.html) | [ZH](ipc-protocol.md) |
-| 测试了什么 | [testing](testing.md) | [VI](https://camarelol.netlify.app/vi/docs/testing.html) | [ZH](testing.md) |
-| 自己动手运行 | [vm-testing](vm-testing.md) | [VI](https://camarelol.netlify.app/vi/docs/vm-testing.html) | [ZH](vm-testing.md) |
-| 尚未构建的内容 | [roadmap](roadmap.md) | [VI](https://camarelol.netlify.app/vi/docs/roadmap.html) | [ZH](roadmap.md) |
+| 更新是如何签名的 | [updates-signing](updates-signing.md) | [VI](https://tamkogay9876-code.github.io/camareLOL-mirror/vi/docs/updates-signing.html) | [ZH](updates-signing.md) |
+| 为什么拒绝过旧的索引 | [updates-rollback](updates-rollback.md) | [VI](https://tamkogay9876-code.github.io/camareLOL-mirror/vi/docs/updates-rollback.html) | [ZH](updates-rollback.md) |
+| 构建你自己的软件包 | [updates-packaging](updates-packaging.md) | [VI](https://tamkogay9876-code.github.io/camareLOL-mirror/vi/docs/updates-packaging.html) | [ZH](updates-packaging.md) |
+| 什么时候更新会被拒绝 | [updates-troubleshooting](updates-troubleshooting.md) | [VI](https://tamkogay9876-code.github.io/camareLOL-mirror/vi/docs/updates-troubleshooting.html) | [ZH](updates-troubleshooting.md) |
+| 三个组件 | [architecture](architecture.md) | [VI](https://tamkogay9876-code.github.io/camareLOL-mirror/vi/docs/architecture.html) | [ZH](architecture.md) |
+| IPC 协议 | [ipc-protocol](ipc-protocol.md) | [VI](https://tamkogay9876-code.github.io/camareLOL-mirror/vi/docs/ipc-protocol.html) | [ZH](ipc-protocol.md) |
+| 测试了什么 | [testing](testing.md) | [VI](https://tamkogay9876-code.github.io/camareLOL-mirror/vi/docs/testing.html) | [ZH](testing.md) |
+| 自己动手运行 | [vm-testing](vm-testing.md) | [VI](https://tamkogay9876-code.github.io/camareLOL-mirror/vi/docs/vm-testing.html) | [ZH](vm-testing.md) |
+| 尚未构建的内容 | [roadmap](roadmap.md) | [VI](https://tamkogay9876-code.github.io/camareLOL-mirror/vi/docs/roadmap.html) | [ZH](roadmap.md) |
 
 ## 目前它能做什么
 
