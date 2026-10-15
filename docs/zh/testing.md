@@ -12,10 +12,10 @@
 ```console
 $ cargo test --workspace                        # Rust core + TUI
 $ cd python && python3 -m unittest discover -s tests -v
-$ cd java && ./build.sh                         # compiles, runs CatalogTest, builds the jar
-$ python site/test_markdown.py                  # site renderer
-$ python site/test_render_site.py               # site build, offline
-$ python scripts/check_pkgbuild.py              # PKGBUILD matches the newest tag
+$ cd java && ./build.sh                         # 编译、运行 CatalogTest 并打包 jar
+$ python site/test_markdown.py                  # 站点渲染器
+$ python site/test_render_site.py               # 站点构建，离线运行
+$ python scripts/check_pkgbuild.py              # PKGBUILD 与最新标签一致
 ```
 
 快速，不碰磁盘，不联网。

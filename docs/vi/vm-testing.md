@@ -15,18 +15,18 @@ thật mà không đụng tới gì cả.
 
 ```console
 $ cd /path/to/camareLOL
-$ bash scripts/vm-release-test.sh create    # VM: Arch ISO + two empty disks
-$ bash scripts/vm-release-test.sh boot      # headless; downloads the binary, runs self-test
-$ bash scripts/vm-release-test.sh verify    # screenshot the result
+$ bash scripts/vm-release-test.sh create    # VM: Arch ISO + hai đĩa rỗng
+$ bash scripts/vm-release-test.sh boot      # chạy không màn hình; tải binary, chạy self-test
+$ bash scripts/vm-release-test.sh verify    # chụp lại kết quả
 ```
 
 Bên trong VM:
 
 ```console
 $ camarelol --version
-$ camarelol --scan          # JSON: model, serial, partitions, risk level
-$ camarelol --self-test     # non-destructive checks
-$ camarelol                 # open the TUI; typing nothing writes nothing
+$ camarelol --scan          # JSON: model, số sê-ri, phân vùng, mức rủi ro
+$ camarelol --self-test     # các bước kiểm không phá huỷ
+$ camarelol                 # mở TUI; không gõ gì thì không ghi gì
 ```
 
 `--self-test` an toàn để chạy trên máy thật. `--scan` cũng vậy. TUI chỉ ghi khi
@@ -43,10 +43,10 @@ bạn gõ cụm từ xác nhận.
 
 ```console
 $ cd /path/to/camareLOL
-$ bash scripts/vm-test.sh create    # VM + empty 20 GiB disk + FAT disk holding the binary
-$ bash scripts/vm-test.sh boot      # boot, type the install commands automatically
-$ bash scripts/vm-test.sh check     # screenshot the result
-$ bash scripts/vm-test.sh destroy   # delete the VM
+$ bash scripts/vm-test.sh create    # VM + đĩa rỗng 20 GiB + đĩa FAT chứa binary
+$ bash scripts/vm-test.sh boot      # boot, tự gõ các lệnh cài đặt
+$ bash scripts/vm-test.sh check     # chụp lại kết quả
+$ bash scripts/vm-test.sh destroy   # xoá VM
 ```
 
 Kết quả mong đợi: mọi giai đoạn hoàn tất, `/mnt/etc/fstab` hợp lệ, và có
@@ -68,7 +68,7 @@ $ VBoxManage storageattach lol --storagectl SATA --port 0 --device 0 \
 $ VBoxManage storagectl lol --name IDE --add ide
 $ VBoxManage storageattach lol --storagectl IDE --port 0 --device 0 \
     --type dvddrive --medium "$PWD/.test/archlinux-x86_64.iso"
-$ VBoxManage startvm lol            # NOT headless — you want to see it
+$ VBoxManage startvm lol            # KHÔNG headless — bạn muốn nhìn màn hình
 ```
 
 Bên trong ISO sống:

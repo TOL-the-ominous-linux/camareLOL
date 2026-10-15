@@ -35,8 +35,8 @@ Chạy nó từ ISO sống của Arch — đó là nơi một trình cài đặt
 ```console
 $ curl -sSLO https://github.com/tamkogay9876-code/camareLOL/releases/latest/download/camarelol
 $ chmod +x camarelol
-$ ./camarelol --self-test      # non-destructive checks; safe on a real machine
-$ sudo ./camarelol             # the TUI
+$ ./camarelol --self-test      # kiểm không phá huỷ; an toàn trên máy thật
+$ sudo ./camarelol             # mở TUI
 ```
 
 `--self-test` không bao giờ ghi vào ổ đĩa. Hãy chạy nó trước.
@@ -44,9 +44,9 @@ $ sudo ./camarelol             # the TUI
 Luôn cập nhật — trình cập nhật chỉ báo cáo và chỉ cài khi được yêu cầu:
 
 ```console
-$ camarelol --check-update     # reports, downloads nothing, exit code 10 if newer
-$ camarelol --update           # download, verify signature and SHA-256, install
-$ camarelol --rollback-update  # put the previous binary back
+$ camarelol --check-update     # chỉ báo, không tải gì, mã thoát 10 nếu có bản mới
+$ camarelol --update           # tải, kiểm chữ ký và SHA-256, cài
+$ camarelol --rollback-update  # đưa binary cũ trở lại
 ```
 
 Nó không bao giờ tự thay thế chính nó, không bao giờ làm việc đó khi một quá

@@ -15,18 +15,18 @@
 
 ```console
 $ cd /path/to/camareLOL
-$ bash scripts/vm-release-test.sh create    # VM: Arch ISO + two empty disks
-$ bash scripts/vm-release-test.sh boot      # headless; downloads the binary, runs self-test
-$ bash scripts/vm-release-test.sh verify    # screenshot the result
+$ bash scripts/vm-release-test.sh create    # 虚拟机：Arch ISO + 两块空磁盘
+$ bash scripts/vm-release-test.sh boot      # 无头模式；下载二进制文件并运行自检
+$ bash scripts/vm-release-test.sh verify    # 截图保存结果
 ```
 
 在虚拟机内部：
 
 ```console
 $ camarelol --version
-$ camarelol --scan          # JSON: model, serial, partitions, risk level
-$ camarelol --self-test     # non-destructive checks
-$ camarelol                 # open the TUI; typing nothing writes nothing
+$ camarelol --scan          # JSON：型号、序列号、分区、风险等级
+$ camarelol --self-test     # 非破坏性检查
+$ camarelol                 # 打开 TUI；不输入任何内容就不会写入
 ```
 
 `--self-test` 在真实机器上运行是安全的。`--scan` 也是。只有当你
@@ -43,10 +43,10 @@ $ camarelol                 # open the TUI; typing nothing writes nothing
 
 ```console
 $ cd /path/to/camareLOL
-$ bash scripts/vm-test.sh create    # VM + empty 20 GiB disk + FAT disk holding the binary
-$ bash scripts/vm-test.sh boot      # boot, type the install commands automatically
-$ bash scripts/vm-test.sh check     # screenshot the result
-$ bash scripts/vm-test.sh destroy   # delete the VM
+$ bash scripts/vm-test.sh create    # 虚拟机 + 20 GiB 空磁盘 + 存放二进制文件的 FAT 磁盘
+$ bash scripts/vm-test.sh boot      # 启动，自动输入安装命令
+$ bash scripts/vm-test.sh check     # 截图保存结果
+$ bash scripts/vm-test.sh destroy   # 删除虚拟机
 ```
 
 预期结果：所有阶段完成，存在有效的 `/mnt/etc/fstab`，并且有
@@ -68,7 +68,7 @@ $ VBoxManage storageattach lol --storagectl SATA --port 0 --device 0 \
 $ VBoxManage storagectl lol --name IDE --add ide
 $ VBoxManage storageattach lol --storagectl IDE --port 0 --device 0 \
     --type dvddrive --medium "$PWD/.test/archlinux-x86_64.iso"
-$ VBoxManage startvm lol            # NOT headless — you want to see it
+$ VBoxManage startvm lol            # 不要使用无头模式——你需要看到画面
 ```
 
 在实时 ISO 内部：

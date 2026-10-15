@@ -3,9 +3,10 @@
 
 [← Chỉ mục tài liệu](index.md)
 
-Một tổng kiểm chứng minh một tệp đến nơi nguyên vẹn. Nó không chứng minh tệp đó
-đến từ đúng người bạn tin — nếu máy chủ đưa cho bạn cả nội dung lẫn hash khớp
-với nó, chúng khớp, và sự khớp đó chẳng có ý nghĩa gì.
+Một giá trị kiểm tra (checksum) chứng minh tệp đến nơi nguyên vẹn. Nó không
+chứng minh tệp đó đến từ đúng người bạn tin — nếu máy chủ đưa cho bạn cả nội
+dung lẫn giá trị kiểm tra khớp với nó, chúng khớp, và sự khớp đó chẳng có ý
+nghĩa gì.
 
 Vì vậy, chỉ mục cập nhật được ký riêng, và khóa được **biên dịch thẳng vào
 trong tệp nhị phân**.

@@ -11,10 +11,10 @@ liệu nó có chạy được trên một máy thật sự phải khởi độn
 ```console
 $ cargo test --workspace                        # Rust core + TUI
 $ cd python && python3 -m unittest discover -s tests -v
-$ cd java && ./build.sh                         # compiles, runs CatalogTest, builds the jar
-$ python site/test_markdown.py                  # site renderer
-$ python site/test_render_site.py               # site build, offline
-$ python scripts/check_pkgbuild.py              # PKGBUILD matches the newest tag
+$ cd java && ./build.sh                         # biên dịch, chạy CatalogTest, đóng gói jar
+$ python site/test_markdown.py                  # bộ dựng trang
+$ python site/test_render_site.py               # bản dựng trang, không mạng
+$ python scripts/check_pkgbuild.py              # PKGBUILD khớp thẻ mới nhất
 ```
 
 Nhanh, không ổ đĩa, không mạng.

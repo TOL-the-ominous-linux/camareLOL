@@ -35,8 +35,8 @@ camareLOL 从终端安装 Arch Linux。它会检测你的硬件、提出一个�
 ```console
 $ curl -sSLO https://github.com/tamkogay9876-code/camareLOL/releases/latest/download/camarelol
 $ chmod +x camarelol
-$ ./camarelol --self-test      # non-destructive checks; safe on a real machine
-$ sudo ./camarelol             # the TUI
+$ ./camarelol --self-test      # 非破坏性检查；在真实机器上运行也安全
+$ sudo ./camarelol             # 打开 TUI
 ```
 
 `--self-test` 绝不会写入磁盘。请先运行它。
@@ -44,9 +44,9 @@ $ sudo ./camarelol             # the TUI
 保持最新——更新器默认只做报告，只有在被要求时才安装：
 
 ```console
-$ camarelol --check-update     # reports, downloads nothing, exit code 10 if newer
-$ camarelol --update           # download, verify signature and SHA-256, install
-$ camarelol --rollback-update  # put the previous binary back
+$ camarelol --check-update     # 只报告，不下载任何内容；有新版本时退出码为 10
+$ camarelol --update           # 下载、验证签名与 SHA-256，然后安装
+$ camarelol --rollback-update  # 恢复上一个二进制文件
 ```
 
 它绝不会自行替换自身，绝不在安装进行中替换，也会拒绝任何校验和或签名
