@@ -74,8 +74,6 @@ jobs:
           python -m pip install --upgrade pip
           python -m unittest discover -s tests -v
 
-      - name: The update mirror
-
       - name: The site
         # The renderer turns repository documentation into HTML. A bug here
         # publishes a broken page to the project's front door, so it is tested
@@ -87,6 +85,12 @@ jobs:
           # A reader clicking "English" must land on the English page. In the
           # Vietnamese table it landed back on Vietnamese, silently.
           python site/check_lang_table.py
+
+      - name: The workflows themselves parse
+        # A step with neither run: nor uses: is valid YAML and invalid to
+        # GitHub, which then starts no job at all. The run reports failure
+        # with no log to read, which is how a whole workflow went dark.
+        run: python scripts/check_workflows.py
 
       - name: No secrets in the tree
         # .gitignore stops accidents. This catches the rest: a file added with
