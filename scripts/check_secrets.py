@@ -127,7 +127,27 @@ def main() -> int:
               "scripts/check_secrets.py —\n  đừng nới mẫu.")
         return 1
 
-    print("  không thấy bí mật nào trong tệp đang theo dõi hay thay đổi chưa commit")
+    # Thư mục cách ly phải nằm ngoài kho. Nếu ai đó di chuyển nó vào trong, nó sẽ
+    # bị .gitignore ở chỗ kia chặn — nhưng chỉ cho tới lúc ai đó chạy `git add -f`.
+    # Kiểm tra ở đây thì thấy ngay, trước khi nó thành bí mật trong lịch sử.
+    quarantine = Path.home() / "Tài liệu" / "cắt cy"
+    try:
+        quarantine.resolve().relative_to(ROOT.resolve())
+    except ValueError:
+        print(f"  thư mục cách ly nằm ngoài kho: {quarantine}")
+    except OSError:
+        pass  # không có trên máy này; không phải lỗi
+    else:
+        problems.append(f"thư mục cách ly {quarantine} nằm BÊN TRONG kho — "
+                        f"bí mật sẽ bị commit")
+
+    if problems:
+        print(f"\n  {len(problems)} vấn đề:")
+        for item in problems:
+            print(f"    {item}")
+        return 1
+
+    print("  không thấy bí mật nào trong tệp đang được theo dõi hay thay đổi chưa commit")
     return 0
 
 
