@@ -152,9 +152,15 @@ jobs:
           # place made every run fail the validity check against a tarball that
           # is not the released one — and 'SKIP' would have passed while checking
           # nothing.
+          #
+          # Written to its own file rather than into $staging: the tarball is
+          # already built, so editing the copy inside it changes nothing that
+          # makepkg will read. The next step copies this one over the extracted
+          # PKGBUILD.
           sha="$(sha256sum "${RUNNER_TEMP}/${name}.tar.gz" | cut -d' ' -f1)"
-          sed -i "s|^sha256sums=.*|sha256sums=('${sha}')|" "$staging/PKGBUILD"
-          grep -E '^(pkgver|sha256sums)=' "$staging/PKGBUILD"
+          sed "s|^sha256sums=.*|sha256sums=('${sha}')|" "$staging/PKGBUILD" \
+            > "${RUNNER_TEMP}/PKGBUILD.pinned"
+          grep -E '^(pkgver|sha256sums)=' "${RUNNER_TEMP}/PKGBUILD.pinned"
 
       - name: makepkg the package in an Arch container
         run: |
@@ -169,6 +175,7 @@ jobs:
           rm -rf "$pkgdir"
           mkdir -p "$pkgdir"
           cp "${RUNNER_TEMP}/camarelol-${version}.tar.gz" "$pkgdir/"
+          cp "${RUNNER_TEMP}/PKGBUILD.pinned" "$pkgdir/PKGBUILD.pinned"
           tar -xzf "$pkgdir/camarelol-${version}.tar.gz" -C "$pkgdir"
           docker run --rm \
             -v "${pkgdir}:/build" \
@@ -185,6 +192,11 @@ jobs:
               srcdir="$(find /build -maxdepth 1 -type d -name "camarelol-*" | head -1)"
               echo "source dir: $srcdir"
               test -f "$srcdir/PKGBUILD"
+              # The recipe that carries this tarball s own checksum. The copy
+              # inside the tarball cannot: it was sealed before the checksum was
+              # known, so it still holds the released one and makepkg rejects
+              # every build as corrupt.
+              cp /build/PKGBUILD.pinned "$srcdir/PKGBUILD"
               # makepkg looks for the source tarball next to the PKGBUILD.
               cp /build/camarelol-*.tar.gz "$srcdir/"
               # Run as a normal user, the way makepkg is meant to be used.
