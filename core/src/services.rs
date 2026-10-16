@@ -63,8 +63,18 @@ impl ServiceSelection {
             v.push("sshd".into());
         }
         if self.zram {
-            // zram-generator ships this unit; there is no `zram-config` service.
-            v.push("systemd-zram-generator@zram0.service".into());
+            // `zram-generator` — the package `packages()` installs — ships
+            // `systemd-zram-setup@.service`, a template instantiated as
+            // `systemd-zram-setup@zram0.service`. It does NOT ship the
+            // `systemd-zram-generator@zram0.service` of Arch's separate
+            // `systemd-zram-generator` package.
+            //
+            // Enabling a unit that is not installed fails quietly: the install
+            // completes, reports "completed with warnings", and zram is simply
+            // never on. That is what a VirtualBox install showed: the finished
+            // system had `systemd-zram-setup@.service` on disk and no
+            // `systemd-zram-generator@zram0.service` to enable.
+            v.push("systemd-zram-setup@zram0.service".into());
         }
         v
     }
@@ -88,6 +98,12 @@ impl ServiceSelection {
         if self.bluetooth {
             v.push("bluez".into());
             v.push("bluez-utils".into());
+        }
+        if self.ssh {
+            // Enabling `sshd` without installing openssh fails the same quiet
+            // way the zram unit did: the install finishes, warns that the unit
+            // is missing, and ssh is not running.
+            v.push("openssh".into());
         }
         if self.zram {
             v.push("zram-generator".into());
@@ -135,11 +151,83 @@ pub fn validate(sel: &ServiceSelection, has_bluetooth_hardware: bool) -> Result<
 mod tests {
     use super::*;
 
+    /// Every unit `services()` enables must come from a package
+    /// `packages()` installs.
+    ///
+    /// Enabling a unit that is not on disk is not an error the installer can
+    /// see: it warns, carries on, and reports "completed with warnings". The
+    /// feature is then quietly absent from a system that claims to have it —
+    /// which is how `ssh` shipped without `openssh` and zram shipped with the
+    /// wrong unit name.
+    ///
+    /// `NetworkManager` is excluded on purpose: it comes from the profile's own
+    /// core package list, not from this module.
+    #[test]
+    fn no_unit_is_enabled_without_the_package_that_provides_it() {
+        let sel = ServiceSelection {
+            network_manager: false,
+            bluetooth: true,
+            ssh: true,
+            zram: true,
+            printing: true,
+            ..Default::default()
+        };
+        let pkgs = sel.packages();
+
+        for unit in sel.services() {
+            let provider = match unit.as_str() {
+                "bluetooth" => "bluez",
+                "sshd" => "openssh",
+                "systemd-zram-setup@zram0.service" => "zram-generator",
+                other => panic!("thêm unit mới {other} thì thêm luôn gói cung cấp nó"),
+            };
+            assert!(
+                pkgs.iter().any(|p| p == provider),
+                "bật {unit} nhưng không cài {provider}; packages() = {pkgs:?}"
+            );
+        }
+    }
+
     #[test]
     fn default_selection_enables_network_and_pipewire() {
         let sel = ServiceSelection::default();
         assert!(sel.services().contains(&"NetworkManager".to_string()));
         assert!(sel.packages().contains(&"pipewire".to_string()));
+    }
+
+    /// The zram unit and the zram package have to come from the same project.
+    ///
+    /// Arch ships two of them and they are not interchangeable: the package
+    /// `zram-generator` installs `systemd-zram-setup@zram0.service`, while the
+    /// separate `systemd-zram-generator` package installs
+    /// `systemd-zram-generator@zram0.service`. Enabling the wrong one fails
+    /// quietly — the install reports "completed with warnings" and zram never
+    /// comes up, which is exactly how it reached a finished VirtualBox install
+    /// before this was pinned.
+    #[test]
+    fn the_zram_unit_belongs_to_the_zram_package_we_install() {
+        let sel = ServiceSelection {
+            zram: true,
+            ..Default::default()
+        };
+        assert!(
+            sel.packages().contains(&"zram-generator".to_string()),
+            "cài zram phải kéo gói zram-generator"
+        );
+        let units = sel.services();
+        let zram = units
+            .iter()
+            .find(|u| u.contains("zram"))
+            .expect("bật zram thì phải có một unit");
+        assert!(
+            zram.starts_with("systemd-zram-setup@"),
+            "unit {zram} không thuộc gói zram-generator — \
+             nó thuộc gói systemd-zram-generator, mà ta không cài"
+        );
+        assert!(
+            !units.contains(&"systemd-zram-generator@zram0.service".to_string()),
+            "unit này không tồn tại khi cài zram-generator; bật nó là bật hư"
+        );
     }
 
     #[test]
