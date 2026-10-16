@@ -31,6 +31,17 @@ def newest_tag() -> str | None:
     return out.stdout.strip() or None
 
 
+def gitrev(rev: str) -> str | None:
+    try:
+        out = subprocess.run(
+            ["git", "-c", "safe.directory=*", "rev-parse", rev],
+            cwd=ROOT, capture_output=True, text=True, timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return out.stdout.strip() or None
+
+
 def field(text: str, name: str) -> str | None:
     m = re.search(rf"^{name}=(.*)$", text, re.M)
     return m.group(1).strip().strip("'\"") if m else None
@@ -47,10 +58,22 @@ def main() -> int:
     pkgver = field(text, "pkgver")
     tag = newest_tag()
     if tag and pkgver != tag.lstrip("v"):
-        problems.append(
-            f"pkgver={pkgver} nhưng thẻ mới nhất là {tag}. "
-            f"Bản phát hành sinh lại PKGBUILD, nhưng bản trong kho vẫn phải đúng."
-        )
+        tc, hc = gitrev(f"{tag}^{{commit}}"), gitrev("HEAD")
+        if tc and hc and tc == hc:
+            # Thẻ mới nhất trỏ đúng vào commit đang được build — khoảnh khắc
+            # giữa chừng phát hành: thẻ được ghim trước, còn PKGBUILD xác định
+            # kèm sha256 của tarball chỉ sinh ra ở commit sync ngay sau. Lần
+            # chạy 0.1.13 theo thẻ đã đỏ oan ở đây, trên chính cây đã xanh
+            # trước đó. Báo cho không im lặng, nhưng không báo hỏng.
+            print(
+                f"  PKGBUILD: giữa chừng phát hành ({tag} trỏ vào commit đang "
+                "build) — pkgver cập nhật ở commit sync theo sau"
+            )
+        else:
+            problems.append(
+                f"pkgver={pkgver} nhưng thẻ mới nhất là {tag}. "
+                f"Bản phát hành sinh lại PKGBUILD, nhưng bản trong kho vẫn phải đúng."
+            )
 
     source = field(text, "source") or ""
     if "http" not in source:
@@ -70,7 +93,7 @@ def main() -> int:
     for problem in problems:
         print(f"  PKGBUILD: {problem}")
     if not problems:
-        print(f"  PKGBUILD khớp thẻ {tag} và có sha256 thật")
+        print(f"  PKGBUILD khớp {tag if tag else 'kho chưa có thẻ nào'} và có sha256 thật")
     return 1 if problems else 0
 
 
