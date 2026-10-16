@@ -80,6 +80,21 @@ $ git clone https://github.com/tamkogay9876-code/camareLOL
 $ cd camareLOL && sudo ./install.sh --binary
 ```
 
+### Via npm
+
+On a running Arch system, npm is one more way in:
+
+```console
+$ sudo pacman -S nodejs npm
+$ npm install -g @wenker-ai/camarelo
+```
+
+The package carries the release binary plus a small Node wrapper that runs
+before it. If the bundled build is older than the newest GitHub release, the
+wrapper can fetch that release (verified against the release `SHA256SUMS`) and
+replace its own copy. The binary never replaces itself — what that does and
+does not protect against is written in [Updating](docs/en/update.md).
+
 ### Updating
 
 camareLOL does not update itself. There is no updater, no index URL, and no
