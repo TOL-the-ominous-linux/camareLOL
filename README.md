@@ -31,9 +31,33 @@ table points sideways into the other two.
 | The IPC protocol | [ipc-protocol](docs/en/ipc-protocol.md) | [VI](docs/vi/ipc-protocol.md) | [ZH](docs/zh/ipc-protocol.md) |
 | What gets tested | [testing](docs/en/testing.md) | [VI](docs/vi/testing.md) | [ZH](docs/zh/testing.md) |
 | Running it yourself | [vm-testing](docs/en/vm-testing.md) | [VI](docs/vi/vm-testing.md) | [ZH](docs/zh/vm-testing.md) |
+| Updating, and why there is none | [update](docs/en/update.md) | [VI](docs/vi/update.md) | [ZH](docs/zh/update.md) |
 | What is not built yet | [roadmap](docs/en/roadmap.md) | [VI](docs/vi/roadmap.md) | [ZH](docs/zh/roadmap.md) |
 
 Start with [the overview](docs/en/index.md).
+
+## What changed in 0.1.11
+
+**The updater is gone.** `--check-update`, `--update` and `--rollback-update`
+no longer exist, and there is no index URL, mirror list or signing key left in
+the build.
+
+It was never automatic — `--check-update` only reported. What was automatic was
+the chain underneath it, and that chain broke four times in one day. The
+failure mode was always the same shape: one host stopped answering, another
+kept serving a frozen copy of the index, and every camareLOL in the field
+reported itself current.
+
+This matters if you are on 0.1.10 or older: your binary has an updater that asks
+an address which no longer resolves. It cannot install anything, so nothing is
+at risk. Download this release and replace the binary — see
+[Updating](docs/en/update.md).
+
+Also removed: the website and its update mirror. Three hosts in one day proved
+that a deployment chain you depend on is a liability, not an asset.
+
+The installer, the safety gate, the IPC protocol and the Java catalog are
+unchanged.
 
 ## Install
 

@@ -57,6 +57,7 @@ binary by hand.
 | The IPC protocol | [EN](ipc-protocol.md) | [VI](../vi/ipc-protocol.md) | [ZH](../zh/ipc-protocol.md) |
 | What gets tested | [EN](testing.md) | [VI](../vi/testing.md) | [ZH](../zh/testing.md) |
 | Running it yourself | [EN](vm-testing.md) | [VI](../vi/vm-testing.md) | [ZH](../zh/vm-testing.md) |
+| Updating | [update](update.md) | [VI](../vi/update.md) | [ZH](../zh/update.md) |
 | What is not built yet | [EN](roadmap.md) | [VI](../vi/roadmap.md) | [ZH](../zh/roadmap.md) |
 
 ## What it does today

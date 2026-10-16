@@ -45,6 +45,17 @@ git rev-parse --verify --quiet "refs/tags/$TAG" >/dev/null \
         git tag -a $TAG -m 'camareLOL $VERSION'
         git push origin $TAG"
 
+# Cargo.toml và thẻ phải nói cùng một phiên bản.
+#
+# Chúng đã trôi nhau một lần: thẻ đã tới 0.1.10 trong khi Cargo.toml vẫn ghi
+# 0.1.5. `cargo install --git` cho ra một binary mà chính metadata của nó gọi
+# là 0.1.5. Thẻ thắng khi build nên bản phát hành vẫn đúng — nhưng mọi thứ
+# đọc Cargo.toml thì không.
+CRATE_VERSION="$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -1)"
+[ "$CRATE_VERSION" = "$VERSION" ] \
+    || die "Cargo.toml ghi $CRATE_VERSION, thẻ là $VERSION.
+    Sửa version trong Cargo.toml rồi commit trước khi đặt thẻ."
+
 if ! git diff --quiet || ! git diff --cached --quiet; then
     die "cây làm việc bẩn — build từ trạng thái không ai biết.
     Commit hoặc stash trước."

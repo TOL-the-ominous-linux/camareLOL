@@ -56,6 +56,7 @@ $ sudo pacman -S camarelol      # 从软件仓库或 AUR
 | IPC 协议 | [EN](../en/ipc-protocol.md) | [VI](../vi/ipc-protocol.md) | [ZH](ipc-protocol.md) |
 | 测试了什么 | [EN](../en/testing.md) | [VI](../vi/testing.md) | [ZH](testing.md) |
 | 自己动手运行 | [EN](../en/vm-testing.md) | [VI](../vi/vm-testing.md) | [ZH](vm-testing.md) |
+| 更新 | [EN](../en/update.md) | [VI](../vi/update.md) | [ZH](update.md) |
 | 尚未构建的内容 | [EN](../en/roadmap.md) | [VI](../vi/roadmap.md) | [ZH](roadmap.md) |
 
 ## 目前它能做什么

@@ -57,6 +57,7 @@ bằng tay.
 | Giao thức IPC | [EN](../en/ipc-protocol.md) | [VI](ipc-protocol.md) | [ZH](../zh/ipc-protocol.md) |
 | Những gì được kiểm thử | [EN](../en/testing.md) | [VI](testing.md) | [ZH](../zh/testing.md) |
 | Tự chạy thử | [EN](../en/vm-testing.md) | [VI](vm-testing.md) | [ZH](../zh/vm-testing.md) |
+| Cập nhật | [EN](../en/update.md) | [VI](update.md) | [ZH](../zh/update.md) |
 | Những gì chưa làm | [EN](../en/roadmap.md) | [VI](roadmap.md) | [ZH](../zh/roadmap.md) |
 
 ## Hiện nó làm được gì

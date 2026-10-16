@@ -10,6 +10,11 @@
 /// The git tag wins when there is one: `Cargo.toml` fell behind the tag once,
 /// and a build that calls itself 0.1.5 while shipping as 0.1.6 is precisely
 /// the kind of ambiguity this module exists to remove.
+///
+/// `Cargo.toml` now tracks the tag again as of 0.1.11. It had sat at 0.1.5
+/// while releases went to 0.1.10, so `cargo install --git` produced a binary
+/// whose own metadata said 0.1.5. Keeping the tag override costs nothing and
+/// still covers a packaged build that never saw a git checkout.
 pub const VERSION: &str = match option_env!("CAMARELOL_RELEASE_VERSION") {
     Some(v) => v,
     None => env!("CARGO_PKG_VERSION"),
