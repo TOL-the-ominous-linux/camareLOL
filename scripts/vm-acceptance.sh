@@ -51,7 +51,10 @@ guest() {
 }
 
 post() { # post <tên>  — tệp kết quả đã nằm ở /tmp/r-<tên>.txt trong khách
-    guest "curl -sS -X POST --data-binary @/tmp/r-$1.txt http://$HOST_ADDR:$PORT/step/$1 >/dev/null 2>&1; echo done-$1" 4
+    # Mã HTTP phải hiện trên màn hình: máy chủ chết hoặc mạng khách đứt thì
+    # 000 hiện ở đấy, còn phiên bản cũ thì POST thất bại trôi qua im lặng và
+    # bài kiểm tra đối phó bằng "không có kết quả" cho cả bảy bước.
+    guest "echo post-$1 http=\$(curl -sS -m 8 -o /dev/null -w '%{http_code}' -X POST --data-binary @/tmp/r-$1.txt http://$HOST_ADDR:$PORT/step/$1 2>/dev/null); echo done-$1" 4
 }
 
 # Đọc một kết quả từ máy chủ.
@@ -96,7 +99,6 @@ if ! kill -0 "$SERVER_PID" 2>/dev/null; then
     say "máy chủ kết quả không lên:"; cat "$RESULTS/server.log"; exit 1
 fi
 cat "$RESULTS/server.log" | sed 's/^/  /'
-
 say "tạo VM"
 if vm list vms | grep -q "\"$VM_NAME\""; then
     vm controlvm "$VM_NAME" poweroff >/dev/null 2>&1; sleep 2
@@ -106,27 +108,9 @@ vm createvm --name "$VM_NAME" --ostype ArchLinux_64 --register
 vm modifyvm "$VM_NAME" --memory 4096 --cpus 4 --vram 16 \
     --boot1 dvd --boot2 disk --audio-driver none --usb off \
     --clipboard-mode disabled
-# Khách phải tới được dịch vụ trên loopback của máy chủ. Không bật thì mọi
-# `curl http://10.0.2.2:PORT` bị từ chối, và bài kiểm tra im lặng thất bại ở
-# đúng chỗ đáng lẽ phải kiểm tra binary.
-#
-# VirtualBox không có cờ dòng lệnh cho nó: nó nằm trong tệp .vbox dưới dạng
-# `<NAT localhost-reachable="true"/>`, và mặc định là tắt. VM `camarelol-release-
-# test` có nó bật sẵn nên lần chạy đầu của script này — trên một VM mới — thất
-# bại im lặng, đúng những gì nó sinh ra để chống lại.
-VM_VBOX="${VM_DIR}/${VM_NAME}.vbox"
-python3 - "$VM_VBOX" <<'PY'
-import pathlib, sys
-p = pathlib.Path(sys.argv[1])
-s = p.read_text()
-if "<NAT/>" in s:
-    p.write_text(s.replace("<NAT/>", '<NAT localhost-reachable="true"/>', 1))
-    print("  bật localhost-reachable cho NAT")
-elif 'localhost-reachable="true"' in s:
-    print("  NAT đã cho phép localhost")
-else:
-    print("  CẢNH BÁO: không tìm thấy khối <NAT> trong .vbox — kiểm tra thủ công")
-PY
+# VM mới tạo rồi startvm ngay lập tức đã gặp lỗi NIC/DHCP lần đầu tạm thời —
+# nghỉ một hơi giữa các lệnh cấu hình VM với startvm.
+sleep 3
 # Hai đĩa trống: một cho smoke test, một cho bản cài thật.
 vm storagectl "$VM_NAME" --name SATA --add sata --controller IntelAhci
 for port in 0 1; do
@@ -139,30 +123,58 @@ vm storageattach "$VM_NAME" --storagectl IDE --port 0 --device 0 \
     --type dvddrive --medium "$ISO"
 note "Arch ISO + 2 đĩa trống 16 GiB"
 
-say "khởi động VM (chờ 100s cho môi trường live)"
+# Khách phải tới được dịch vụ trên loopback của máy chủ (10.0.2.2). VirtualBox
+# không có cờ dòng lệnh cho nó: nó nằm trong .vbox dưới dạng
+# `<NAT localhost-reachable="true"/>`, và mặc định là tắt. Khối này phải nằm
+# SAU mọi lệnh cấu hình: mỗi `modifyvm`/`storagectl`/`storageattach` là một
+# lần VBoxSVC ghi lại toàn bộ tệp từ bộ nhớ đệm, lược bỏ mọi chỉnh sửa python
+# viết thẳng vào tệp. Lần chạy đầu 0.1.13 boot mà cờ này đã bị lược bỏ vì khối
+# xóa nằm trước các lệnh storage — đúng loại im lặng mà bài kiểm tra này sinh
+# ra để chống lại.
+VM_VBOX="${VM_DIR}/${VM_NAME}.vbox"
+python3 - "$VM_VBOX" <<'PY'
+import pathlib, sys
+p = pathlib.Path(sys.argv[1])
+s = p.read_text()
+if "<NAT/>" in s:
+    p.write_text(s.replace("<NAT/>", '<NAT localhost-reachable="true"/>', 1))
+if 'localhost-reachable="true"' in p.read_text():
+    print("  localhost-reachable bật trong .vbox")
+else:
+    print("  CẢNH BÁO: không tìm thấy khối <NAT> trong .vbox — kiểm tra thủ công")
+PY
+
+say "khởi động VM (chờ môi trường live, rồi chờ IP thật sự)"
 vm startvm "$VM_NAME" --type headless
-sleep 100
+sleep 70   # hệ live chuyển ra tty1, networkd chạy DHCP ban đầu
 guest "" 5   # Enter để đảm bảo có prompt
+# Đừng tin một giấc ngủ 100 giây: lần chạy đầu của phiên này, VM dậy mà không
+# có IP nào, mọi curl đều thất bại và cả bảy bước về tay trắng — trong khi
+# không một dấu hiệu nào hiện lên. Chờ cho tới khi enp0s3 có IP thật; sau 90
+# giây vẫn trống thì khởi lại networkd một lần và chờ tiếp. Ảnh chụp IP của
+# khoảnh khắc này đi theo tệp r-download.txt — vậy nếu tải thất bại thì tệp
+# thất bại tự khai báo mạng đã ở tình trạng nào.
+guest 'for i in $(seq 1 30); do ip -4 addr show dev enp0s3 | grep -q inet && break; sleep 3; done; ip -4 addr show dev enp0s3 | grep -q inet || { systemctl restart systemd-networkd; sleep 12; }; ip -4 -br addr > /tmp/r-download.txt 2>&1' 120
 
 # ------------------------------------------------------------- các bước
 
-say "bước 1/5 — tải binary từ máy chủ"
-guest "curl -sS -o /root/camarelol http://$HOST_ADDR:$PORT/camarelol > /tmp/r-download.txt 2>&1 && chmod +x /root/camarelol && echo downloaded >> /tmp/r-download.txt; /root/camarelol --version >> /tmp/r-download.txt 2>&1; echo rc=\$? >> /tmp/r-download.txt" 25
+say "bước 1/6 — tải binary từ máy chủ"
+guest "curl -sS -o /root/camarelol http://$HOST_ADDR:$PORT/camarelol >> /tmp/r-download.txt 2>&1 && chmod +x /root/camarelol && echo downloaded >> /tmp/r-download.txt; /root/camarelol --version >> /tmp/r-download.txt 2>&1; echo rc=\$? >> /tmp/r-download.txt" 25
 post download
 
-say "bước 2/5 — quét thiết bị thật (--scan)"
+say "bước 2/6 — quét thiết bị thật (--scan)"
 guest "/root/camarelol --scan > /tmp/survey.json 2>/tmp/scan.err; echo rc=\$? > /tmp/r-scan.txt; echo bytes=\$(stat -c%s /tmp/survey.json) >> /tmp/r-scan.txt; cat /tmp/scan.err >> /tmp/r-scan.txt; grep -c path /tmp/survey.json >> /tmp/r-scan.txt" 20
 post scan
 
-say "bước 3/5 — self-test"
+say "bước 3/6 — self-test"
 guest "/root/camarelol --self-test > /tmp/st.txt 2>&1; echo rc=\$? > /tmp/r-selftest.txt; cat /tmp/st.txt >> /tmp/r-selftest.txt" 25
 post selftest
 
-say "bước 4/5 — --help không còn cờ cập nhật"
+say "bước 4/6 — --help không còn cờ cập nhật"
 guest "/root/camarelol --help > /tmp/help.txt 2>&1; echo rc=\$? > /tmp/r-help.txt; grep -cE '^    --(check-)?update|rollback-update' /tmp/help.txt >> /tmp/r-help.txt; grep -A3 'UPDATING' /tmp/help.txt >> /tmp/r-help.txt" 12
 post help
 
-say "bước 5/5 — cài thật vào đĩa trống (--scripted --execute)"
+say "bước 5/6 — cài thật vào đĩa trống (--scripted --execute)"
 guest "curl -sS -o /root/vm-helper.py http://$HOST_ADDR:$PORT/vm-helper.py >/dev/null 2>&1; python3 /root/vm-helper.py /tmp/survey.json /tmp/profile.toml > /tmp/r-install.txt 2>&1; echo profile_rc=\$? >> /tmp/r-install.txt" 15
 post install_profile
 note "chạy cài đặt — có thể mất vài phút"

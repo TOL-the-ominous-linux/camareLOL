@@ -42,6 +42,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
         # `/camarelol` và `/vm-helper.py`: phục vụ đúng tệp cần thử, không phải
         # bất cứ thứ gì đang nằm trên máy chủ.
         name = self.path.lstrip("/")
+        # GET cũng phải thành tiếng: bước tải binary là bước đầu tiên của khách
+        # — nếu nó không hiện ở đây thì máy khách chưa từng tới được máy chủ,
+        # và bài kiểm tra thất bại ở mạng chứ không phải ở binary.
+        print(f"  GET {self.path}", flush=True)
         if "/" in name or not name:
             self._send(404, b"not found", "text/plain")
             return
@@ -90,10 +94,11 @@ def main() -> int:
         print(f"  không có thư mục phục vụ: {Handler.files}", file=sys.stderr)
         return 1
     served = sorted(p.name for p in Handler.files.iterdir() if p.is_file())
-    print(f"  phục vụ {len(served)} tệp từ {Handler.files}: {', '.join(served)}")
+    print(f"  phục vụ {len(served)} tệp từ {Handler.files}: {', '.join(served)}",
+          flush=True)
     socketserver.TCPServer.allow_reuse_address = True
     with socketserver.TCPServer(("0.0.0.0", args.port), Handler) as httpd:
-        print(f"  lắng nghe 0.0.0.0:{args.port}, kết quả về {out}")
+        print(f"  lắng nghe 0.0.0.0:{args.port}, kết quả về {out}", flush=True)
         httpd.serve_forever()
     return 0
 
