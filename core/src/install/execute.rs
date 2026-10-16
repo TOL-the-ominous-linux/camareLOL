@@ -555,7 +555,14 @@ pub fn run_install(
                     "system-config" => {
                         let script = system_config_script(cfg);
                         runner.chroot_script(&script)?;
-                        Ok("locale, keymap, timezone and hostname written".into())
+                        Ok(format!(
+                            "locale, keymap, timezone and hostname written{}",
+                            if cfg.services.zram {
+                                " + zram-generator.conf"
+                            } else {
+                                ""
+                            }
+                        ))
                     }
                     "accounts" => {
                         let script = account_script(cfg);
@@ -608,9 +615,17 @@ pub fn run_install(
     }
 }
 
-/// Build the in-target script that writes locale / keymap / timezone / hostname.
+/// Build the in-target script that writes locale / keymap / timezone / hostname,
+/// and — when zram was selected — the one file that makes zram real.
+///
+/// `zram-generator` ships the unit and gets installed fine, but by design it is
+/// a no-op without `/etc/systemd/zram-generator.conf`: the file is what tells it
+/// which devices to carve out. Two previous releases enabled the
+/// unit and installed the package and still never had a swap at boot, because
+/// that file was missing. The config is written here, where every other
+/// /etc file lives, with `zram_size_mb` honoured when it was set.
 fn system_config_script(cfg: &InstallationConfig) -> String {
-    format!(
+    let mut script = format!(
         r#"set -e
 echo 'LANG={locale}' > /etc/locale.conf
 echo 'KEYMAP={keymap}' > /etc/vconsole.conf
@@ -624,7 +639,19 @@ echo '{host}' > /etc/hostname
         keymap = cfg.keymap,
         tz = cfg.timezone,
         host = cfg.hostname,
-    )
+    );
+    if cfg.services.zram {
+        // upstream documents plain integers as MiB; `min` is part of the
+        // accepted expression grammar, and 4096 is what Fedora ships.
+        let size = match cfg.services.zram_size_mb {
+            Some(mb) => format!("zram-size = {mb}"),
+            None => "zram-size = min(ram / 2, 4096)".to_owned(),
+        };
+        script.push_str(&format!(
+            "printf '[zram0]\\n{size}\\n' > /etc/systemd/zram-generator.conf\n"
+        ));
+    }
+    script
 }
 
 /// Build the in-target script for users.
@@ -684,6 +711,13 @@ fn post_check(cfg: &InstallationConfig, plan: &PartitionPlan, root: &str) -> Vec
     if !root_mounted {
         w.push("no root partition in plan".into());
     }
+    if cfg.services.zram && !root_path.join("etc/systemd/zram-generator.conf").exists() {
+        // unit + package alone never produce a swap: zram-generator reads this
+        // file to know which devices to create, and without it is a no-op. A
+        // regression here is how 0.1.11 and 0.1.12 shipped a zram that was
+        // "installed" and still off.
+        w.push("/etc/systemd/zram-generator.conf is missing — zram will never come up".into());
+    }
     if !cfg.users.is_empty() && !cfg.admin_users.is_empty() {
         // informational only
     }
@@ -710,6 +744,52 @@ mod tests {
             &crate::storage::layout::LayoutRequest::default(),
         )
         .unwrap()
+    }
+
+    #[test]
+    fn zram_selection_writes_the_config_that_makes_it_real() {
+        // The unit and the package alone never produced a swap — zram-generator
+        // reads /etc/systemd/zram-generator.conf to know which devices to
+        // create, and without it is a documented no-op. The script must write
+        // that file whenever zram was selected.
+        let cfg = InstallationConfig::default(); // default services include zram
+        let script = system_config_script(&cfg);
+        assert!(script.contains("zram-generator.conf"), "{}", script);
+        assert!(script.contains("[zram0]"), "{}", script);
+        assert!(
+            script.contains("zram-size = min(ram / 2, 4096)"),
+            "{}",
+            script
+        );
+    }
+
+    #[test]
+    fn explicit_zram_size_is_honoured() {
+        let cfg = InstallationConfig {
+            services: crate::services::ServiceSelection {
+                zram_size_mb: Some(2048),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let script = system_config_script(&cfg);
+        assert!(script.contains("zram-size = 2048"), "{}", script);
+        // Take the default confidence away: the chosen size must not fall back
+        // into the default expression.
+        assert!(!script.contains("min(ram / 2, 4096)"), "{}", script);
+    }
+
+    #[test]
+    fn zram_off_writes_no_config() {
+        let cfg = InstallationConfig {
+            services: crate::services::ServiceSelection {
+                zram: false,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let script = system_config_script(&cfg);
+        assert!(!script.contains("zram-generator.conf"), "{}", script);
     }
 
     #[test]
