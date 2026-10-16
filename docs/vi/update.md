@@ -55,6 +55,24 @@ Không có chữ ký để xác minh, vì cũng không có gì để xác minh. 
 cho bạn biết đang chạy bản phát hành nào, và đó là toàn bộ câu chuyện về niềm
 tin.
 
+### Qua npm
+
+Cần `node` và `npm` trên máy:
+
+```console
+$ sudo pacman -S nodejs npm
+$ npm install -g @wenker-ai/camarelo
+```
+
+Vỏ npm không nằm trong binary: nó là mã Node chạy **trước khi** binary bắt đầu,
+và binary vẫn không có đường nào thay chính nó. Khi bản trong gói cũ hơn bản
+mới nhất trên GitHub Releases, vỏ hỏi một câu — trả lời `y` thì nó tải bản đó,
+đối chiếu `SHA256SUMS`, thay binary trong gói và chạy tiếp; trả lời `n` thì đi
+thẳng vào trình cài đặt.
+
+Niềm tin đúng bằng tải tay: tệp kiểm nằm cùng một chỗ với binary, nên nó bắt
+được tệp tải về hỏng giữa đường chứ không bắt được máy chủ bị chiếm.
+
 ---
 
 ## Nếu bạn đang ở 0.1.10 hoặc cũ hơn
@@ -73,15 +91,15 @@ không còn phím `u`.
 
 ```console
 $ camarelol --version
-camareLOL 0.1.11 (tag v0.1.11, commit abc1234)
+camareLOL 0.1.12 (tag v0.1.12, commit abc1234)
 ```
 
 Ba phần, và chúng nên khớp nhau:
 
 | Phần | Ý nghĩa |
 |---|---|
-| `0.1.11` | bản phát hành binary được build từ |
-| `tag v0.1.11` | thẻ git, cũng là tên bản phát hành |
+| `0.1.12` | bản phát hành binary được build từ |
+| `tag v0.1.12` | thẻ git, cũng là tên bản phát hành |
 | `commit abc1234` | đúng commit đó |
 
 Nếu nó ghi `[built from a dirty working tree]`, binary đó được biên dịch từ thay

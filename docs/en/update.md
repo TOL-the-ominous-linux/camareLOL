@@ -55,6 +55,26 @@ There is no signature to verify, because there is nothing to verify against.
 `--version` tells you which release you are running, and that is the whole of
 the trust story.
 
+### Via npm
+
+Requires `node` and `npm`:
+
+```console
+$ sudo pacman -S nodejs npm
+$ npm install -g @wenker-ai/camarelo
+```
+
+The npm wrapper is not inside the binary: it is Node code that runs *before*
+the binary starts, and the binary still has no code path that replaces itself.
+When the bundled build is older than the latest GitHub release, the wrapper
+asks once — answer `y` and it downloads that build, checks it against
+`SHA256SUMS`, replaces the bundled binary and hands over; answer `n` and it
+goes straight to the installer.
+
+The trust story is the same as downloading by hand: the checksum file lives in
+the same place as the binary, so it catches a download corrupted in transit —
+not a compromised server.
+
 ---
 
 ## If you are on 0.1.10 or older
@@ -73,15 +93,15 @@ is not present in later versions.
 
 ```console
 $ camarelol --version
-camareLOL 0.1.11 (tag v0.1.11, commit abc1234)
+camareLOL 0.1.12 (tag v0.1.12, commit abc1234)
 ```
 
 Three parts, and they should agree:
 
 | Part | Meaning |
 |---|---|
-| `0.1.11` | the release this binary was built from |
-| `tag v0.1.11` | the git tag, which is what the release is named |
+| `0.1.12` | the release this binary was built from |
+| `tag v0.1.12` | the git tag, which is what the release is named |
 | `commit abc1234` | the exact commit |
 
 If it says `[built from a dirty working tree]`, that binary was compiled from

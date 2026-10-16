@@ -1,0 +1,46 @@
+{
+  "name": "@wenker-ai/camarelo",
+  "version": "0.1.12",
+  "description": "camareLOL — a safety-first TUI installer for Arch Linux, with a Vietnamese soul",
+  "license": "GPL-3.0-or-later",
+  "homepage": "https://github.com/tamkogay9876-code/camareLOL",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tamkogay9876-code/camareLOL.git"
+  },
+  "bugs": {
+    "url": "https://github.com/tamkogay9876-code/camareLOL/issues"
+  },
+  "keywords": [
+    "arch",
+    "archlinux",
+    "installer",
+    "tui",
+    "camarelol",
+    "linux"
+  ],
+  "bin": {
+    "camarelol": "bin/camarelol.js"
+  },
+  "files": [
+    "bin/",
+    "lib/",
+    "vendor/",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "postinstall": "node lib/postinstall.js",
+    "test": "node test/run.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "preferUnplugged": true
+}
