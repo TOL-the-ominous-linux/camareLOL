@@ -85,9 +85,13 @@ $ cd camareLOL && sudo ./install.sh --binary
 On a running Arch system, npm is one more way in:
 
 ```console
-$ sudo pacman -S nodejs npm
+$ sudo pacman -S --needed nodejs npm curl
 $ npm install -g @wenker-ai/camarelo
 ```
+
+On the **archiso** (live ISO), the pacman database is empty — use
+`sudo pacman -Sy --needed nodejs npm curl` after connecting to the network,
+and see [Updating](docs/en/update.md).
 
 The package carries the release binary plus a small Node wrapper that runs
 before it. If the bundled build is older than the newest GitHub release, the

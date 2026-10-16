@@ -60,8 +60,17 @@ tin.
 Cần `node` và `npm` trên máy:
 
 ```console
-$ sudo pacman -S nodejs npm
+$ sudo pacman -S --needed nodejs npm curl
 $ npm install -g @wenker-ai/camarelo
+```
+
+Trên **archiso** (live ISO) phải khác một chút: cơ sở dữ liệu pacman còn rỗng
+nên `pacman -S` báo `database file for 'core' does not exist`. Kéo nó về rồi
+cài trong cùng một lượt, kèm mạng đã nối (Wi-Fi bên ngoài quy trình này —
+pacman cần mạng để tải DB):
+
+```console
+$ sudo pacman -Sy --needed nodejs npm curl
 ```
 
 Vỏ npm không nằm trong binary: nó là mã Node chạy **trước khi** binary bắt đầu,

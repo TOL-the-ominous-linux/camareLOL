@@ -60,8 +60,17 @@ the trust story.
 Requires `node` and `npm`:
 
 ```console
-$ sudo pacman -S nodejs npm
+$ sudo pacman -S --needed nodejs npm curl
 $ npm install -g @wenker-ai/camarelo
+```
+
+On **archiso** (the live ISO), one extra step: the pacman databases are empty,
+so plain `pacman -S` fails with `database file for 'core' does not exist`.
+Download them and install in one go — with a network already up (Wi-Fi lives
+outside this flow; pacman needs it to fetch the database):
+
+```console
+$ sudo pacman -Sy --needed nodejs npm curl
 ```
 
 The npm wrapper is not inside the binary: it is Node code that runs *before*

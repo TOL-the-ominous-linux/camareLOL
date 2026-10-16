@@ -15,11 +15,18 @@ cổng an toàn đứng trước mọi thao tác phá huỷ.
 Trên Arch, cần `node`, `npm`, `curl`, `git`, `sudo`:
 
 ```console
-$ sudo pacman -S nodejs npm curl git
+$ sudo pacman -S --needed nodejs npm curl git
 $ npm install -g @wenker-ai/camarelo
 ```
 
 (`npm i -g @wenker-ai/camarelo` cũng là một — `i` là tên ngắn của `install`.)
+
+Trên **archiso** (live ISO) pacman có cơ sở dữ liệu rỗng — `pacman -S` riêng lẻ
+sẽ báo `database file for 'core' does not exist`. Nối mạng trước rồi dùng:
+
+```console
+$ sudo pacman -Sy --needed nodejs npm curl git
+```
 
 Sau đó:
 

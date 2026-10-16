@@ -55,8 +55,16 @@ $ camarelol --version                  # 看看现在装的是哪一版
 需要先装好 `node` 和 `npm`：
 
 ```console
-$ sudo pacman -S nodejs npm
+$ sudo pacman -S --needed nodejs npm curl
 $ npm install -g @wenker-ai/camarelo
+```
+
+在 **archiso**（live ISO）上要多一步：pacman 的软件包数据库还是空的，直接用
+`pacman -S` 会报 `database file for 'core' does not exist`。先连好网络
+（Wi-Fi 不在本流程内——pacman 下载数据库需要网络），再把数据库与软件一起装：
+
+```console
+$ sudo pacman -Sy --needed nodejs npm curl
 ```
 
 npm 外壳不属于二进制文件的一部分：它是在二进制文件启动**之前**运行的 Node
