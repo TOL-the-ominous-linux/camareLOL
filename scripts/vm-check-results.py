@@ -62,7 +62,7 @@ def _(body: str, expect: str) -> tuple[bool, str]:
         return False, f"--version trả mã {rc_of(body)}"
     if f"tag v{expect}" not in body:
         return False, f"binary không mang thẻ v{expect}: {body.strip()[:120]}"
-    return True, f"0.1.11, thẻ khớp"
+    return True, f"{expect}, thẻ v{expect} khớp"
 
 
 @check("scan")
@@ -146,10 +146,34 @@ def _(body: str, expect: str) -> tuple[bool, str]:
     return True, f"{finished}/{started} pha hoàn tất"
 
 
+@check("zram")
+def _(body: str, expect: str) -> tuple[bool, str]:
+    """Trên hệ thống ĐÃ CÀI: mọi thứ hứa ở menu phải có thật trên đĩa.
+
+    Hai lần cài trước (0.1.11, 0.1.12) kết thúc "completed with warnings" và
+    mọi pha đều đã xong — nhưng zram vẫn không bao giờ bật, ssh vẫn không cài
+    gói. Chỉ có đĩa đích mới kể sự thật, nên khách mở đích lên và trỏ từng thứ:
+    unit file, symlink enable, binary/generator, /etc/systemd/zram-generator.conf,
+    sshd + openssh.
+    """
+    if not body:
+        return False, "không có kết quả — bước 6 chưa gửi (cài xong rồi mới gửi), có thể đã treo"
+    found = dict(re.findall(r"^([a-z_]+)=(yes|no)", body, re.M))
+    need = ["zram_unit", "zram_wants", "zram_bin", "zram_conf",
+            "sshd_unit", "sshd_wants", "openssh"]
+    missing_keys = [k for k in need if k not in found]
+    if missing_keys:
+        return False, f"thiếu cột mốc {', '.join(missing_keys)} — khách có thể chết giữa chừng: {body.strip()[:200]}"
+    bad = [k for k, v in found.items() if v == "no"]
+    if bad:
+        return False, f"trên đĩa đích còn thiếu: {', '.join(bad)}"
+    return True, f"{len(need)} thứ đều có thật trên hệ đã cài"
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--results", required=True)
-    ap.add_argument("--expect-version", default="0.1.11")
+    ap.add_argument("--expect-version", default="0.1.13")
     args = ap.parse_args()
 
     results = pathlib.Path(args.results)

@@ -74,6 +74,14 @@ trap cleanup EXIT
 say "dọn kết quả cũ"
 rm -rf "$RESULTS" "$SERVE"
 mkdir -p "$RESULTS" "$SERVE"
+BINARY="$ROOT/out/release/camarelol"
+[ -x "$BINARY" ] || { echo "  FAIL: binary không có hoặc không chạy được: $BINARY"; exit 1; }
+# Phiên bản kỳ vọng lấy từ chính binary sẽ kiểm — không sao chép số ra chỗ
+# khác: 0.1.11 từng cài mimes lệch để script ghim cứng --expect-version 0.1.11,
+# và chạy sai bài. Cờ --version của binary in 'camareLOL <v> (tag …)'.
+EXP_VERSION="$("$BINARY" --version 2>/dev/null | awk '{print $2}')"
+[[ "$EXP_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "  FAIL: không đọc được phiên bản từ binary: '$EXP_VERSION'"; exit 1; }
+note "binary kiểm tra: $BINARY (phiên bản $EXP_VERSION)"
 # Chép đúng những gì khách sẽ dùng. Không dùng bản trong kho: bài kiểm tra này
 # kiểm tra *thứ đã phát hành*, và chỉ máy chủ mới biết thứ đó là gì.
 cp "$ROOT/out/release/camarelol" "$SERVE/camarelol"
@@ -161,8 +169,16 @@ note "chạy cài đặt — có thể mất vài phút"
 guest "/root/camarelol --scripted /tmp/profile.toml --allow-destructive --execute > /tmp/inst.txt 2>&1; echo INSTALL_RC=\$? > /tmp/r-install.txt; cat /tmp/inst.txt >> /tmp/r-install.txt" 60
 post install
 
+say "bước 6/6 — kiểm trên hệ thống ĐÃ CÀI: unit, gói, config của zram và ssh"
+# Hai bản 0.1.11/0.1.12 cài "xong" mà thiếu thật. Những gì quyết định tính năng
+# sống là trên đĩa đích, không phải mã thoát của trình cài: unit file có thật,
+# symlink enable có thật, binary/generator có thật, config có thật. Cá nhân
+# /dev/sdX lấy từ profile để không đoán đĩa.
+guest "D=\$(grep -om1 '/dev/sd[a-z]' /tmp/profile.toml); [[ \$D ]] || D=/dev/sda; M=/vmroot; mkdir -p \$M 2>/dev/null; mountpoint -q /mnt && M=/mnt || mount \${D}1 \$M 2>/dev/null; { test -e \$M/usr/lib/systemd/system/systemd-zram-setup@.service && echo zram_unit=yes || echo zram_unit=no; test -e \$M/etc/systemd/system/multi-user.target.wants/systemd-zram-setup@zram0.service && echo zram_wants=yes || echo zram_wants=no; test -e \$M/usr/lib/systemd/system-generators/zram-generator && echo zram_bin=yes || echo zram_bin=no; test -e \$M/etc/systemd/zram-generator.conf && echo zram_conf=yes || echo zram_conf=no; test -e \$M/usr/lib/systemd/system/sshd.service && echo sshd_unit=yes || echo sshd_unit=no; test -e \$M/etc/systemd/system/multi-user.target.wants/sshd.service && echo sshd_wants=yes || echo sshd_wants=no; pacman -Qr \$M openssh >/dev/null 2>&1 && echo openssh=yes || echo openssh=no; } > /tmp/r-zram.txt 2>&1" 15
+post zram
+
 say "đọc kết quả và kết luận"
-python3 "$ROOT/scripts/vm-check-results.py" --results "$RESULTS" --expect-version 0.1.11
+python3 "$ROOT/scripts/vm-check-results.py" --results "$RESULTS" --expect-version "$EXP_VERSION"
 CHECK_RC=$?
 
 VBoxManage controlvm "$VM_NAME" screenshotpng "$RESULTS/99-final.png" >/dev/null 2>&1 || true

@@ -62,11 +62,13 @@ aur_packages = []
 aur_enabled = false
 
 [services]
+# ssh = true để bài kiểm tra chạm cả hai bản vá: openssh phải có thật khi
+# sshd được bật, và zram-generator.conf phải có thật khi zram được bật.
 audio = "pipewire"
 network_manager = true
 bluetooth = false
 printing = false
-ssh = false
+ssh = true
 zram = true
 """
     profile_path.write_text(profile, encoding="utf-8")
