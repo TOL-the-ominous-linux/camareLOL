@@ -135,4 +135,3 @@ note "phiên bản trong binary : $("$OUT_DIR/camarelol" --version | head -1)"
 printf '\nTiếp theo:\n\n'
 note "1. gh release create $TAG --title ... --notes ... $OUT_DIR/camarelol"
 note "2. $OUT_DIR/camarelol-$VERSION.tar.gz  $OUT_DIR/camarelol-catalog.jar  $PKGBUILD_OUT"
-note "4. gh release upload $TAG $OUT_DIR/latest.json $OUT_DIR/latest.json.sig"
