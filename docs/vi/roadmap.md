@@ -22,7 +22,11 @@ Hoàn tất.
 - [x] Ghi log và các màn hình xác nhận
 - [x] Cổng an toàn: khoá, chạy thử không ghi, thực thi với cụm từ phải gõ tay
 - [x] Lưu và nạp cấu hình, có phiên bản schema, không có mật khẩu
-- [x] Trình tự cập nhật có ký, có dự phòng mirror
+- [x] ~~Trình tự cập nhật có ký, có dự phòng mirror~~ — đã bỏ, và đây là trạng
+      thái đúng. Cập nhật đến từ `pacman` hoặc tải tay. Một thành phần việc của
+      nó là thay thế một binary xoá ổ đĩa là con đường ngắn nhất từ máy chủ bị
+      chiếm tới dữ liệu bị xoá, và chuỗi mirror đứng sau nó hỏng liên tục trong
+      khi vẫn báo thành công.
 - [x] Lớp tự động hoá Python, danh mục Java, IPC có phiên bản
 
 ## Stage 2 — Desktop

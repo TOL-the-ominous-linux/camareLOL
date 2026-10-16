@@ -12,18 +12,11 @@ destructive operation.
 
 | | |
 |---|---|
-| Website | **<https://tamkogay9876-code.github.io/camareLOL-mirror>** |
 | Releases | <https://github.com/tamkogay9876-code/camareLOL/releases> |
 | Discussions | <https://github.com/tamkogay9876-code/camareLOL/discussions> |
 | Issues | <https://github.com/tamkogay9876-code/camareLOL/issues> |
 
 ## Languages
-
-| Language | Documentation |
-|---|---|
-| English | <https://tamkogay9876-code.github.io/camareLOL-mirror/en/docs/> |
-| Tiếng Việt | <https://tamkogay9876-code.github.io/camareLOL-mirror/vi/docs/> |
-| 中文 | <https://tamkogay9876-code.github.io/camareLOL-mirror/zh/docs/> |
 
 The installer itself speaks Vietnamese and English (`--lang vi|en`).
 
@@ -40,26 +33,31 @@ $ sudo ./camarelol             # the TUI
 
 `--self-test` never writes to a disk. Run it first.
 
-Staying current — the updater reports by default and installs only when asked:
+camareLOL does not update itself. There is no updater, no index URL, and no
+code path in the binary that replaces it.
+
+That is a decision, not an unfinished feature. This program erases disks; a
+component whose job is to replace itself is the shortest path from a
+compromised server to erased data. Update it the way every other Arch package
+is updated:
 
 ```console
-$ camarelol --check-update     # reports, downloads nothing, exit code 10 if newer
-$ camarelol --update           # download, verify signature and SHA-256, install
-$ camarelol --rollback-update  # put the previous binary back
+$ sudo pacman -S camarelol      # from a repository or the AUR
 ```
 
-It never replaces itself on its own, never while an install is running, and
-refuses a download whose checksum or signature does not match.
+Or download the release you want from
+<https://github.com/tamkogay9876-code/camareLOL/releases> and replace the
+binary by hand.
 
 ## Documentation
 
 | Topic | English | Tiếng Việt | 中文 |
 |---|---|---|---|
-| The three components | [architecture](architecture.md) | [VI](https://tamkogay9876-code.github.io/camareLOL-mirror/vi/docs/architecture.html) | [ZH](https://tamkogay9876-code.github.io/camareLOL-mirror/zh/docs/architecture.html) |
-| The IPC protocol | [ipc-protocol](ipc-protocol.md) | [VI](https://tamkogay9876-code.github.io/camareLOL-mirror/vi/docs/ipc-protocol.html) | [ZH](https://tamkogay9876-code.github.io/camareLOL-mirror/zh/docs/ipc-protocol.html) |
-| What gets tested | [testing](testing.md) | [VI](https://tamkogay9876-code.github.io/camareLOL-mirror/vi/docs/testing.html) | [ZH](https://tamkogay9876-code.github.io/camareLOL-mirror/zh/docs/testing.html) |
-| Running it yourself | [vm-testing](vm-testing.md) | [VI](https://tamkogay9876-code.github.io/camareLOL-mirror/vi/docs/vm-testing.html) | [ZH](https://tamkogay9876-code.github.io/camareLOL-mirror/zh/docs/vm-testing.html) |
-| What is not built yet | [roadmap](roadmap.md) | [VI](https://tamkogay9876-code.github.io/camareLOL-mirror/vi/docs/roadmap.html) | [ZH](https://tamkogay9876-code.github.io/camareLOL-mirror/zh/docs/roadmap.html) |
+| The three components | [EN](architecture.md) | [VI](../vi/architecture.md) | [ZH](../zh/architecture.md) |
+| The IPC protocol | [EN](ipc-protocol.md) | [VI](../vi/ipc-protocol.md) | [ZH](../zh/ipc-protocol.md) |
+| What gets tested | [EN](testing.md) | [VI](../vi/testing.md) | [ZH](../zh/testing.md) |
+| Running it yourself | [EN](vm-testing.md) | [VI](../vi/vm-testing.md) | [ZH](../zh/vm-testing.md) |
+| What is not built yet | [EN](roadmap.md) | [VI](../vi/roadmap.md) | [ZH](../zh/roadmap.md) |
 
 ## What it does today
 

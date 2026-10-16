@@ -13,18 +13,11 @@ camareLOL 从终端安装 Arch Linux。它会检测你的硬件、提出一个�
 
 | | |
 |---|---|
-| 网站 | **<https://tamkogay9876-code.github.io/camareLOL-mirror>** |
 | 发布版本 | <https://github.com/tamkogay9876-code/camareLOL/releases> |
 | 讨论 | <https://github.com/tamkogay9876-code/camareLOL/discussions> |
 | 问题 | <https://github.com/tamkogay9876-code/camareLOL/issues> |
 
 ## 语言
-
-| 语言 | 文档 |
-|---|---|
-| English | <https://tamkogay9876-code.github.io/camareLOL-mirror/en/docs/> |
-| Tiếng Việt | <https://tamkogay9876-code.github.io/camareLOL-mirror/vi/docs/> |
-| 中文 | <https://tamkogay9876-code.github.io/camareLOL-mirror/zh/docs/> |
 
 安装器本身支持越南语和英语（`--lang vi|en`）。
 
@@ -41,26 +34,29 @@ $ sudo ./camarelol             # 打开 TUI
 
 `--self-test` 绝不会写入磁盘。请先运行它。
 
-保持最新——更新器默认只做报告，只有在被要求时才安装：
+camareLOL 不会自我更新。没有更新器，没有索引地址，代码里也没有任何
+替换自身二进制文件的路径。
+
+这是一个决定，不是一个没做完的功能。本程序会擦除磁盘；一个职责就是
+替换自身的组件，是从被攻破的服务器到数据被擦除之间最短的一条路。
+像更新其他 Arch 软件包那样更新它：
 
 ```console
-$ camarelol --check-update     # 只报告，不下载任何内容；有新版本时退出码为 10
-$ camarelol --update           # 下载、验证签名与 SHA-256，然后安装
-$ camarelol --rollback-update  # 恢复上一个二进制文件
+$ sudo pacman -S camarelol      # 从软件仓库或 AUR
 ```
 
-它绝不会自行替换自身，绝不在安装进行中替换，也会拒绝任何校验和或签名
-不匹配的下载。
+或者从 <https://github.com/tamkogay9876-code/camareLOL/releases>
+下载想要的版本，手动替换二进制文件。
 
 ## 文档
 
 | 主题 | English | Tiếng Việt | 中文 |
 |---|---|---|---|
-| 三个组件 | [architecture](architecture.md) | [VI](https://tamkogay9876-code.github.io/camareLOL-mirror/vi/docs/architecture.html) | [ZH](architecture.md) |
-| IPC 协议 | [ipc-protocol](ipc-protocol.md) | [VI](https://tamkogay9876-code.github.io/camareLOL-mirror/vi/docs/ipc-protocol.html) | [ZH](ipc-protocol.md) |
-| 测试了什么 | [testing](testing.md) | [VI](https://tamkogay9876-code.github.io/camareLOL-mirror/vi/docs/testing.html) | [ZH](testing.md) |
-| 自己动手运行 | [vm-testing](vm-testing.md) | [VI](https://tamkogay9876-code.github.io/camareLOL-mirror/vi/docs/vm-testing.html) | [ZH](vm-testing.md) |
-| 尚未构建的内容 | [roadmap](roadmap.md) | [VI](https://tamkogay9876-code.github.io/camareLOL-mirror/vi/docs/roadmap.html) | [ZH](roadmap.md) |
+| 三个组件 | [EN](../en/architecture.md) | [VI](../vi/architecture.md) | [ZH](architecture.md) |
+| IPC 协议 | [EN](../en/ipc-protocol.md) | [VI](../vi/ipc-protocol.md) | [ZH](ipc-protocol.md) |
+| 测试了什么 | [EN](../en/testing.md) | [VI](../vi/testing.md) | [ZH](testing.md) |
+| 自己动手运行 | [EN](../en/vm-testing.md) | [VI](../vi/vm-testing.md) | [ZH](vm-testing.md) |
+| 尚未构建的内容 | [EN](../en/roadmap.md) | [VI](../vi/roadmap.md) | [ZH](roadmap.md) |
 
 ## 目前它能做什么
 

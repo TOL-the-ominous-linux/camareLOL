@@ -74,17 +74,12 @@ jobs:
           python -m pip install --upgrade pip
           python -m unittest discover -s tests -v
 
-      - name: The site
-        # The renderer turns repository documentation into HTML. A bug here
-        # publishes a broken page to the project's front door, so it is tested
-        # against the real docs rather than only toy input.
-        run: |
-          python -m py_compile site/*.py
-          python site/test_markdown.py
-          python site/test_render_site.py
-          # A reader clicking "English" must land on the English page. In the
-          # Vietnamese table it landed back on Vietnamese, silently.
-          python site/check_lang_table.py
+      - name: The documentation tables
+        # A reader clicking "English" must land on the English page. In the
+        # Vietnamese table it landed back on Vietnamese, silently — and the
+        # Chinese table had the same bug, which the old check missed because it
+        # only recognised the traditional character for the header.
+        run: python scripts/check_lang_table.py
 
       - name: The workflows themselves parse
         # A step with neither run: nor uses: is valid YAML and invalid to
@@ -126,7 +121,7 @@ jobs:
   package:
     name: PKGBUILD
     runs-on: ubuntu-latest
-    needs: [rust, python, java, functions]
+    needs: [rust, python, java]
     steps:
       - uses: actions/checkout@v5
 
@@ -225,29 +220,3 @@ jobs:
           # The container wrote as root; hand the artifacts back to the runner
           # so the job can clean up after itself.
           sudo chown -R "$(id -u):$(id -g)" "$pkgdir"
-
-
-  functions:
-    name: Netlify functions
-    # The login flow cannot be exercised on a developer machine here — there is
-    # no Node runtime and no Google client — so CI is the only place the session
-    # signing is ever tested. A cookie that fails to reject a forged one turns
-    # into "everyone is logged in", and that is not a bug this finds in review.
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - name: Every function parses
-        run: |
-          set -euo pipefail
-          for f in site/functions/*.js; do
-            node --check "$f" || { echo "::error::$f does not parse"; exit 1; }
-            printf '  ok %s\n' "$f"
-          done
-
-      - name: A forged session is refused
-        run: node site/test_functions.mjs
-

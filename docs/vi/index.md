@@ -13,18 +13,11 @@ cổng an toàn đứng trước mọi thao tác phá huỷ.
 
 | | |
 |---|---|
-| Trang web | **<https://tamkogay9876-code.github.io/camareLOL-mirror>** |
 | Bản phát hành | <https://github.com/tamkogay9876-code/camareLOL/releases> |
 | Thảo luận | <https://github.com/tamkogay9876-code/camareLOL/discussions> |
 | Vấn đề | <https://github.com/tamkogay9876-code/camareLOL/issues> |
 
 ## Ngôn ngữ
-
-| Ngôn ngữ | Tài liệu |
-|---|---|
-| English | <https://tamkogay9876-code.github.io/camareLOL-mirror/en/docs/> |
-| Tiếng Việt | <https://tamkogay9876-code.github.io/camareLOL-mirror/vi/docs/> |
-| 中文 | <https://tamkogay9876-code.github.io/camareLOL-mirror/zh/docs/> |
 
 Bản thân trình cài đặt nói tiếng Việt và tiếng Anh (`--lang vi|en`).
 
@@ -41,27 +34,30 @@ $ sudo ./camarelol             # mở TUI
 
 `--self-test` không bao giờ ghi vào ổ đĩa. Hãy chạy nó trước.
 
-Luôn cập nhật — trình cập nhật chỉ báo cáo và chỉ cài khi được yêu cầu:
+camareLOL không tự cập nhật. Không có trình cập nhật, không có mã chỉ mục,
+và trong binary không có đường nào thay chính nó.
+
+Đó là quyết định, không phải phần chưa làm. Chương trình này xoá ổ đĩa; một
+thành phần việc của nó là thay thế chính nó là con đường ngắn nhất từ máy
+chủ bị chiếm tới dữ liệu bị xoá. Cập nhật nó như mọi gói Arch khác:
 
 ```console
-$ camarelol --check-update     # chỉ báo, không tải gì, mã thoát 10 nếu có bản mới
-$ camarelol --update           # tải, kiểm chữ ký và SHA-256, cài
-$ camarelol --rollback-update  # đưa binary cũ trở lại
+$ sudo pacman -S camarelol      # từ kho phần mềm hoặc AUR
 ```
 
-Nó không bao giờ tự thay thế chính nó, không bao giờ làm việc đó khi một quá
-trình cài đặt đang chạy, và từ chối mọi bản tải về mà tổng kiểm hoặc chữ ký
-không khớp.
+Hoặc tải bản bạn muốn từ
+<https://github.com/tamkogay9876-code/camareLOL/releases> và thay binary
+bằng tay.
 
 ## Tài liệu
 
 | Chủ đề | English | Tiếng Việt | 中文 |
 |---|---|---|---|
-| Ba thành phần | [EN](https://tamkogay9876-code.github.io/CAMARELOL-MIRROR/en/docs/architecture.html) | [VI](architecture.md) | [ZH](https://tamkogay9876-code.github.io/camareLOL-mirror/zh/docs/architecture.html) |
-| Giao thức IPC | [EN](https://tamkogay9876-code.github.io/CAMARELOL-MIRROR/en/docs/ipc-protocol.html) | [VI](ipc-protocol.md) | [ZH](https://tamkogay9876-code.github.io/camareLOL-mirror/zh/docs/ipc-protocol.html) |
-| Những gì được kiểm thử | [EN](https://tamkogay9876-code.github.io/CAMARELOL-MIRROR/en/docs/testing.html) | [VI](testing.md) | [ZH](https://tamkogay9876-code.github.io/camareLOL-mirror/zh/docs/testing.html) |
-| Tự chạy thử | [EN](https://tamkogay9876-code.github.io/CAMARELOL-MIRROR/en/docs/vm-testing.html) | [VI](vm-testing.md) | [ZH](https://tamkogay9876-code.github.io/camareLOL-mirror/zh/docs/vm-testing.html) |
-| Những gì chưa làm | [EN](https://tamkogay9876-code.github.io/CAMARELOL-MIRROR/en/docs/roadmap.html) | [VI](roadmap.md) | [ZH](https://tamkogay9876-code.github.io/camareLOL-mirror/zh/docs/roadmap.html) |
+| Ba thành phần | [EN](../en/architecture.md) | [VI](architecture.md) | [ZH](../zh/architecture.md) |
+| Giao thức IPC | [EN](../en/ipc-protocol.md) | [VI](ipc-protocol.md) | [ZH](../zh/ipc-protocol.md) |
+| Những gì được kiểm thử | [EN](../en/testing.md) | [VI](testing.md) | [ZH](../zh/testing.md) |
+| Tự chạy thử | [EN](../en/vm-testing.md) | [VI](vm-testing.md) | [ZH](../zh/vm-testing.md) |
+| Những gì chưa làm | [EN](../en/roadmap.md) | [VI](roadmap.md) | [ZH](../zh/roadmap.md) |
 
 ## Hiện nó làm được gì
 

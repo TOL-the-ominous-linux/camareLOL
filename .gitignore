@@ -10,8 +10,6 @@ __pycache__/
 *.pyc
 java/out/
 /out/
-/lol/site/
-site-preview/
 
 # Test artefacts
 /.test/*.iso
@@ -63,8 +61,6 @@ id_ed25519*
 *.asc
 
 # Local deployment state, which carries deploy tokens
-.netlify/
-.vercel/
 
 # Scratch
 *.bak

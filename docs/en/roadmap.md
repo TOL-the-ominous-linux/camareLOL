@@ -20,7 +20,11 @@ Complete.
 - [x] Logging and confirmation screens
 - [x] Safety gate: locked, dry-run, execute with a typed phrase
 - [x] Configuration save and load, schema-versioned, no passwords
-- [x] Signed self-updater with mirror fallback
+- [x] ~~Signed self-updater with mirror fallback~~ — removed, and this is the
+      intended state. Updates come from `pacman` or a manual download. A
+      component whose job is to replace a disk-erasing binary is the shortest
+      path from a compromised server to erased data, and the mirror chain
+      behind it failed repeatedly while reporting success.
 - [x] Python automation layer, Java catalog, versioned IPC
 
 ## Stage 2 — Desktop

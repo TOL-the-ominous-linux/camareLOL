@@ -12,18 +12,17 @@ destructive operation.
 
 | | |
 |---|---|
-| Website | **<https://tamkogay9876-code.github.io/camareLOL-mirror>** |
 | Releases | <https://github.com/tamkogay9876-code/camareLOL/releases> |
 | Discussions | <https://github.com/tamkogay9876-code/camareLOL/discussions> |
 | Issues | <https://github.com/tamkogay9876-code/camareLOL/issues> |
 
-The website is generated from this repository, so it cannot disagree with the
-code.
+There is no website. The documentation is Markdown in `docs/`, which GitHub
+renders in the repository itself — no server to run, nothing to break.
 
 ## Documentation
 
-Written in three languages. Every page exists in all three; the language
-switcher is in the footer of the site.
+Written in three languages. Every page exists in all three, so each page's
+table points sideways into the other two.
 
 | Topic | English | Tiếng Việt | 中文 |
 |---|---|---|---|
@@ -34,7 +33,7 @@ switcher is in the footer of the site.
 | Running it yourself | [vm-testing](docs/en/vm-testing.md) | [VI](docs/vi/vm-testing.md) | [ZH](docs/zh/vm-testing.md) |
 | What is not built yet | [roadmap](docs/en/roadmap.md) | [VI](docs/vi/roadmap.md) | [ZH](docs/zh/roadmap.md) |
 
-Read it on the site instead: <https://tamkogay9876-code.github.io/camareLOL-mirror/en/docs/>
+Start with [the overview](docs/en/index.md).
 
 ## Install
 
@@ -157,9 +156,8 @@ Keyboard only: `↑↓` move, `Enter` select, `Space` toggle, `Tab` next field,
 ./build.sh test                                # everything (Rust + Python + Java)
 cd python && python3 -m unittest discover -s tests -v
 cd java && ./build.sh
-python site/test_markdown.py                   # site renderer
-python site/test_render_site.py                # site build, offline
-python scripts/check_pkgbuild.py               # PKGBUILD matches the newest tag
+python scripts/check_lang_table.py              # doc tables point at the right language
+python scripts/check_pkgbuild.py                # PKGBUILD matches the newest tag
 cargo clippy --workspace --all-targets -- -D warnings
 ```
 
