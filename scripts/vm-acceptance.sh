@@ -123,26 +123,23 @@ vm storageattach "$VM_NAME" --storagectl IDE --port 0 --device 0 \
     --type dvddrive --medium "$ISO"
 note "Arch ISO + 2 đĩa trống 16 GiB"
 
-# Khách phải tới được dịch vụ trên loopback của máy chủ (10.0.2.2). VirtualBox
-# không có cờ dòng lệnh cho nó: nó nằm trong .vbox dưới dạng
-# `<NAT localhost-reachable="true"/>`, và mặc định là tắt. Khối này phải nằm
-# SAU mọi lệnh cấu hình: mỗi `modifyvm`/`storagectl`/`storageattach` là một
-# lần VBoxSVC ghi lại toàn bộ tệp từ bộ nhớ đệm, lược bỏ mọi chỉnh sửa python
-# viết thẳng vào tệp. Lần chạy đầu 0.1.13 boot mà cờ này đã bị lược bỏ vì khối
-# xóa nằm trước các lệnh storage — đúng loại im lặng mà bài kiểm tra này sinh
-# ra để chống lại.
-VM_VBOX="${VM_DIR}/${VM_NAME}.vbox"
-python3 - "$VM_VBOX" <<'PY'
-import pathlib, sys
-p = pathlib.Path(sys.argv[1])
-s = p.read_text()
-if "<NAT/>" in s:
-    p.write_text(s.replace("<NAT/>", '<NAT localhost-reachable="true"/>', 1))
-if 'localhost-reachable="true"' in p.read_text():
-    print("  localhost-reachable bật trong .vbox")
-else:
-    print("  CẢNH BÁO: không tìm thấy khối <NAT> trong .vbox — kiểm tra thủ công")
-PY
+# Khối từng sửa .vbox để thêm `localhost-reachable="true"` bị bỏ — bằng chứng
+# trên VBox 7.2.20: thuộc tính KHÔNG có trong schema, load nếu có cũng bị lược
+# và power-off đầu tiên xoá sạch (căn cứ: .vbox sau lần chạy 0.1.13 đầu là
+# `<NAT/>` trơn, dù thông báo đã in "bật"). Còn thanh toán cho việc nó không
+# cần tới: probe trên chính VM này với .vbox trơn — `GET=200`, 10.0.2.2 tới
+# được loopback máy chủ mặc định. Không giữ khối nào giả thành công ở đây.
+
+# Lỗi thật của hai lần chạy trắng đầu tiên (0.1.13, hai lần liên tiếp): VM
+# *vừa create* bấm nguồn lên mà NIC/NAT chưa tự dựng xong — mỗi curl từ khách
+# đều 000, không một kết quả nào về host, trong khi mọi lần boot sau khi đã
+# tắt–bật lại đều có mạng chuẩn (probe: GET=200). Vậy chạy nóng một vòng trước
+# đích thật: đây là công việc, không phải may rủi.
+say "chạy nóng NIC/NAT: bật nguồn 40 giây rồi tắt (first boot của VM vừa tạo không có mạng)"
+vm startvm "$VM_NAME" --type headless >/dev/null 2>&1
+sleep 40
+vm controlvm "$VM_NAME" poweroff >/dev/null 2>&1
+sleep 3
 
 say "khởi động VM (chờ môi trường live, rồi chờ IP thật sự)"
 vm startvm "$VM_NAME" --type headless
