@@ -50,15 +50,21 @@ guest() {
     sleep "${2:-5}"
 }
 
-post() { # post <tên>  — tệp kết quả đã nằm ở /tmp/r-<tên>.txt trong khách
-    # Mã HTTP phải hiện trên màn hình: máy chủ chết hoặc mạng khách đứt thì
-    # 000 hiện ở đấy, còn phiên bản cũ thì POST thất bại trôi qua im lặng và
-    # bài kiểm tra đối phó bằng "không có kết quả" cho cả bảy bước.
-    # Mã HTTP hiển trị trên màn hình: máy chủ chết hoặc mạng khách đứt thì 000
-    # hiển thị, còn phiên bản cũ POST thất bại trôi qua im lặng. Mã lỗi curl IN
-    # LUÔN (2>&1 vào biến X) — POST trà trộn tầng mạng hay tệp thiếu đều tự khai.
-    # $? gán ngay sau phần gán X (đúng mã thoát của curl, đè lên là 0 của echo).
-    guest "X=\$(curl -sS -m 8 -o /dev/null -w '%{http_code}' -X POST --data-binary @/tmp/r-$1.txt http://$HOST_ADDR:$PORT/step/$1 2>&1); echo post-$1-rc=\$?; echo post-$1 http=\$X; echo done-$1" 4
+post() { # post <tên> [timeout_s] — chờ TỆP về thật sự thay vì ngủ cứng
+    # Gõ lệnh post rồi CHỜ $RESULTS/step_<tên>.txt xuất hiện (máy chủ tạo
+    # tệp tại chỗ khi nhận). Sleep cứng 4 giây từng đối với thời gian thật
+    # của khách: cài thật dài hơn 60 giây → checker đọc trước khi tệp về
+    # (run 6), và post cuối gõ vào hàng đợi rồi VM bị tắt mất — server
+    # không bao giờ nhận step_zram. Chờ tệp = đồng bộ theo sự thật; hết giờ
+    # thì checker tự khai "không có kết quả". Curl in mã + stderr ra màn
+    # hình nên tầng nào hỏng cũng có tên.
+    guest "X=\$(curl -sS -m 8 -o /dev/null -w '%{http_code}' -X POST --data-binary @/tmp/r-$1.txt http://$HOST_ADDR:$PORT/step/$1 2>&1); echo post-$1-rc=\$?; echo post-$1 http=\$X; echo done-$1" 1
+    local to="${2:-45}" waited=0
+    while [ $waited -lt $to ]; do
+        [ -e "$RESULTS/step_$1.txt" ] && return 0
+        sleep 2
+        waited=$((waited + 2))
+    done
 }
 
 # Đọc một kết quả từ máy chủ.
@@ -196,11 +202,11 @@ guest "/root/camarelol --help > /tmp/help.txt 2>&1; echo rc=\$? > /tmp/r-help.tx
 post help
 
 say "bước 5/6 — cài thật vào đĩa trống (--scripted --execute)"
-guest "curl -sS -o /root/vm-helper.py http://$HOST_ADDR:$PORT/vm-helper.py >/dev/null 2>&1; echo helper_dlc=\$? bytes=\$(stat -c%s /root/vm-helper.py 2>/dev/null); python3 /root/vm-helper.py /tmp/survey.json /tmp/profile.toml > /tmp/helper-out.txt 2>&1; HRC=\$?; echo helper_rc=\$HRC; cat /tmp/helper-out.txt; { cat /tmp/helper-out.txt; echo profile_rc=\$HRC; } > /tmp/r-install.txt" 15
+guest "curl -sS -o /root/vm-helper.py http://$HOST_ADDR:$PORT/vm-helper.py >/dev/null 2>&1; echo helper_dlc=\$? bytes=\$(stat -c%s /root/vm-helper.py 2>/dev/null); python3 /root/vm-helper.py /tmp/survey.json /tmp/profile.toml > /tmp/helper-out.txt 2>&1; HRC=\$?; echo helper_rc=\$HRC; cat /tmp/helper-out.txt; { cat /tmp/helper-out.txt; echo profile_rc=\$HRC; } > /tmp/r-install_profile.txt" 15
 post install_profile
 note "chạy cài đặt — có thể mất vài phút"
-guest "/root/camarelol --scripted /tmp/profile.toml --allow-destructive --execute > /tmp/inst.txt 2>&1; echo INSTALL_RC=\$? > /tmp/r-install.txt; cat /tmp/inst.txt >> /tmp/r-install.txt" 60
-post install
+guest "/root/camarelol --scripted /tmp/profile.toml --allow-destructive --execute > /tmp/inst.txt 2>&1; echo INSTALL_RC=\$? > /tmp/r-install.txt; cat /tmp/inst.txt >> /tmp/r-install.txt" 10
+post install 600
 
 say "bước 6/6 — kiểm trên hệ thống ĐÃ CÀI: unit, gói, config của zram và ssh"
 # Hai bản 0.1.11/0.1.12 cài "xong" mà thiếu thật. Những gì quyết định tính năng
@@ -208,7 +214,7 @@ say "bước 6/6 — kiểm trên hệ thống ĐÃ CÀI: unit, gói, config c�
 # symlink enable có thật, binary/generator có thật, config có thật. Cá nhân
 # /dev/sdX lấy từ profile để không đoán đĩa.
 guest "D=\$(grep -om1 '/dev/sd[a-z]' /tmp/profile.toml); [[ \$D ]] || D=/dev/sda; M=/vmroot; mkdir -p \$M 2>/dev/null; mountpoint -q /mnt && M=/mnt || mount \${D}1 \$M 2>/dev/null; { test -e \$M/usr/lib/systemd/system/systemd-zram-setup@.service && echo zram_unit=yes || echo zram_unit=no; test -e \$M/etc/systemd/system/multi-user.target.wants/systemd-zram-setup@zram0.service && echo zram_wants=yes || echo zram_wants=no; test -e \$M/usr/lib/systemd/system-generators/zram-generator && echo zram_bin=yes || echo zram_bin=no; test -e \$M/etc/systemd/zram-generator.conf && echo zram_conf=yes || echo zram_conf=no; test -e \$M/usr/lib/systemd/system/sshd.service && echo sshd_unit=yes || echo sshd_unit=no; test -e \$M/etc/systemd/system/multi-user.target.wants/sshd.service && echo sshd_wants=yes || echo sshd_wants=no; pacman -Qr \$M openssh >/dev/null 2>&1 && echo openssh=yes || echo openssh=no; } > /tmp/r-zram.txt 2>&1" 15
-post zram
+post zram 300
 
 say "đọc kết quả và kết luận"
 python3 "$ROOT/scripts/vm-check-results.py" --results "$RESULTS" --expect-version "$EXP_VERSION"
