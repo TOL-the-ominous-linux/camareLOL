@@ -80,8 +80,13 @@ $ sudo pacman -S iwd
 
 Hai dấu hiệu cho biết camareLOL đã thấy đủ mạng để tải gói: ô trạng thái ở
 màn hình chào ghi `internet connection OK`, và `zram` trong danh sách dịch vụ
-không bị gạch chéo. Nếu máy chỉ có Wi-Fi mà chưa nối, camareLOL nói rõ điều
-đó ở màn hình chào thay vì im lặng.
+không bị gạch chéo.
+
+Còn một trường hợp camareLOL tự nói trước: máy **chỉ có Wi-Fi, chưa nối, và
+không có `iwctl` lẫn `nmtui`** — tức là không có công cụ nào để nối được. Lúc
+đó màn hình chào hiện dòng cảnh báo vàng, thay vì chỉ ghi "no network
+connection detected" rồi im lặng. Nếu `iwctl` còn có (live ISO luôn có), thì
+bạn tự nối được, nên không cảnh báo.
 
 ### Qua npm
 

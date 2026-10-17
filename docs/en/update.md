@@ -80,8 +80,13 @@ $ sudo pacman -S iwd
 
 Two signs tell you camareLOL sees enough network to install: the status field on
 the welcome screen reads `internet connection OK`, and `zram` in the service list
-is not struck through. On a Wi-Fi-only machine that is not connected yet,
-camareLOL says so on the welcome screen instead of staying silent.
+is not struck through.
+
+One case camareLOL now names up front: the machine has **Wi-Fi only, is not
+connected, and has neither `iwctl` nor `nmtui`** — nothing available to connect
+with. The welcome screen then shows a yellow warning instead of only reporting
+"no network connection detected" and staying silent. With `iwctl` present (the
+live ISO always has it) you can connect yourself, so no warning.
 
 ### Via npm
 

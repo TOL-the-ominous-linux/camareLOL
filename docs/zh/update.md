@@ -74,8 +74,12 @@ $ sudo pacman -S iwd
 ```
 
 有两个迹象说明 camareLOL 已经能看到足够的网络来装包：欢迎界面的状态栏写着
-`internet connection OK`，并且服务列表里的 `zram` 没有被划掉。在只有 Wi-Fi
-但尚未连接的机器上，camareLOL 会在欢迎界面明说，而不是沉默。
+`internet connection OK`，并且服务列表里的 `zram` 没有被划掉。
+
+有一种情况 camareLOL 现在会主动说明：机器**只有 Wi-Fi、尚未连接，而且既没有
+`iwctl` 也没有 `nmtui`** —— 也就是没有任何工具可以用来连接。这时欢迎界面会显示
+一行黄色警告，而不是只写一句 "no network connection detected" 然后沉默。如果
+`iwctl` 还在（live ISO 一定有），你可以自己连接，所以不会出现警告。
 
 ### 通过 npm
 
