@@ -141,6 +141,33 @@ grep -q "dirty working tree" <<<"$BUILT" \
     && die "binary tự báo cây làm việc bẩn:
     $BUILT"
 
+# ------------------------------------------------------------- VM acceptance gate
+# Harness là bằng chứng duy nhất rằng tính năng có thật trên đĩa. Từ chối
+# phát hành binary hỏng harness. SKIP_VM=1 để bỏ qua (chỉ khi khẩn cấp).
+if [ "${SKIP_VM:-0}" != "1" ]; then
+    command -v VBoxManage >/dev/null 2>&1 \
+        || die "không tìm thấy VBoxManage — cần VirtualBox để chạy VM acceptance."
+    note "chạy VM acceptance (cần VirtualBox, ~10 phút)..."
+    # Harness tái dùng listener foreground khỏe — đảm bảo nó có sẵn.
+    if ! curl -fsS -m 3 -o /dev/null http://127.0.0.1:8899/vm-helper.py 2>/dev/null; then
+        note "  khởi động server kết quả foreground..."
+        mkdir -p /tmp/opencode/vm-accept /tmp/opencode/vm-serve
+        cp "$OUT_DIR/camarelol" /tmp/opencode/vm-serve/camarelol
+        cp "$REPO_DIR/scripts/vm-helper.py" /tmp/opencode/vm-serve/vm-helper.py
+        (nohup python3 "$REPO_DIR/scripts/vm-result-server.py" --port 8899 \
+            --out /tmp/opencode/vm-accept --serve-dir /tmp/opencode/vm-serve \
+            >/tmp/vm-su/server-fg.log 2>&1 &)
+        sleep 2
+    fi
+    if ! "$REPO_DIR/scripts/vm-acceptance.sh"; then
+        die "VM acceptance THẤT BẠI — không phát hành bản này.
+        Sửa lỗi rồi chạy lại. Bỏ qua bằng SKIP_VM=1 (chỉ khi khẩn cấp)."
+    fi
+    note "VM acceptance PASS — binary đã được chứng minh trên máy thật."
+else
+    note "BỎ QUA VM acceptance (SKIP_VM=1) — bạn tự chịu trách nhiệm."
+fi
+
 printf '\nXong. Kiểm tra lại trước khi phát hành:\n\n'
 note "phiên bản trong binary : $("$OUT_DIR/camarelol" --version | head -1)"
 printf '\nTiếp theo:\n\n'
