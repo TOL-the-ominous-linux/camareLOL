@@ -148,7 +148,12 @@ say "chạy nóng NIC/NAT: bật nguồn 40 giây rồi tắt (first boot của 
 vm startvm "$VM_NAME" --type headless >/dev/null 2>&1
 sleep 40
 vm controlvm "$VM_NAME" poweroff >/dev/null 2>&1
-sleep 3
+# Nghỉ 45 giây sau poweroff: run 3 và run 4 khi nghỉ 3 giây vẫn chết trắng cả
+# session (mọi curl 000, server log trống), trong khi chính VM đó được boot
+# lại sau ~10 phút nghỉ thì có 10.0.2.15 + GET 200 ngay (probe 2026-10-17,
+# ảnh /tmp/vm-su/probeMark.png). Chuẩn của sự chênh: khoảng nghỉ dài hơn để
+# NAT/DHCP VirtualBox dựng lại phiên; kể cả bằng VM instance xác định như nhau.
+sleep 45
 
 say "khởi động VM (chờ môi trường live, rồi chờ IP thật sự)"
 vm startvm "$VM_NAME" --type headless
@@ -164,6 +169,9 @@ guest 'for i in $(seq 1 30); do ip -4 addr show dev enp0s3 | grep -q inet && bre
 # Probe guest→server in THẲNG lên màn hình: run chết trắng cũng tự khai báo
 # tầng nào hỏng — 000 nghĩa là kết nối không tới server, 200 là thấy được.
 guest "curl -sS -m 3 -o /dev/null -w prehttp=%{http_code} http://$HOST_ADDR:$PORT/camarelol; echo pre-done" 10
+# Ảnh chụp NGAY khoảnh khắc preflight: nếu run chết trắng sau đó, 05-preflight.png
+# vẫn còn nguyên trạng thái IP/giải mã mà 99-final.png cuối run đã lướt qua.
+vm controlvm "$VM_NAME" screenshotpng "$RESULTS/05-preflight.png" >/dev/null 2>&1 || true
 
 # ------------------------------------------------------------- các bước
 
