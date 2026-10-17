@@ -91,14 +91,23 @@ cp "$ROOT/out/release/camarelol" "$SERVE/camarelol"
 cp "$ROOT/scripts/vm-helper.py" "$SERVE/vm-helper.py"
 
 say "khởi động máy chủ kết quả (cổng $PORT)"
-python3 "$ROOT/scripts/vm-result-server.py" --port "$PORT" --out "$RESULTS" \
-        --serve-dir "$SERVE" > "$RESULTS/server.log" 2>&1 &
-SERVER_PID=$!
-sleep 2
-if ! kill -0 "$SERVER_PID" 2>/dev/null; then
-    say "máy chủ kết quả không lên:"; cat "$RESULTS/server.log"; exit 1
+# Server sinh từ shell nền (opencode background) bị KHÁCH không nhìn thấy:
+# host 127.0.0.1 vẫn 200 nhưng guest qua NAT luôn 000 — nguyên nhân hai run
+# chết trắng đầu tiên (mọi probe thủ công khởi từ foreground đều 200). Vì
+# vậy ưu tiên listener khỏe khởi từ foreground: nếu cổng đã có listener
+# trả 200 cho /camarelol thì tái dùng và không tự sinh server.
+if curl -fsS -m 3 -o /dev/null "http://127.0.0.1:$PORT/vm-helper.py" 2>/dev/null; then
+    note "  tái dùng listener $PORT đang có sẵn (khởi từ foreground)"
+else
+    python3 "$ROOT/scripts/vm-result-server.py" --port "$PORT" --out "$RESULTS" \
+            --serve-dir "$SERVE" > "$RESULTS/server.log" 2>&1 &
+    SERVER_PID=$!
+    sleep 2
+    if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+        say "máy chủ kết quả không lên:"; cat "$RESULTS/server.log"; exit 1
+    fi
+    note "  server tự sinh PID $SERVER_PID. Chạy harness từ shell nền mà run chết trắng thì khởi listener từ foreground: nohup python3 scripts/vm-result-server.py --port $PORT --out $RESULTS --serve-dir $SERVE &"
 fi
-cat "$RESULTS/server.log" | sed 's/^/  /'
 say "tạo VM"
 if vm list vms | grep -q "\"$VM_NAME\""; then
     vm controlvm "$VM_NAME" poweroff >/dev/null 2>&1; sleep 2
@@ -151,7 +160,10 @@ guest "" 5   # Enter để đảm bảo có prompt
 # giây vẫn trống thì khởi lại networkd một lần và chờ tiếp. Ảnh chụp IP của
 # khoảnh khắc này đi theo tệp r-download.txt — vậy nếu tải thất bại thì tệp
 # thất bại tự khai báo mạng đã ở tình trạng nào.
-guest 'for i in $(seq 1 30); do ip -4 addr show dev enp0s3 | grep -q inet && break; sleep 3; done; ip -4 addr show dev enp0s3 | grep -q inet || { systemctl restart systemd-networkd; sleep 12; }; ip -4 -br addr > /tmp/r-download.txt 2>&1' 120
+guest 'for i in $(seq 1 30); do ip -4 addr show dev enp0s3 | grep -q inet && break; sleep 3; done; ip -4 addr show dev enp0s3 | grep -q inet || { systemctl restart systemd-networkd; sleep 12; }; ip -4 -br addr 2>&1 | tee /tmp/r-download.txt' 120
+# Probe guest→server in THẲNG lên màn hình: run chết trắng cũng tự khai báo
+# tầng nào hỏng — 000 nghĩa là kết nối không tới server, 200 là thấy được.
+guest "curl -sS -m 3 -o /dev/null -w prehttp=%{http_code} http://$HOST_ADDR:$PORT/camarelol; echo pre-done" 10
 
 # ------------------------------------------------------------- các bước
 
