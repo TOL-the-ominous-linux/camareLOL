@@ -28,6 +28,8 @@ struct Args {
     self_test: bool,
     scripted: Option<PathBuf>,
     language: Option<String>,
+    postcheck: bool,
+    postcheck_root: Option<PathBuf>,
 }
 
 fn parse_args() -> Result<Args, String> {
@@ -44,6 +46,8 @@ fn parse_args() -> Result<Args, String> {
             "--self-test" => a.self_test = true,
             "--scripted" => a.scripted = args.next().map(PathBuf::from),
             "--lang" => a.language = args.next(),
+            "--postcheck" => a.postcheck = true,
+            "--postcheck-root" => a.postcheck_root = args.next().map(PathBuf::from),
             "-h" | "--help" => {
                 println!("{}", usage());
                 std::process::exit(0);
@@ -74,6 +78,8 @@ OPTIONS:
     --allow-destructive       Arm the safety gate (still requires confirmation)
     --execute                 Really write to disk (default is dry-run)
     --lang <vi|en>            Installer language
+    --postcheck               Verify an installed system (default: /)
+    --postcheck-root <PATH>   Root to check (for mounted systems)
 
     -h, --help                Show this help
     -V, --version             Show version and commit
@@ -131,6 +137,12 @@ fn main() {
         }
     }
 
+    if args.postcheck {
+        let root = args.postcheck_root.clone().unwrap_or_else(|| PathBuf::from("/"));
+        cmd_postcheck(&root);
+        return;
+    }
+
     if let Some(cfg_path) = args.scripted.clone() {
         match scripted::run_scripted(
             &cfg_path,
@@ -173,6 +185,35 @@ fn main() {
             std::process::exit(1);
         }
     }
+}
+
+/// Verify an installed system: check that the features the installer promised
+/// are actually on disk. Each check is a direct file existence test — the same
+/// markers the VM acceptance harness uses in its step 6.
+fn cmd_postcheck(root: &std::path::Path) {
+    let checks = [
+        ("zram_unit", root.join("usr/lib/systemd/system/systemd-zram-setup@.service")),
+        ("zram_wants", root.join("etc/systemd/system/multi-user.target.wants/systemd-zram-setup@zram0.service")),
+        ("zram_bin", root.join("usr/lib/systemd/system-generators/zram-generator")),
+        ("zram_conf", root.join("etc/systemd/zram-generator.conf")),
+        ("sshd_unit", root.join("usr/lib/systemd/system/sshd.service")),
+        ("sshd_wants", root.join("etc/systemd/system/multi-user.target.wants/sshd.service")),
+        ("openssh", root.join("usr/bin/sshd")),
+    ];
+    let mut failed = 0;
+    for (name, path) in &checks {
+        if path.exists() {
+            println!("  PASS {name}");
+        } else {
+            println!("  FAIL {name} — {}", path.display());
+            failed += 1;
+        }
+    }
+    if failed > 0 {
+        println!("  {failed} check(s) failed");
+        std::process::exit(1);
+    }
+    println!("  all checks passed");
 }
 
 /// Rust ignores SIGPIPE and turns it into a panic on the next write, so
