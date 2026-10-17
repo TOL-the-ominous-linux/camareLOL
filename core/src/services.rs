@@ -62,6 +62,9 @@ impl ServiceSelection {
         if self.ssh {
             v.push("sshd".into());
         }
+        if self.printing {
+            v.push("cups".into());
+        }
         if self.zram {
             // `zram-generator` — the package `packages()` installs — ships
             // `systemd-zram-setup@.service`, a template instantiated as
@@ -178,6 +181,7 @@ mod tests {
             let provider = match unit.as_str() {
                 "bluetooth" => "bluez",
                 "sshd" => "openssh",
+                "cups" => "cups",
                 "systemd-zram-setup@zram0.service" => "zram-generator",
                 other => panic!("thêm unit mới {other} thì thêm luôn gói cung cấp nó"),
             };

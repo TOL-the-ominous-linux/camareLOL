@@ -242,7 +242,15 @@ impl App {
             Screen::Accounts => self.handle_accounts_key(key),
             Screen::Review => match key.code {
                 KeyCode::Enter => self.try_start_install(),
-                KeyCode::Char('s') => self.save_config_now(),
+                KeyCode::Char('s') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                    self.save_config_now();
+                }
+                KeyCode::Backspace => {
+                    self.confirm_phrase.pop();
+                }
+                KeyCode::Char(c) => {
+                    self.confirm_phrase.push(c);
+                }
                 _ => {}
             },
             Screen::Progress => {

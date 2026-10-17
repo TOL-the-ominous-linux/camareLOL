@@ -570,11 +570,24 @@ pub fn run_install(
                         Ok("target mounted".into())
                     }
                     "pacstrap" => {
+                        let profile = cfg
+                            .desktop_profile()
+                            .unwrap_or(crate::desktop::DesktopProfile::ConsoleOnly);
                         let mut pkgs = cfg.packages.pacstrap_list();
-                        pkgs.extend(crate::desktop::packages_for(
-                            cfg.desktop_profile()
-                                .unwrap_or(crate::desktop::DesktopProfile::ConsoleOnly),
-                        ));
+                        pkgs.extend(crate::desktop::packages_for(profile));
+                        // Make the display-server choice real instead of a stored
+                        // string: an explicit Wayland or X11 selection pulls the
+                        // stack that choice needs. `Auto` adds nothing — the
+                        // profile already brings a working default.
+                        if let Ok(server) = cfg.display_server() {
+                            let resolved = crate::desktop::resolve_display_server(profile, server)
+                                .unwrap_or(server);
+                            pkgs.extend(
+                                crate::desktop::display_server_packages(resolved)
+                                    .iter()
+                                    .map(|p| (*p).to_string()),
+                            );
+                        }
                         pkgs.extend(cfg.services.packages());
                         // The bootloader has to exist inside the target before we
                         // can install it into it.
@@ -609,7 +622,18 @@ pub fn run_install(
                         Ok(format!("{} user(s) configured", cfg.users.len()))
                     }
                     "services" => {
-                        runner.enable_services(&cfg.services.services())?;
+                        // Enable the services the user selected. The display manager
+                        // comes from the desktop profile (its package is installed
+                        // in the pacstrap phase), so it is enabled here alongside
+                        // the rest rather than living in ServiceSelection, whose
+                        // package/provider invariant is checked separately.
+                        let mut services = cfg.services.services();
+                        if let Some(dm) = cfg.display_manager.as_deref() {
+                            if !services.iter().any(|s| s == dm) {
+                                services.push(dm.to_string());
+                            }
+                        }
+                        runner.enable_services(&services)?;
                         Ok("services enabled".into())
                     }
                     "initramfs" => {
@@ -679,6 +703,18 @@ echo '{host}' > /etc/hostname
         tz = cfg.timezone,
         host = cfg.hostname,
     );
+    // A greetd-based profile (Hyprland, Sway) needs its config file to know
+    // which compositor to launch; without it greetd starts and does nothing.
+    if cfg.display_manager.as_deref() == Some("greetd") {
+        if let Ok(profile) = cfg.desktop_profile() {
+            if let Some(cmd) = crate::desktop::greetd_command(profile) {
+                script.push_str(&format!(
+                    "mkdir -p /etc/greetd\ncat > /etc/greetd/config.toml <<'EOF'\n[terminal]\nvt = 1\n\n[default_session]\ncommand = \"tuigreet --time --cmd {cmd}\"\nuser = \"greeter\"\nEOF\n",
+                    cmd = cmd
+                ));
+            }
+        }
+    }
     if cfg.services.zram {
         // upstream documents plain integers as MiB; `min` is part of the
         // accepted expression grammar, and 4096 is what Fedora ships.
@@ -800,6 +836,18 @@ mod tests {
             "{}",
             script
         );
+    }
+
+    #[test]
+    fn greetd_profile_writes_its_config() {
+        let cfg = InstallationConfig {
+            desktop: "hyprland".into(),
+            display_manager: Some("greetd".into()),
+            ..Default::default()
+        };
+        let script = system_config_script(&cfg);
+        assert!(script.contains("/etc/greetd/config.toml"), "{}", script);
+        assert!(script.contains("tuigreet --time --cmd Hyprland"), "{}", script);
     }
 
     #[test]

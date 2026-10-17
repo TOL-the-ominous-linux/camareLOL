@@ -213,9 +213,46 @@ pub fn packages_for(profile: DesktopProfile) -> Vec<String> {
     profile.packages()
 }
 
+/// Packages implied by an explicit display-server choice.
+///
+/// `Auto` returns nothing: the profile's own package list already pulls a
+/// working stack, and guessing here would only add duplicates. An explicit
+/// choice installs the pieces that choice actually needs, so a Wayland-only
+/// or X11-only system does not end up with both stacks half-installed.
+pub fn display_server_packages(server: DisplayServer) -> Vec<&'static str> {
+    match server {
+        DisplayServer::Wayland => vec!["wayland", "xorg-xwayland"],
+        DisplayServer::X11 => vec!["xorg-server", "xorg-xinit"],
+        DisplayServer::Auto => vec![],
+    }
+}
+
+/// The compositor command a greetd-based profile should launch.
+pub fn greetd_command(profile: DesktopProfile) -> Option<&'static str> {
+    match profile {
+        DesktopProfile::Hyprland => Some("Hyprland"),
+        DesktopProfile::Sway => Some("sway"),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn display_server_packages_match_choice() {
+        assert!(display_server_packages(DisplayServer::Wayland).contains(&"wayland"));
+        assert!(display_server_packages(DisplayServer::X11).contains(&"xorg-server"));
+        assert!(display_server_packages(DisplayServer::Auto).is_empty());
+    }
+
+    #[test]
+    fn greetd_command_only_for_greetd_profiles() {
+        assert_eq!(greetd_command(DesktopProfile::Hyprland), Some("Hyprland"));
+        assert_eq!(greetd_command(DesktopProfile::Sway), Some("sway"));
+        assert_eq!(greetd_command(DesktopProfile::Plasma), None);
+    }
 
     #[test]
     fn sway_is_wayland_only() {
