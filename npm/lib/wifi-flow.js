@@ -18,6 +18,47 @@ function iwctl(command) {
 }
 
 /**
+ * Mạng này có cần mật khẩu không?
+ *
+ * `iwctl station <dev> get-networks` in bảng có cột Security: `open` thì mở,
+ * còn lại (`psk`, `wpa2`, `sae`…) thì cần mật khẩu. Quét trước rồi tra tên
+ * mạng trong bảng; không thấy thì coi như không cần, để người dùng tự nhập
+ * nếu họ muốn.
+ */
+function hasPassphrase(device, ssid) {
+  iwctl(`station ${device} scan`);
+  spawnSync('sh', ['-c', 'sleep 4']);
+  const out = spawnSync(
+    'sh',
+    ['-c', `iwctl --command 'station ${device} get-networks' 2>/dev/null || true`],
+    { encoding: 'utf8' },
+  ).stdout;
+  const security = parseSecurity(out, ssid);
+  return security !== '' && security !== 'open';
+}
+
+/**
+ * Cột Security của một mạng trong bảng `iwctl get-networks`.
+ *
+ * Tên mạng có thể chứa dấu cách ("My Home 5G"), nên không được tách theo khoảng
+ * trắng rồi so phần tử đầu — phải khớp tiền tố rồi mới đọc phần còn lại.
+ * Không thấy thì trả '' (không đoán).
+ */
+function parseSecurity(table, ssid) {
+  for (const raw of table.split('\n')) {
+    const line = raw.replace(/^\s+/, '');
+    if (!line.startsWith(ssid)) continue;
+    const rest = line.slice(ssid.length).trim();
+    if (!rest) continue;
+    const security = rest.split(/\s+/)[0].toLowerCase();
+    // Dòng tiêu đề cột cũng bắt đầu bằng "Network name" — không phải mạng.
+    if (/^(network|signal|security)$/i.test(security)) continue;
+    return security;
+  }
+  return '';
+}
+
+/**
  * Nối vào một mạng.
  *
  * @returns {boolean} true nếu có mạng sau khi thử.
@@ -82,7 +123,27 @@ async function connectWifi() {
       return false;
     }
 
-    iwctl(`station ${device} connect "${answer}"`);
+    // Mật khẩu: hỏi TRƯỚC khi kết nối, vì `iwctl` sẽ dừng lại ở dấu nhắc
+    // "Passphrase:" và chờ stdin. Mà ở đây ta gọi `iwctl --command`, tức mỗi
+    // lệnh là một tiến trình riêng không có stdin là TTY — nên mạng có mã hoá
+    // sẽ treo vĩnh viễn, và mọi mạng nhà đều có mã hoá. Đo được 2026-10-17
+    // trên VirtualBox: `iwctl station wlan5 connect SecureNet` in
+    // "Type the network passphrase for SecureNet psk." rồi đứng yên.
+    // Mật khẩu đi trong argv của iwctl, nên trong `ps` của chính máy đó sẽ
+    // thấy — đúng như mọi công cụ nối Wi-Fi khác, và còn hơn là ghi vào log.
+    let pass = '';
+    if (await hasPassphrase(device, answer)) {
+      pass = await askLine('Mật khẩu (để trống nếu mạng mở): ');
+      if (!pass) {
+        say('Cần mật khẩu cho mạng này.');
+        return false;
+      }
+    }
+
+    // Mạng mở thì không thêm gì — `iwctl connect <ssid> ` với tham số rỗng
+    // không phải cú pháp hợp lệ.
+    const cmd = pass ? `station ${device} connect "${answer}" ${pass}` : `station ${device} connect "${answer}"`;
+    iwctl(cmd);
     // Cho iwd thời gian xác nhập và lấy địa chỉ.
     spawnSync('sh', ['-c', 'sleep 8']);
 
@@ -99,4 +160,6 @@ async function connectWifi() {
   return false;
 }
 
-module.exports = { connectWifi, iwctl };
+module.exports = { connectWifi, iwctl, hasPassphrase };
+// Chỉ để test: hàm tra thuần, không chạy iwctl.
+module.exports.__test_parseSecurity = parseSecurity;

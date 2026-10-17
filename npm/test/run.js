@@ -22,6 +22,7 @@ const os = require('node:os');
 const { compare, normalise } = require('../lib/version');
 const { expectedFrom, sha256 } = require('../lib/selfupdate');
 const wifi = require('../lib/wifi');
+const flow = require('../lib/wifi-flow');
 
 const tests = [];
 function test(name, fn) {
@@ -62,6 +63,32 @@ test('có mạng: mọi đích hỏng thì mới báo không có', () => {
   });
   assert.strictEqual(ok, false);
   assert.ok(calls >= 3, `phải thử hết danh sách đích, mới hỏi ${calls}`);
+});
+
+// Lỗi thật đo 2026-10-17 trên VirtualBox: `iwctl` dừng ở dấu nhắc
+// "Passphrase:" và chờ stdin, mà wrapper gọi `iwctl --command` nên không có
+// stdin TTY — mọi mạng có mã hoá (tức gần như mọi mạng nhà) sẽ treo.
+
+test('mạng mở thì không cần mật khẩu', () => {
+  // Bảng get-networks mà iwctl thật sẽ in, cột Security là "open".
+  const table = ['  CamareTest   open   ****'].join('\n');
+  assert.strictEqual(flow.__test_parseSecurity(table, 'CamareTest'), 'open');
+});
+
+test('mạng có mã hoá thì cần mật khẩu', () => {
+  const table = ['  SecureNet    psk    ****', '  CamareTest   open   ****'].join('\n');
+  assert.strictEqual(flow.__test_parseSecurity(table, 'SecureNet'), 'psk');
+  assert.strictEqual(flow.__test_parseSecurity(table, 'CamareTest'), 'open');
+});
+
+test('tên mạng có dấu cách vẫn dò được', () => {
+  const table = ['  My Home 5G   wpa2   ***'].join('\n');
+  assert.strictEqual(flow.__test_parseSecurity(table, 'My Home 5G'), 'wpa2');
+});
+
+test('không thấy mạng trong bảng thì không đoán, coi như mở', () => {
+  const table = '  SecureNet    psk    ****';
+  assert.strictEqual(flow.__test_parseSecurity(table, 'KhongCoThat'), '');
 });
 
 /* ------------------------------------------------------------------ version */
