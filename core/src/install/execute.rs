@@ -293,11 +293,24 @@ fn ensure_template_symlink(root: &str, service: &str) -> Result<()> {
     let wants_dir = format!("{root}/etc/systemd/system/multi-user.target.wants");
     let link = format!("{wants_dir}/{service}");
     let template = service.split('@').next().unwrap_or(service);
-    let target = format!("../../../usr/lib/systemd/system/{template}@.service");
+    // Four levels up from .../multi-user.target.wants/ back to the target root.
+    // A relative link keeps the check honest on a mounted target: `test -e`
+    // resolves it inside the mount, while an absolute link would be resolved
+    // against the host root and hide a missing unit.
+    let target = format!("../../../../usr/lib/systemd/system/{template}@.service");
     let link_path = std::path::Path::new(&link);
-    if !link_path.exists() {
+    // Check the link itself (not its target): a broken symlink still exists as
+    // a link and must be replaced, not duplicated.
+    let needs_write = match link_path.symlink_metadata() {
+        Ok(_) => std::fs::read_link(link_path)
+            .map(|t| t.to_string_lossy() != target)
+            .unwrap_or(true),
+        Err(_) => true,
+    };
+    if needs_write {
+        let _ = std::fs::remove_file(link_path);
         std::fs::create_dir_all(&wants_dir)?;
-        std::os::unix::fs::symlink(&target, &link_path)?;
+        std::os::unix::fs::symlink(&target, link_path)?;
     }
     Ok(())
 }
@@ -833,9 +846,35 @@ mod tests {
         let target = std::fs::read_link(&link).unwrap();
         assert_eq!(
             target.to_str().unwrap(),
-            "../../../usr/lib/systemd/system/systemd-zram-setup@.service"
+            "../../../../usr/lib/systemd/system/systemd-zram-setup@.service"
         );
         // Clean up.
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn template_symlink_resolves_to_the_unit_inside_the_target_root() {
+        // The point of the relative link: resolved from the wants directory it
+        // must land on the unit file inside the target root, which is exactly
+        // what the acceptance harness checks with `test -e` on a mounted disk.
+        // A link with one `..` too few silently resolves under /etc and reads as
+        // "zram never enabled" on the installed system.
+        let tmp = std::env::temp_dir().join(format!("camarelol-resolve-{}", std::process::id()));
+        let root = tmp.to_str().unwrap();
+        // Pretend zram-generator shipped its template unit.
+        let unit = tmp.join("usr/lib/systemd/system/systemd-zram-setup@.service");
+        std::fs::create_dir_all(unit.parent().unwrap()).unwrap();
+        std::fs::write(&unit, "[Install]\nWantedBy=multi-user.target\n").unwrap();
+
+        ensure_template_symlink(root, "systemd-zram-setup@zram0.service").unwrap();
+
+        let link = tmp.join("etc/systemd/system/multi-user.target.wants/systemd-zram-setup@zram0.service");
+        // Resolve the way `test -e` does: follow the link.
+        assert!(
+            link.exists(),
+            "symlink must resolve — got {:?}",
+            std::fs::read_link(&link)
+        );
         let _ = std::fs::remove_dir_all(&tmp);
     }
 
