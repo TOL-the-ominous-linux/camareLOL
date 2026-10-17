@@ -55,6 +55,34 @@ There is no signature to verify, because there is nothing to verify against.
 `--version` tells you which release you are running, and that is the whole of
 the trust story.
 
+### If the machine has Wi-Fi only
+
+camareLOL needs a network to fetch Arch packages. If you install with `pacman`
+or by hand, connect Wi-Fi first with `iwctl` — which the Arch live ISO ships:
+
+```console
+$ iwctl
+[iwd]# device list
+[iwd]# station wlan0 scan
+[iwd]# station wlan0 get-networks
+[iwd]# station wlan0 connect "NetworkName"
+[iwd]# station wlan0 enable
+```
+
+An encrypted network makes `connect` ask for a password; type it there. The
+interface is not always `wlan0` — `device list` shows the real name.
+
+If `iwctl` is missing:
+
+```console
+$ sudo pacman -S iwd
+```
+
+Two signs tell you camareLOL sees enough network to install: the status field on
+the welcome screen reads `internet connection OK`, and `zram` in the service list
+is not struck through. On a Wi-Fi-only machine that is not connected yet,
+camareLOL says so on the welcome screen instead of staying silent.
+
 ### Via npm
 
 Requires `node` and `npm`:
@@ -64,10 +92,18 @@ $ sudo pacman -S --needed nodejs npm curl
 $ npm install -g @wenker-ai/camarelo
 ```
 
+The npm wrapper asks to connect Wi-Fi before running the installer — including
+encrypted networks.
+
 On **archiso** (the live ISO), one extra step: the pacman databases are empty,
 so plain `pacman -S` fails with `database file for 'core' does not exist`.
-Download them and install in one go — with a network already up (Wi-Fi lives
-outside this flow; pacman needs it to fetch the database):
+Download them and install in one go — with a network already up. pacman needs a
+network to fetch the database; Wi-Fi depends on how you installed:
+
+- **Via npm** (`npm install -g @wenker-ai/camarelo`): the wrapper offers to
+  connect Wi-Fi with `iwctl` first, encrypted networks included.
+- **Via `pacman` or by hand**: connect Wi-Fi yourself first, see
+  [If the machine has Wi-Fi only](#if-the-machine-has-wi-fi-only).
 
 ```console
 $ sudo pacman -Sy --needed nodejs npm curl

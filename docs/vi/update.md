@@ -55,6 +55,34 @@ Không có chữ ký để xác minh, vì cũng không có gì để xác minh. 
 cho bạn biết đang chạy bản phát hành nào, và đó là toàn bộ câu chuyện về niềm
 tin.
 
+### Nếu máy chỉ có Wi-Fi
+
+camareLOL cần mạng để tải gói Arch. Nếu bạn cài bằng `pacman` hoặc tải tay thì
+phải nối Wi-Fi trước bằng `iwctl` — công cụ có sẵn trong Arch live ISO:
+
+```console
+$ iwctl
+[iwd]# device list
+[iwd]# station wlan0 scan
+[iwd]# station wlan0 get-networks
+[iwd]# station wlan0 connect "TenMang"
+[iwd]# station wlan0 enable
+```
+
+Mạng có mật khẩu thì `connect` sẽ hỏi, gõ mật khẩu vào. Tên giao diện không
+phải lúc nào cũng là `wlan0` — xem `device list` để biết đúng tên.
+
+Nếu `iwctl` không có:
+
+```console
+$ sudo pacman -S iwd
+```
+
+Hai dấu hiệu cho biết camareLOL đã thấy đủ mạng để tải gói: ô trạng thái ở
+màn hình chào ghi `internet connection OK`, và `zram` trong danh sách dịch vụ
+không bị gạch chéo. Nếu máy chỉ có Wi-Fi mà chưa nối, camareLOL nói rõ điều
+đó ở màn hình chào thay vì im lặng.
+
 ### Qua npm
 
 Cần `node` và `npm` trên máy:
@@ -64,10 +92,19 @@ $ sudo pacman -S --needed nodejs npm curl
 $ npm install -g @wenker-ai/camarelo
 ```
 
+Vỏ npm tự hỏi nối Wi-Fi trước khi chạy trình cài — kể cả mạng có mật khẩu.
+
 Trên **archiso** (live ISO) phải khác một chút: cơ sở dữ liệu pacman còn rỗng
 nên `pacman -S` báo `database file for 'core' does not exist`. Kéo nó về rồi
-cài trong cùng một lượt, kèm mạng đã nối (Wi-Fi bên ngoài quy trình này —
-pacman cần mạng để tải DB):
+cài trong cùng một lượt, kèm mạng đã nối — pacman cần mạng để tải DB, còn
+Wi-Fi thì tùy cách cài:
+
+- **Cài qua npm** (`npm install -g @wenker-ai/camarelo`): vỏ npm hỏi nối Wi-Fi
+  bằng `iwctl` trước khi chạy trình cài, kể cả mạng có mật khẩu.
+- **Cài bằng `pacman` hoặc tải tay**: phải tự nối Wi-Fi trước bằng `iwctl`
+  (xem [mục Wi-Fi](#nếu-máy-chỉ-có-wi-fi)).
+
+```console
 
 ```console
 $ sudo pacman -Sy --needed nodejs npm curl

@@ -50,6 +50,33 @@ $ camarelol --version                  # 看看现在装的是哪一版
 没有签名需要校验，因为也没有东西可校验。`--version` 告诉你正在运行哪个发布
 版本，这就是信任问题的全部。
 
+### 如果机器只有 Wi-Fi
+
+camareLOL 需要网络来下载 Arch 软件包。如果你用 `pacman` 或手动安装，需要先用
+`iwctl` 连接 Wi-Fi —— Arch live ISO 自带这个工具：
+
+```console
+$ iwctl
+[iwd]# device list
+[iwd]# station wlan0 scan
+[iwd]# station wlan0 get-networks
+[iwd]# station wlan0 connect "网络名"
+[iwd]# station wlan0 enable
+```
+
+加密网络会让 `connect` 询问密码，在那里输入即可。接口名不一定是 `wlan0` ——
+用 `device list` 看真实名称。
+
+如果没有 `iwctl`：
+
+```console
+$ sudo pacman -S iwd
+```
+
+有两个迹象说明 camareLOL 已经能看到足够的网络来装包：欢迎界面的状态栏写着
+`internet connection OK`，并且服务列表里的 `zram` 没有被划掉。在只有 Wi-Fi
+但尚未连接的机器上，camareLOL 会在欢迎界面明说，而不是沉默。
+
 ### 通过 npm
 
 需要先装好 `node` 和 `npm`：
@@ -61,7 +88,12 @@ $ npm install -g @wenker-ai/camarelo
 
 在 **archiso**（live ISO）上要多一步：pacman 的软件包数据库还是空的，直接用
 `pacman -S` 会报 `database file for 'core' does not exist`。先连好网络
-（Wi-Fi 不在本流程内——pacman 下载数据库需要网络），再把数据库与软件一起装：
+再把数据库与软件一起装——pacman 需要网络来下载数据库，Wi-Fi 则取决于你的安装方式：
+
+- **通过 npm 安装**（`npm install -g @wenker-ai/camarelo`）：npm 包装器会先用
+  `iwctl` 询问是否连接 Wi-Fi，加密网络同样支持。
+- **通过 `pacman` 或手动安装**：请自行先连接 Wi-Fi，见
+  [如果机器只有 Wi-Fi](#如果机器只有-wi-fi)。
 
 ```console
 $ sudo pacman -Sy --needed nodejs npm curl

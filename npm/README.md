@@ -71,8 +71,10 @@ Các mạng đã lưu:
 Tên mạng (SSID):
 ```
 
-Dùng `iwctl` — công cụ có sẵn trong Arch live ISO. Cho tối đa ba lần thử, vì
-lần đầu thường là để nhập mật khẩu và lần sau mới nối được.
+Dùng `iwctl` — công cụ có sẵn trong Arch live ISO. Với mạng có mật khẩu, công cụ
+đọc cột `Security` của `iwctl get-networks` và hỏi mật khẩu **trước** khi
+nối, rồi truyền thẳng vào lệnh `connect`. Cho tối đa ba lần thử vì mạng đúng
+thường là lần thứ hai.
 
 Sau đó vào màn hình cài đặt như bình thường.
 
