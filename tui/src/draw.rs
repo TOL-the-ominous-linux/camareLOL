@@ -185,7 +185,7 @@ fn screen_block(title: impl Into<String>) -> Block<'static> {
 
 fn draw_welcome(f: &mut Frame, app: &App, area: Rect) {
     let hw = camarelol_core::hardware::summarize();
-    let text = vec![
+    let mut text = vec![
         Line::from(vec![Span::styled(
             "  c a m a r e L O L",
             Style::default().fg(ACCENT).add_modifier(Modifier::BOLD),
@@ -220,6 +220,22 @@ fn draw_welcome(f: &mut Frame, app: &App, area: Rect) {
             "  To update: `sudo pacman -S camarelol`, or download a release from the releases page.",
         )),
     ];
+    // Nói thẳng khi Wi-Fi là đường duy nhất mà máy không có công cụ để nối:
+    // "no network connection detected" một mình không giúp ai đoán phải làm
+    // gì. Hàm `wifi_setup_available()` và trường `wireless` đã tồn tại từ
+    // lâu nhưng không ai gọi — cờ này là lần đầu chúng được dùng thật.
+    if app.wifi_needs_setup {
+        text.insert(
+            5,
+            Line::from(Span::styled(
+                app.tr(
+                    "  ⚠ Chỉ có Wi-Fi và chưa nối, mà máy không có iwctl/nmtui để nối.",
+                    "  ⚠ Wi-Fi is the only interface, not connected, and no iwctl/nmtui to connect it.",
+                ),
+                Style::default().fg(WARN),
+            )),
+        );
+    }
     f.render_widget(
         Paragraph::new(text)
             .block(screen_block("Welcome"))

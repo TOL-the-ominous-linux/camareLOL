@@ -88,6 +88,26 @@ pub fn wifi_setup_available() -> bool {
     crate::sys::tool_available("iwctl") || crate::sys::tool_available("nmtui")
 }
 
+/// Có cần báo người dùng rằng Wi-Fi là đường duy nhất mà họ chưa nối được không.
+///
+/// Cả ba điều kiện: máy có giao diện không dây, **không** giao diện nào đang
+/// có đường truyền, và máy không có công cụ nối nào. Không có điều kiện nào
+/// trong ba thì không báo: đang có mạng thì chẳng thiếu gì, không có Wi-Fi thì
+/// nhắc cũng vô ích.
+pub fn wifi_only_without_helper() -> bool {
+    let ifaces = list_interfaces();
+    wifi_warning_worthy(
+        ifaces.iter().any(|i| i.wireless),
+        ifaces.iter().any(|i| i.carrier && i.name != "lo"),
+        wifi_setup_available(),
+    )
+}
+
+/// Quyết định thuần, tách khỏi việc đọc /sys để kiểm thử được trên mọi máy.
+fn wifi_warning_worthy(has_wireless: bool, has_link: bool, helper: bool) -> bool {
+    has_wireless && !has_link && !helper
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -115,5 +135,25 @@ mod tests {
     fn error_helper() {
         let e = crate::error::CamarelolError::new(crate::error::ErrorCode::NetworkUnreachable, "x");
         assert_eq!(e.code, crate::error::ErrorCode::NetworkUnreachable);
+    }
+
+    #[test]
+    fn wifi_warning_only_when_wireless_and_no_helper() {
+        // Ba điều kiện phải cùng đúng: Wi-Fi là đường duy nhất, đường đó
+        // chưa có, và máy không có công cụ để nối.
+        assert!(wifi_warning_worthy(true, false, false));
+        // Đã có iwctl thì không cảnh báo — người dùng tự nối được.
+        assert!(!wifi_warning_worthy(true, false, true));
+        // Đã có đường truyền (wlan đã nối, hoặc có dây) thì không cảnh báo.
+        assert!(!wifi_warning_worthy(true, true, false));
+        // Không có Wi-Fi thì nhắc cũng vô ích.
+        assert!(!wifi_warning_worthy(false, false, false));
+    }
+
+    #[test]
+    fn wifi_warning_on_real_host_does_not_panic() {
+        // Máy thật: hàm này sau đây được TUI gọi, nên nó phải chạy được ở mọi
+        // nơi kể cả máy không có card không dây nào.
+        let _ = wifi_only_without_helper();
     }
 }

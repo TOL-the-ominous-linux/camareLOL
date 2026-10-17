@@ -54,11 +54,40 @@ function savedNetworks() {
     .filter(Boolean);
 }
 
-/** Có mạng chưa. */
-function hasInternet() {
-  const r = spawnSync('sh', ['-c', 'curl -sS --max-time 5 -o /dev/null https://archlinux.org 2>/dev/null'],
-    { encoding: 'utf8' });
-  return r.status === 0;
+/**
+ * Có mạng chưa.
+ *
+ * Một lần thử trước đây hỏng vì lý do rất thật: đo trên máy thật ngày
+ * 2026-10-17, lần gọi đầu tiên trả `false` trong khi máy đang có mạng — DNS và
+ * TLS lạnh vượt quá `--max-time 5`. Hậu quả là hỏi người dùng "kết nối
+ * Wi-Fi?" đúng lúc họ đã có mạng.
+ *
+ * Vì vậy: thử nhiều đích, và coi **bất kỳ mã HTTP nào** là có mạng. 4xx/5xx
+ * vẫn chứng minh máy chạm được một máy chủ khác — chỉ "không chạm được" mới là
+ * không có mạng. `-I` dùng HEAD nên nhẹ hơn GET một trang HTML.
+ */
+const NET_PROBES = [
+  'https://archlinux.org',
+  'https://mirror.rackspace.com',
+  'https://registry.npmjs.org',
+];
+
+// `probe` nhận một url và trả mã thoát của curl. Mặc định là curl thật; test
+// thay bằng hàm giả để kiểm logic thử nhiều đích mà không chạm mạng.
+function hasInternet(probe) {
+  const run = probe || defaultProbe;
+  for (const url of NET_PROBES) {
+    if (run(url) === 0) return true;
+  }
+  return false;
+}
+
+function defaultProbe(url) {
+  return spawnSync(
+    'curl',
+    ['-sS', '-I', '--max-time', '8', '-o', '/dev/null', url],
+    { encoding: 'utf8' },
+  ).status;
 }
 
 module.exports = { have, wirelessInterfaces, savedNetworks, hasInternet, say };

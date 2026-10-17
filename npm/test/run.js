@@ -21,11 +21,48 @@ const os = require('node:os');
 
 const { compare, normalise } = require('../lib/version');
 const { expectedFrom, sha256 } = require('../lib/selfupdate');
+const wifi = require('../lib/wifi');
 
 const tests = [];
 function test(name, fn) {
   tests.push({ name, fn });
 }
+
+/* -------------------------------------------------------------------- wifi */
+
+// Lỗi thật đo ngày 2026-10-17: một lần thử duy nhất với --max-time 5 báo
+// "không có mạng" trên máy đang có mạng, vì lần khởi động lạnh chậm hơn 5
+// giây. Người dùng bị hỏi nối Wi-Fi khi đã có mạng.
+
+test('có mạng: đích đầu thành công thì thôi, không thử tiếp', () => {
+  const asked = [];
+  const ok = wifi.hasInternet((url) => {
+    asked.push(url);
+    return 0;
+  });
+  assert.strictEqual(ok, true);
+  assert.strictEqual(asked.length, 1);
+});
+
+test('có mạng: đích đầu hỏng thì thử đích sau', () => {
+  const asked = [];
+  const ok = wifi.hasInternet((url) => {
+    asked.push(url);
+    return asked.length >= 2 ? 0 : 6; // 6 = không giải được tên
+  });
+  assert.strictEqual(ok, true);
+  assert.ok(asked.length >= 2, `phải thử nhiều đích, mới hỏi ${asked.length}`);
+});
+
+test('có mạng: mọi đích hỏng thì mới báo không có', () => {
+  let calls = 0;
+  const ok = wifi.hasInternet(() => {
+    calls += 1;
+    return 7; // không kết nối được
+  });
+  assert.strictEqual(ok, false);
+  assert.ok(calls >= 3, `phải thử hết danh sách đích, mới hỏi ${calls}`);
+});
 
 /* ------------------------------------------------------------------ version */
 

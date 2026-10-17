@@ -113,6 +113,10 @@ pub struct App {
     pub quit: bool,
     pub firmware: Firmware,
     pub connectivity: Connectivity,
+    /// Máy chỉ có Wi-Fi, chưa nối, và không có iwctl/nmtui để nối. Không có
+    /// cờ này thì màn hình chỉ hiện "no network connection detected" — người
+    /// dùng không được báo phải làm gì.
+    pub wifi_needs_setup: bool,
 
     // cursor positions for the list screens
     pub storage_index: usize,
@@ -174,6 +178,7 @@ impl App {
         };
         let firmware = core.firmware();
         let connectivity = network::check_internet().unwrap_or(network::Connectivity::Down);
+        let wifi_needs_setup = network::wifi_only_without_helper();
         let mut app = App {
             core,
             screen: Screen::Welcome,
@@ -181,6 +186,7 @@ impl App {
             quit: false,
             firmware,
             connectivity,
+            wifi_needs_setup,
             storage_index: 0,
             disk_mode_index: 0,
             language_index: 1,
