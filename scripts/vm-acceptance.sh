@@ -54,7 +54,11 @@ post() { # post <tên>  — tệp kết quả đã nằm ở /tmp/r-<tên>.txt t
     # Mã HTTP phải hiện trên màn hình: máy chủ chết hoặc mạng khách đứt thì
     # 000 hiện ở đấy, còn phiên bản cũ thì POST thất bại trôi qua im lặng và
     # bài kiểm tra đối phó bằng "không có kết quả" cho cả bảy bước.
-    guest "echo post-$1 http=\$(curl -sS -m 8 -o /dev/null -w '%{http_code}' -X POST --data-binary @/tmp/r-$1.txt http://$HOST_ADDR:$PORT/step/$1 2>/dev/null); echo done-$1" 4
+    # Mã HTTP hiển trị trên màn hình: máy chủ chết hoặc mạng khách đứt thì 000
+    # hiển thị, còn phiên bản cũ POST thất bại trôi qua im lặng. Mã lỗi curl IN
+    # LUÔN (2>&1 vào biến X) — POST trà trộn tầng mạng hay tệp thiếu đều tự khai.
+    # $? gán ngay sau phần gán X (đúng mã thoát của curl, đè lên là 0 của echo).
+    guest "X=\$(curl -sS -m 8 -o /dev/null -w '%{http_code}' -X POST --data-binary @/tmp/r-$1.txt http://$HOST_ADDR:$PORT/step/$1 2>&1); echo post-$1-rc=\$?; echo post-$1 http=\$X; echo done-$1" 4
 }
 
 # Đọc một kết quả từ máy chủ.
@@ -192,7 +196,7 @@ guest "/root/camarelol --help > /tmp/help.txt 2>&1; echo rc=\$? > /tmp/r-help.tx
 post help
 
 say "bước 5/6 — cài thật vào đĩa trống (--scripted --execute)"
-guest "curl -sS -o /root/vm-helper.py http://$HOST_ADDR:$PORT/vm-helper.py >/dev/null 2>&1; python3 /root/vm-helper.py /tmp/survey.json /tmp/profile.toml > /tmp/r-install.txt 2>&1; echo profile_rc=\$? >> /tmp/r-install.txt" 15
+guest "curl -sS -o /root/vm-helper.py http://$HOST_ADDR:$PORT/vm-helper.py >/dev/null 2>&1; echo helper_dlc=\$? bytes=\$(stat -c%s /root/vm-helper.py 2>/dev/null); python3 /root/vm-helper.py /tmp/survey.json /tmp/profile.toml > /tmp/helper-out.txt 2>&1; HRC=\$?; echo helper_rc=\$HRC; cat /tmp/helper-out.txt; { cat /tmp/helper-out.txt; echo profile_rc=\$HRC; } > /tmp/r-install.txt" 15
 post install_profile
 note "chạy cài đặt — có thể mất vài phút"
 guest "/root/camarelol --scripted /tmp/profile.toml --allow-destructive --execute > /tmp/inst.txt 2>&1; echo INSTALL_RC=\$? > /tmp/r-install.txt; cat /tmp/inst.txt >> /tmp/r-install.txt" 60
