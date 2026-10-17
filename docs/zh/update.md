@@ -113,6 +113,51 @@ $ zramctl
 
 ---
 
+## 检查你自己的安装：`--postcheck`
+
+别猜，直接问安装器：
+
+```console
+$ sudo camarelol --postcheck
+  PASS zram_unit
+  PASS zram_wants
+  PASS zram_bin
+  PASS zram_conf
+  PASS sshd_unit
+  PASS sshd_wants
+  PASS openssh
+  all checks passed
+```
+
+这七行是七件**必须真的在磁盘上**的东西，不是菜单里的七个选项。如果你的
+系统挂在别处，指向它的根目录：
+
+```console
+$ sudo camarelol --postcheck /mnt
+```
+
+出现 `FAIL` 说明有东西被选中了却从未真正落地 —— 这个命令什么都不修，只说
+实话。按上面的方法手动修，或者用更新的版本重装。
+
+### 0.1.13 有一个 bug：zram 从未被启用
+
+0.1.13 正确写了配置文件，但**没有创建启用 symlink**（在安装环境里对模板
+unit 执行 `systemctl enable` 不会产生 symlink）。结果是 `zram_conf` 有了而
+`zram_wants` 没有，所以即便安装报告 `completed`，zram 仍然不会运行。手动
+修复：
+
+```console
+$ sudo ln -s ../../../../usr/lib/systemd/system/systemd-zram-setup@.service \
+    /etc/systemd/system/multi-user.target.wants/systemd-zram-setup@zram0.service
+$ sudo systemctl start systemd-zram-setup@zram0
+$ zramctl
+```
+
+修复已在仓库里，VirtualBox 验收测试现在正好盯住这一点：最后一步会挂载装
+好的磁盘，要求七个标记全部存在，所以以后的发布不会再漏掉它。
+
+---
+
 ## 查看你装的是什么
 
 ```console

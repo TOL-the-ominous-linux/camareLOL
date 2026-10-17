@@ -127,6 +127,55 @@ again.
 
 ---
 
+## Checking your own install: `--postcheck`
+
+Instead of guessing, ask the installer:
+
+```console
+$ sudo camarelol --postcheck
+  PASS zram_unit
+  PASS zram_wants
+  PASS zram_bin
+  PASS zram_conf
+  PASS sshd_unit
+  PASS sshd_wants
+  PASS openssh
+  all checks passed
+```
+
+Those seven lines are seven things that must **really exist on disk**, not
+seven choices in a menu. If your system is mounted somewhere else, point at
+its root:
+
+```console
+$ sudo camarelol --postcheck /mnt
+```
+
+A `FAIL` means something was selected and never landed — this command fixes
+nothing, it only tells the truth. Fix it by hand as above, or reinstall with a
+newer release.
+
+### 0.1.13 has a bug: zram is never enabled
+
+0.1.13 writes the config file correctly but **never creates the enable
+symlink** (`systemctl enable` for a template unit inside the install
+environment produces no symlink). So `zram_conf` exists while `zram_wants`
+does not, and zram still never runs even though the install reports
+`completed`. Fix it by hand:
+
+```console
+$ sudo ln -s ../../../../usr/lib/systemd/system/systemd-zram-setup@.service \
+    /etc/systemd/system/multi-user.target.wants/systemd-zram-setup@zram0.service
+$ sudo systemctl start systemd-zram-setup@zram0
+$ zramctl
+```
+
+The fix is in the repository, and the VirtualBox acceptance test now guards
+exactly this: its last step mounts the installed disk and demands all seven
+markers, so a later release cannot ship without it.
+
+---
+
 ## Checking what you have
 
 ```console

@@ -124,6 +124,53 @@ xem lại một lần nữa.
 
 ---
 
+## Kiểm tra bản cài của bạn: `--postcheck`
+
+Thay vì tự đoán, hãy hỏi chính trình cài:
+
+```console
+$ sudo camarelol --postcheck
+  PASS zram_unit
+  PASS zram_wants
+  PASS zram_bin
+  PASS zram_conf
+  PASS sshd_unit
+  PASS sshd_wants
+  PASS openssh
+  all checks passed
+```
+
+Bảy dòng đó là bảy thứ phải **có thật trên đĩa**, không phải bảy lựa chọn
+trong menu. Hệ thống bạn cài đĩa ở chỗ khác thì chỉ vào thư mục gốc của nó:
+
+```console
+$ sudo camarelol --postcheck /mnt
+```
+
+Có `FAIL` thì đó là thứ đã chọn nhưng không có thật — mà mục này không sửa
+gì cả, chỉ nói thật. Sửa tay phần đã có sẵn phía trên, hoặc cài lại bằng bản
+mới hơn.
+
+### 0.1.13 có một lỗi: zram chưa được bật
+
+Bản 0.1.13 viết đủ tệp cấu hình, nhưng **quên tạo symlink bật service**
+(`systemctl enable` cho unit mẫu trong môi trường cài không sinh ra symlink
+nào). Kết quả: `zram_conf` có mà `zram_wants` không, nên zram vẫn không chạy
+dù cài đặt báo `completed`. Sửa tay:
+
+```console
+$ sudo ln -s ../../../../usr/lib/systemd/system/systemd-zram-setup@.service \
+    /etc/systemd/system/multi-user.target.wants/systemd-zram-setup@zram0.service
+$ sudo systemctl start systemd-zram-setup@zram0
+$ zramctl
+```
+
+Bản sửa nằm trong kho và bài kiểm tra VirtualBox giờ chặn đúng chỗ này:
+bước cuối mở đĩa đích lên và đòi cả bảy thứ có mặt, nên bản phát hành sau
+này không thể bỏ sót nó.
+
+---
+
 ## Xem mình đang có gì
 
 ```console
