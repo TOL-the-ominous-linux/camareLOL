@@ -96,6 +96,34 @@ không còn phím `u`.
 
 ---
 
+## Nếu hệ thống cài bằng 0.1.12 mà có chọn zram
+
+0.1.12 bật đúng unit (`systemd-zram-setup@zram0.service`) và cài
+`zram-generator` — vậy mà vẫn không có swap zram nào chạy được.
+`zram-generator` đọc `/etc/systemd/zram-generator.conf` mới biết phải tạo
+thiết bị nào; thiếu tệp này thì nó chạy rồi thôi, hệ thống khởi động không
+hề có zram. 0.1.13 bỏ chỗ hụt đó: khi cài đặt, trình cài đặt tự viết tệp cấu
+hình theo lựa chọn `zram_size_mb`.
+
+Hệ thống cài bởi 0.1.12 có sẵn unit và gói, chỉ thiếu tệp cấu hình. Cách nhẹ
+nhất là thêm tệp bằng tay, không cần cài lại:
+
+```console
+$ sudo tee /etc/systemd/zram-generator.conf >/dev/null <<'EOF'
+[zram0]
+zram-size = min(ram / 2, 4096)
+EOF
+$ sudo systemctl start systemd-zram-setup@zram0
+$ zramctl
+```
+
+`min(ram / 2, 4096)` chính là dự phòng của trình cài đặt: nửa RAM, tối đa
+4 GiB. Muốn mức khác thì ghi số MiB thường, ví dụ `zram-size = 2048`. Sau
+lệnh trên, `zramctl` phải hiện được `zram0`; nếu không, khởi động lại rồi
+xem lại một lần nữa.
+
+---
+
 ## Xem mình đang có gì
 
 ```console

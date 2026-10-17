@@ -98,6 +98,35 @@ is not present in later versions.
 
 ---
 
+## If your system was installed with 0.1.12 and zram was selected
+
+0.1.12 enabled the right unit (`systemd-zram-setup@zram0.service`) and
+installed `zram-generator` — and that still is not a working zram swap.
+`zram-generator` reads `/etc/systemd/zram-generator.conf` to know which
+devices to create; with the file absent it runs and does nothing, and the
+system boots with no zram at all. 0.1.13 closes that gap: during install the
+installer writes the config file according to the `zram_size_mb` choice.
+
+A 0.1.12-installed system already has the unit and the package; only the
+config file is missing. The lightest fix is adding the file by hand — no
+reinstall needed:
+
+```console
+$ sudo tee /etc/systemd/zram-generator.conf >/dev/null <<'EOF'
+[zram0]
+zram-size = min(ram / 2, 4096)
+EOF
+$ sudo systemctl start systemd-zram-setup@zram0
+$ zramctl
+```
+
+`min(ram / 2, 4096)` is the installer's default: half of RAM, capped at 4
+GiB. For a different size write a plain MiB number, e.g. `zram-size = 2048`.
+Afterwards `zramctl` should list `zram0`; if it does not, reboot and check
+again.
+
+---
+
 ## Checking what you have
 
 ```console

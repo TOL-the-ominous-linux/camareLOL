@@ -87,6 +87,32 @@ npm 外壳不属于二进制文件的一部分：它是在二进制文件启动*
 
 ---
 
+## 如果系统是用 0.1.12 安装且选了 zram
+
+0.1.12 正确启用了 unit（`systemd-zram-setup@zram0.service`）并装上
+`zram-generator` —— 但这仍然不是一个能用的 zram 交换空间。`zram-generator`
+要读取 `/etc/systemd/zram-generator.conf` 才知道创建哪些设备；缺这个文件时
+它只是运行一下就结束，系统启动后并没有任何 zram。0.1.13 修掉了这个缺口：
+安装时会按照 `zram_size_mb` 的选择自动写入配置文件。
+
+0.1.12 安装的系统已经有启用中的 unit 和软件包，只缺配置文件。最省事的办法
+是手动补上这个文件，不必重装：
+
+```console
+$ sudo tee /etc/systemd/zram-generator.conf >/dev/null <<'EOF'
+[zram0]
+zram-size = min(ram / 2, 4096)
+EOF
+$ sudo systemctl start systemd-zram-setup@zram0
+$ zramctl
+```
+
+`min(ram / 2, 4096)` 正是安装器的默认值：一半内存，最多 4 GiB。想要不同
+大小就写普通 MiB 数字，例如 `zram-size = 2048`。执行之后 `zramctl` 应该能
+看到 `zram0`；如果没看到，重启后再检查一次。
+
+---
+
 ## 查看你装的是什么
 
 ```console
