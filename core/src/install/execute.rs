@@ -234,6 +234,13 @@ impl SystemRunner for RealSystemRunner {
                 skipped.push(format!("{service} ({reason})"));
             }
         }
+        // Template units (containing '@') may not get their symlink created by
+        // `systemctl enable` in a chroot without a running systemd — the command
+        // returns 0 but no symlink appears. Manually create the symlink for any
+        // template unit whose symlink is missing.
+        for service in &enabled {
+            ensure_template_symlink(TARGET_ROOT, service)?;
+        }
         if enabled.is_empty() {
             return Err(CamarelolError::new(
                 ErrorCode::CommandFailed,
@@ -274,6 +281,25 @@ impl SystemRunner for RealSystemRunner {
         }
         Ok(())
     }
+}
+
+/// Create the enable symlink for a template unit if it doesn't exist.
+/// `systemctl enable` for a template instance in a chroot without a running
+/// systemd returns 0 but may not create the symlink — this ensures it exists.
+fn ensure_template_symlink(root: &str, service: &str) -> Result<()> {
+    if !service.contains('@') {
+        return Ok(());
+    }
+    let wants_dir = format!("{root}/etc/systemd/system/multi-user.target.wants");
+    let link = format!("{wants_dir}/{service}");
+    let template = service.split('@').next().unwrap_or(service);
+    let target = format!("../../../usr/lib/systemd/system/{template}@.service");
+    let link_path = std::path::Path::new(&link);
+    if !link_path.exists() {
+        std::fs::create_dir_all(&wants_dir)?;
+        std::os::unix::fs::symlink(&target, &link_path)?;
+    }
+    Ok(())
 }
 
 /// Test double: records what would have happened, touches nothing.
@@ -790,6 +816,38 @@ mod tests {
         };
         let script = system_config_script(&cfg);
         assert!(!script.contains("zram-generator.conf"), "{}", script);
+    }
+
+    #[test]
+    fn template_unit_symlink_is_created_when_systemctl_misses_it() {
+        // `systemctl enable` for a template instance in a chroot without a running
+        // systemd returns 0 but may not create the symlink. This ensures it exists.
+        let tmp = std::env::temp_dir().join(format!("camarelol-test-{}", std::process::id()));
+        let root = tmp.to_str().unwrap();
+        ensure_template_symlink(root, "systemd-zram-setup@zram0.service").unwrap();
+        let link = tmp.join("etc/systemd/system/multi-user.target.wants/systemd-zram-setup@zram0.service");
+        assert!(
+            std::fs::symlink_metadata(&link).is_ok(),
+            "symlink should exist"
+        );
+        let target = std::fs::read_link(&link).unwrap();
+        assert_eq!(
+            target.to_str().unwrap(),
+            "../../../usr/lib/systemd/system/systemd-zram-setup@.service"
+        );
+        // Clean up.
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn non_template_service_is_ignored_by_symlink_fix() {
+        let tmp = std::env::temp_dir().join(format!("camarelol-test-{}", std::process::id()));
+        let root = tmp.to_str().unwrap();
+        ensure_template_symlink(root, "sshd.service").unwrap();
+        // No symlink should be created for non-template services.
+        let wants_dir = tmp.join("etc/systemd/system/multi-user.target.wants");
+        assert!(!wants_dir.exists(), "no wants dir for non-template service");
+        let _ = std::fs::remove_dir_all(&tmp);
     }
 
     #[test]
