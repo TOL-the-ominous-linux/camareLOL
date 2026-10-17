@@ -838,7 +838,8 @@ mod tests {
         let tmp = std::env::temp_dir().join(format!("camarelol-test-{}", std::process::id()));
         let root = tmp.to_str().unwrap();
         ensure_template_symlink(root, "systemd-zram-setup@zram0.service").unwrap();
-        let link = tmp.join("etc/systemd/system/multi-user.target.wants/systemd-zram-setup@zram0.service");
+        let link =
+            tmp.join("etc/systemd/system/multi-user.target.wants/systemd-zram-setup@zram0.service");
         assert!(
             std::fs::symlink_metadata(&link).is_ok(),
             "symlink should exist"
@@ -868,7 +869,8 @@ mod tests {
 
         ensure_template_symlink(root, "systemd-zram-setup@zram0.service").unwrap();
 
-        let link = tmp.join("etc/systemd/system/multi-user.target.wants/systemd-zram-setup@zram0.service");
+        let link =
+            tmp.join("etc/systemd/system/multi-user.target.wants/systemd-zram-setup@zram0.service");
         // Resolve the way `test -e` does: follow the link.
         assert!(
             link.exists(),

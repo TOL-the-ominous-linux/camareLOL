@@ -138,7 +138,10 @@ fn main() {
     }
 
     if args.postcheck {
-        let root = args.postcheck_root.clone().unwrap_or_else(|| PathBuf::from("/"));
+        let root = args
+            .postcheck_root
+            .clone()
+            .unwrap_or_else(|| PathBuf::from("/"));
         cmd_postcheck(&root);
         return;
     }
@@ -192,12 +195,29 @@ fn main() {
 /// markers the VM acceptance harness uses in its step 6.
 fn cmd_postcheck(root: &std::path::Path) {
     let checks = [
-        ("zram_unit", root.join("usr/lib/systemd/system/systemd-zram-setup@.service")),
-        ("zram_wants", root.join("etc/systemd/system/multi-user.target.wants/systemd-zram-setup@zram0.service")),
-        ("zram_bin", root.join("usr/lib/systemd/system-generators/zram-generator")),
+        (
+            "zram_unit",
+            root.join("usr/lib/systemd/system/systemd-zram-setup@.service"),
+        ),
+        (
+            "zram_wants",
+            root.join(
+                "etc/systemd/system/multi-user.target.wants/systemd-zram-setup@zram0.service",
+            ),
+        ),
+        (
+            "zram_bin",
+            root.join("usr/lib/systemd/system-generators/zram-generator"),
+        ),
         ("zram_conf", root.join("etc/systemd/zram-generator.conf")),
-        ("sshd_unit", root.join("usr/lib/systemd/system/sshd.service")),
-        ("sshd_wants", root.join("etc/systemd/system/multi-user.target.wants/sshd.service")),
+        (
+            "sshd_unit",
+            root.join("usr/lib/systemd/system/sshd.service"),
+        ),
+        (
+            "sshd_wants",
+            root.join("etc/systemd/system/multi-user.target.wants/sshd.service"),
+        ),
         ("openssh", root.join("usr/bin/sshd")),
     ];
     let mut failed = 0;
