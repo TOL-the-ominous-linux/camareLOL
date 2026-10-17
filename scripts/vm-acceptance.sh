@@ -65,6 +65,10 @@ post() { # post <tên> [timeout_s] — chờ TỆP về thật sự thay vì ng�
         sleep 2
         waited=$((waited + 2))
     done
+    # Hết giờ mà không thấy tệp: nói ra. Im lặng khiến checker đọc tệp rỗng rồi
+    # kết luận đỏ, trong khi tệp về vài giây sau đó (đo 2026-10-17, lần build
+    # 0.1.15: step_zram.txt về lúc 15:13:49, sau khi kết luận đã in).
+    say "  tệp $RESULTS/step_$1.txt chưa về sau ${to}s — checker sẽ báo hỏng, kể cả khi tệp tới sau đó"
 }
 
 # Đọc một kết quả từ máy chủ.
