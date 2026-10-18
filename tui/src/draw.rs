@@ -216,8 +216,8 @@ fn draw_welcome(f: &mut Frame, app: &App, area: Rect) {
         )),
         Line::from(""),
         Line::from(app.tr(
-            "  Cập nhật: `sudo pacman -S camarelol`, hoặc tải bản mới ở trang phát hành.",
-            "  To update: `sudo pacman -S camarelol`, or download a release from the releases page.",
+            "  Cập nhật: chạy lại scripts/camarelol.sh, hoặc tải bản mới ở trang phát hành.",
+            "  To update: re-run scripts/camarelol.sh, or download a release from the releases page.",
         )),
     ];
     // Nói thẳng khi Wi-Fi là đường duy nhất mà máy không có công cụ để nối:
@@ -740,10 +740,12 @@ mod tests {
 
     #[test]
     fn the_welcome_screen_says_how_to_update() {
-        // It used to say "press u". Now that there is no updater, the useful
-        // thing is where a new version actually comes from.
+        // It used to say "press u", then it said `sudo pacman -S camarelol` —
+        // and there is no such package, so that instruction could never work.
+        // The honest answer is the one-liner that really reinstalls it.
         let text = welcome_text();
-        assert!(text.contains("pacman"), "got:\n{text}");
+        assert!(text.contains("camarelol.sh"), "got:\n{text}");
+        assert!(!text.contains("pacman"), "không có gói pacman:\n{text}");
     }
 
     #[test]

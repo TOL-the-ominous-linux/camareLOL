@@ -90,10 +90,10 @@ UPDATING:
 
     That is a decision, not an omission. This program erases disks; a component
     whose job is to replace itself is the shortest path from a compromised
-    server to erased data. Install and update it the way every other Arch
-    package is updated:
+    server to erased data. There is no pacman package and no AUR package —
+    re-run the one-liner; it picks the newest release and verifies it:
 
-        sudo pacman -S camarelol        # from a repository or the AUR
+        curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh | bash
 
     Or download the release you want from
     https://github.com/tamkogay9876-code/camareLOL/releases and replace the
