@@ -2,6 +2,31 @@
 
 > A modern, safety-first TUI installer for Arch Linux — with a Vietnamese soul.
 
+> ## ⚠ ALPHA — đã qua nhiều bản cập nhật, vẫn còn lỗi
+>
+> camareLOL ở giai đoạn **demo/alpha**. Đã có 16 bản phát hành, nhưng số bản
+> **không** phản ánh độ ổn định. Những lỗi như tên gói Arch viết sai chỉ lộ
+> ra khi chạy thật trong máy ảo — và chúng đã làm hỏng cả bản cài:
+>
+> - `greetd-tuigreeter` thay vì `greetd-tuigreet` → **Hyprland và Sway không
+>   cài được**
+> - `p7zip` thay vì `7zip` → đã bị gỡ khỏi kho Arch
+> - yêu cầu cài gói `systemd-boot` không tồn tại → **mọi** bản cài chọn
+>   systemd-boot đều chết ở `pacstrap`
+>
+> Cả ba đều qua được mọi unit test. Chúng chỉ chết trong VirtualBox.
+>
+> **Vì vậy:**
+>
+> 1. Chỉ chạy trên **ổ trống** — ổ đang có Windows hay dữ liệu thì đừng.
+> 2. Chạy từ **Arch live ISO**, không phải trên máy bạn đang dùng.
+> 3. Sao lưu mọi thứ trước khi cài bất cứ thứ gì.
+>
+> Số phiên bản giữ dạng `0.1.x` là có chủ ý. `0.x` theo SemVer nghĩa là
+> "chưa ổn định". Đặt thành `5.6` sẽ khiến người khác tin rằng đây là phần
+> mềm đã bảo trì lâu và chạy ổn định — một thông đoạp sai, và nguy hiểm với
+> một công cụ xoá ổ đĩa.
+
 camareLOL installs Arch Linux from the terminal without making you type dozens
 of shell commands. It detects your hardware, proposes a safe layout, shows you
 exactly what it is about to do, and only writes to a disk after you confirm it.
