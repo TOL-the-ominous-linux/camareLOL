@@ -170,10 +170,61 @@ def _(body: str, expect: str) -> tuple[bool, str]:
     return True, f"{len(need)} thứ đều có thật trên hệ đã cài"
 
 
+#: Kiểm tra chỉ chạy khi bài kiểm tra thực sự cài desktop. Profile console thì
+#: không có display manager, gói wayland hay cups — đòi những thứ đó sẽ bắt
+#: bài kiểm tra console-only phải thất bại, nên nó thuộc về nhánh riêng.
+DESKTOP_CHECKS: list[tuple[str, str, object]] = []
+
+
+def desktop_check(step: str):
+    def wrap(fn):
+        DESKTOP_CHECKS.append((step, fn.__doc__ or "", fn))
+        return fn
+    return wrap
+
+
+@desktop_check("desktop")
+def _(body: str, expect: str) -> tuple[bool, str]:
+    """Display stack đã chọn phải có thật trên đĩa đích.
+
+    Đây là hàng kiểm tra cho những gì menu hứa mà trước đây không ai đo:
+    display manager có unit thật + symlink enable thật, greetd có file config
+    trỏ đúng compositor, và các gói display server (wayland, xorg-xwayland)
+    thực sự nằm trên đĩa. Cài xong mà thiếu bất kỳ thứ nào thì bản cài vẫn báo
+    "completed" — đúng kiểu lỗi mà `outcome` không nhìn thấy.
+    """
+    if not body:
+        return False, "không có kết quả — bước 7 chưa gửi, có thể đã treo"
+    found = dict(re.findall(r"^([a-z_]+)=(yes|no)", body, re.M))
+    # `is-enabled` trả lời thẳng: "enabled" là thật, còn lại (not-found,
+    # disabled, static, masked) đều là chưa bật. Đoán vị trí symlink thì sai:
+    # greetd dùng Alias=display-manager.service, không có entry nào trong
+    # .wants, và bài kiểm tra trước đã báo nhầm là "thiếu".
+    enabled = dict(re.findall(r"^en_([a-z0-9@_.-]+)=(.*)$", body, re.M))
+    need = ["dm_unit", "dm_alias", "desktop_pkg", "dm_pkg", "wayland", "xwayland"]
+    if "greetd" in expect:
+        need += ["greetd_conf", "greetd_session"]
+        if enabled.get("greetd") != "enabled":
+            return False, f"is-enabled greetd = {enabled.get('greetd', '?')!r}, cần 'enabled'"
+    if "cups" in body:
+        need += ["cups"]
+        if enabled.get("cups") != "enabled":
+            return False, f"is-enabled cups = {enabled.get('cups', '?')!r}, cần 'enabled'"
+    missing_keys = [k for k in need if k not in found]
+    if missing_keys:
+        return False, f"thiếu cột mốc {', '.join(missing_keys)} — khách có thể chết giữa chừng: {body.strip()[:200]}"
+    bad = [k for k, v in found.items() if v == "no" and k in need]
+    if bad:
+        return False, f"trên đĩa đích còn thiếu: {', '.join(bad)}"
+    return True, f"{len(need)} mốc display có thật + is-enabled xác nhận"
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--results", required=True)
     ap.add_argument("--expect-version", default="0.1.13")
+    ap.add_argument("--expect-desktop", default="",
+                    help="profile desktop của bài kiểm tra (bỏ trống = console-only)")
     args = ap.parse_args()
 
     results = pathlib.Path(args.results)
@@ -194,9 +245,13 @@ def main() -> int:
         except (json.JSONDecodeError, OSError) as exc:
             print(f"  khảo sát không đọc được: {exc}")
 
+    checks = list(CHECKS)
+    if args.expect_desktop:
+        checks += DESKTOP_CHECKS
+
     failures = 0
     print()
-    for step, doc, fn in CHECKS:
+    for step, doc, fn in checks:
         body = text(results, step)
         try:
             ok, detail = fn(body, args.expect_version)
@@ -210,9 +265,9 @@ def main() -> int:
 
     print()
     if failures:
-        print(f"  {failures}/{len(CHECKS)} bước hỏng")
+        print(f"  {failures}/{len(checks)} bước hỏng")
         return 1
-    print(f"  {len(CHECKS)}/{len(CHECKS)} bước đạt")
+    print(f"  {len(checks)}/{len(checks)} bước đạt")
     return 0
 
 

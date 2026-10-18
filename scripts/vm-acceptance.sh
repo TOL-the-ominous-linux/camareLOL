@@ -23,8 +23,22 @@
 # ---------------------------------------------------------------------------
 set -uo pipefail
 
-VM_NAME="camarelol-acceptance"
+VM_NAME="${VM_NAME:-camarelol-acceptance}"
 VM_DIR="${HOME}/VirtualBox VMs/${VM_NAME}"
+
+# Desktop run: DESKTOP=hyprland DISPLAY_SERVER=wayland DISPLAY_MANAGER=greetd
+# PRINTING=true. Rỗng (mặc định) = console-only, đúng bài CI cũ.
+DESKTOP="${DESKTOP:-}"
+DISPLAY_SERVER="${DISPLAY_SERVER:-}"
+DISPLAY_MANAGER="${DISPLAY_MANAGER:-}"
+PRINTING="${PRINTING:-false}"
+
+# greetd cần biết compositor để viết config; suy ra từ profile desktop.
+SESSION_CMD=""; DM_PKG="greetd-tuigreet"
+case "$DESKTOP" in
+    hyprland) SESSION_CMD="Hyprland" ;;
+    sway)     SESSION_CMD="sway" ;;
+esac
 ISO="${ISO:-$HOME/Tài liệu/carameLOL/.test/archlinux-x86_64.iso}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PORT="${PORT:-8899}"
@@ -206,22 +220,37 @@ guest "/root/camarelol --help > /tmp/help.txt 2>&1; echo rc=\$? > /tmp/r-help.tx
 post help
 
 say "bước 5/6 — cài thật vào đĩa trống (--scripted --execute)"
-guest "curl -sS -o /root/vm-helper.py http://$HOST_ADDR:$PORT/vm-helper.py >/dev/null 2>&1; echo helper_dlc=\$? bytes=\$(stat -c%s /root/vm-helper.py 2>/dev/null); python3 /root/vm-helper.py /tmp/survey.json /tmp/profile.toml > /tmp/helper-out.txt 2>&1; HRC=\$?; echo helper_rc=\$HRC; cat /tmp/helper-out.txt; { cat /tmp/helper-out.txt; echo profile_rc=\$HRC; } > /tmp/r-install_profile.txt" 15
+guest "curl -sS -o /root/vm-helper.py http://$HOST_ADDR:$PORT/vm-helper.py >/dev/null 2>&1; echo helper_dlc=\$? bytes=\$(stat -c%s /root/vm-helper.py 2>/dev/null); CAMARELOL_TEST_DESKTOP=$DESKTOP CAMARELOL_TEST_DISPLAY_SERVER=$DISPLAY_SERVER CAMARELOL_TEST_DISPLAY_MANAGER=$DISPLAY_MANAGER CAMARELOL_TEST_PRINTING=$PRINTING python3 /root/vm-helper.py /tmp/survey.json /tmp/profile.toml > /tmp/helper-out.txt 2>&1; HRC=\$?; echo helper_rc=\$HRC; cat /tmp/helper-out.txt; grep -E '^(desktop|display_server|display_manager) =' /tmp/profile.toml >> /tmp/helper-out.txt; { cat /tmp/helper-out.txt; echo profile_rc=\$HRC; } > /tmp/r-install_profile.txt" 15
 post install_profile
 note "chạy cài đặt — có thể mất vài phút"
 guest "/root/camarelol --scripted /tmp/profile.toml --allow-destructive --execute > /tmp/inst.txt 2>&1; echo INSTALL_RC=\$? > /tmp/r-install.txt; cat /tmp/inst.txt >> /tmp/r-install.txt" 10
-post install 600
+post install "${INSTALL_TIMEOUT:-600}"
 
 say "bước 6/6 — kiểm trên hệ thống ĐÃ CÀI: unit, gói, config của zram và ssh"
 # Hai bản 0.1.11/0.1.12 cài "xong" mà thiếu thật. Những gì quyết định tính năng
 # sống là trên đĩa đích, không phải mã thoát của trình cài: unit file có thật,
 # symlink enable có thật, binary/generator có thật, config có thật. Cá nhân
 # /dev/sdX lấy từ profile để không đoán đĩa.
-guest "D=\$(grep -om1 '/dev/sd[a-z]' /tmp/profile.toml); [[ \$D ]] || D=/dev/sda; M=/vmroot; mkdir -p \$M 2>/dev/null; mountpoint -q /mnt && M=/mnt || mount \${D}1 \$M 2>/dev/null; { test -e \$M/usr/lib/systemd/system/systemd-zram-setup@.service && echo zram_unit=yes || echo zram_unit=no; test -e \$M/etc/systemd/system/multi-user.target.wants/systemd-zram-setup@zram0.service && echo zram_wants=yes || echo zram_wants=no; test -e \$M/usr/lib/systemd/system-generators/zram-generator && echo zram_bin=yes || echo zram_bin=no; test -e \$M/etc/systemd/zram-generator.conf && echo zram_conf=yes || echo zram_conf=no; test -e \$M/usr/lib/systemd/system/sshd.service && echo sshd_unit=yes || echo sshd_unit=no; test -e \$M/etc/systemd/system/multi-user.target.wants/sshd.service && echo sshd_wants=yes || echo sshd_wants=no; pacman -Qr \$M openssh >/dev/null 2>&1 && echo openssh=yes || echo openssh=no; } > /tmp/r-zram.txt 2>&1" 15
+guest "D=\$(grep -om1 '/dev/sd[a-z]' /tmp/profile.toml); [[ \$D ]] || D=/dev/sda; ROOTP=\$(findmnt -no SOURCE /mnt 2>/dev/null); [[ -n \"\$ROOTP\" ]] || ROOTP=\${D}2; M=/vmroot; mkdir -p \$M 2>/dev/null; mount \"\$ROOTP\" \$M 2>/dev/null; { test -e \$M/usr/lib/systemd/system/systemd-zram-setup@.service && echo zram_unit=yes || echo zram_unit=no; [[ \$(systemctl --root=\$M is-enabled systemd-zram-setup@zram0 2>/dev/null) == enabled ]] && echo zram_wants=yes || echo zram_wants=no; test -e \$M/usr/lib/systemd/system-generators/zram-generator && echo zram_bin=yes || echo zram_bin=no; test -e \$M/etc/systemd/zram-generator.conf && echo zram_conf=yes || echo zram_conf=no; test -e \$M/usr/lib/systemd/system/sshd.service && echo sshd_unit=yes || echo sshd_unit=no; [[ \$(systemctl --root=\$M is-enabled sshd 2>/dev/null) == enabled ]] && echo sshd_wants=yes || echo sshd_wants=no; pacman -Qr \$M openssh >/dev/null 2>&1 && echo openssh=yes || echo openssh=no; } > /tmp/r-zram.txt 2>&1" 25
 post zram 300
 
+# Phần display chỉ có nghĩa khi profile không phải console. Bỏ trống thì bài
+# kiểm tra giữ nguyên phạm vi cũ — thêm một bước luôn "đạt" vì không làm gì
+# chính là cách làm bài kiểm tra thành nghĩa trang.
+if [ -n "$DESKTOP" ]; then
+    say "bước 7/7 — display stack trên hệ ĐÃ CÀI (profile=$DESKTOP)"
+    # `systemctl --root is-enabled` là câu trả lời của chính systemd, không đoán
+    # vị trí symlink. Bài kiểm tra trước nhìn `multi-user.target.wants/` rồi báo
+    # greetd "no" — sai: greetd dùng `Alias=display-manager.service`, không có
+    # symlink nào trong .wants, và nó vẫn chạy. Unit không cài trả "not-found"
+    # nên đây phân biệt được thật với giả.
+    guest "D=\$(grep -om1 '/dev/sd[a-z]' /tmp/profile.toml); [[ \$D ]] || D=/dev/sda; ROOTP=\$(findmnt -no SOURCE /mnt 2>/dev/null); [[ -n \"\$ROOTP\" ]] || ROOTP=\${D}2; M=/vmroot; mkdir -p \$M 2>/dev/null; mount \"\$ROOTP\" \$M 2>/dev/null; { for u in $DISPLAY_MANAGER cups; do printf 'en_%s=' \"\$u\"; systemctl --root=\$M is-enabled \$u 2>/dev/null | tr -d '\n'; echo; done; test -e \$M/usr/lib/systemd/system/$DISPLAY_MANAGER.service && echo dm_unit=yes || echo dm_unit=no; test -L \$M/etc/systemd/system/display-manager.service && echo dm_alias=yes || echo dm_alias=no; test -e \$M/etc/greetd/config.toml && echo greetd_conf=yes || echo greetd_conf=no; grep -q '$SESSION_CMD' \$M/etc/greetd/config.toml 2>/dev/null && echo greetd_session=yes || echo greetd_session=no; pacman -Qr \$M $DESKTOP >/dev/null 2>&1 && echo desktop_pkg=yes || echo desktop_pkg=no; pacman -Qr \$M $DM_PKG >/dev/null 2>&1 && echo dm_pkg=yes || echo dm_pkg=no; pacman -Qr \$M wayland >/dev/null 2>&1 && echo wayland=yes || echo wayland=no; pacman -Qr \$M xorg-xwayland >/dev/null 2>&1 && echo xwayland=yes || echo xwayland=no; pacman -Qr \$M cups >/dev/null 2>&1 && echo cups=yes || echo cups=no; } > /tmp/r-desktop.txt 2>&1" 25
+    post desktop 300
+fi
+
 say "đọc kết quả và kết luận"
-python3 "$ROOT/scripts/vm-check-results.py" --results "$RESULTS" --expect-version "$EXP_VERSION"
+python3 "$ROOT/scripts/vm-check-results.py" --results "$RESULTS" --expect-version "$EXP_VERSION" \
+    $([ -n "$DESKTOP" ] && echo --expect-desktop "$DESKTOP")
 CHECK_RC=$?
 
 VBoxManage controlvm "$VM_NAME" screenshotpng "$RESULTS/99-final.png" >/dev/null 2>&1 || true

@@ -847,7 +847,11 @@ mod tests {
         };
         let script = system_config_script(&cfg);
         assert!(script.contains("/etc/greetd/config.toml"), "{}", script);
-        assert!(script.contains("tuigreet --time --cmd Hyprland"), "{}", script);
+        assert!(
+            script.contains("tuigreet --time --cmd Hyprland"),
+            "{}",
+            script
+        );
     }
 
     #[test]

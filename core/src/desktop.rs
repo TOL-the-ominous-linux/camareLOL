@@ -96,7 +96,11 @@ impl DesktopProfile {
                 "wofi".into(),
                 "waybar".into(),
                 "greetd".into(),
-                "greetd-tuigreeter".into(),
+                // The package is `greetd-tuigreet`. Written as
+                // `greetd-tuigreeter` it passed every unit test here and only
+                // failed inside the VM, at pacstrap:
+                //   target not found: greetd-tuigreeter
+                "greetd-tuigreet".into(),
             ],
             DesktopProfile::Sway => vec![
                 "sway".into(),
@@ -104,7 +108,7 @@ impl DesktopProfile {
                 "wofi".into(),
                 "waybar".into(),
                 "greetd".into(),
-                "greetd-tuigreeter".into(),
+                "greetd-tuigreet".into(),
             ],
             DesktopProfile::ConsoleOnly => vec![],
         }

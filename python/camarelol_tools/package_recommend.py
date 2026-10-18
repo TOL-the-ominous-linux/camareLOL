@@ -20,7 +20,10 @@ UTILITY_GROUPS = {
     "browser": ["firefox"],
     "development": ["git", "base-devel"],
     "monitoring": ["htop", "btop"],
-    "archiving": ["p7zip", "unzip"],
+    # `p7zip` was dropped from the Arch repositories; the community fork that
+    # took its place is `7zip`. Listing p7zip here meant pacstrap failed on a
+    # profile that included it.
+    "archiving": ["7zip", "unzip"],
 }
 
 AUR_GROUPS = {
@@ -41,8 +44,8 @@ DESKTOP_PACKAGES = {
     "xfce": ["xfce4", "xfce4-goodies", "lightdm", "lightdm-gtk-greeter"],
     "cinnamon": ["cinnamon", "lightdm", "lightdm-gtk-greeter"],
     "lxqt": ["lxqt", "sddm"],
-    "hyprland": ["hyprland", "greetd", "greetd-tuigreeter", "kitty", "wofi", "waybar"],
-    "sway": ["sway", "greetd", "greetd-tuigreeter", "foot", "wofi", "waybar"],
+    "hyprland": ["hyprland", "greetd", "greetd-tuigreet", "kitty", "wofi", "waybar"],
+    "sway": ["sway", "greetd", "greetd-tuigreet", "foot", "wofi", "waybar"],
 }
 
 AUDIO_PACKAGES = {

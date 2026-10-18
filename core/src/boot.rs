@@ -41,7 +41,12 @@ impl Bootloader {
     /// Packages needed in the target system.
     pub fn packages(&self) -> &'static [&'static str] {
         match self {
-            Bootloader::SystemdBoot => &["systemd", "systemd-boot"],
+            // `bootctl` ships inside the `systemd` package. There is no package
+            // called `systemd-boot` in the Arch repositories — asking for one
+            // made pacstrap fail with "target not found: systemd-boot" on every
+            // systemd-boot install, and no unit test could see it because the
+            // list is only ever resolved by the package manager.
+            Bootloader::SystemdBoot => &["systemd"],
             Bootloader::Grub => &["grub"],
         }
     }
