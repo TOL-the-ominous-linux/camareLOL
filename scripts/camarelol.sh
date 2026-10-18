@@ -58,11 +58,23 @@ resolve_tag() {
         esac
         return
     fi
-    # tag_name nằm ở đầu payload, nên grep là đủ; không cần phân tích JSON.
-    curl -fsSL --retry 2 --max-time 30 "$API" \
-        | grep -m1 '"tag_name"' \
-        | sed 's/.*"tag_name"[[:space:]]*:[[:space:]]*"//; s/".*//' \
-        || die "không đọc được bản mới nhất từ GitHub"
+    # Không dùng `curl | grep -m1`, và cũng không lọc bằng pipeline nào:
+    #
+    #   grep -m1 thoát ngay khi thấy dòng đầu tiên, đóng pipe, curl nhận
+    #   EPIPE và báo "Failed writing body" — còn `set -o pipefail` biến cả
+    #   pipeline thành thất bại. Nó chỉ "chạy được" khi payload nhỏ kịp
+    #   nằm trong buffer 64 KB trước khi grep đóng pipe, tức là may rủi.
+    #
+    #   Cắt chuỗi thuần của bash: không pipe, không EPIPE, không may rủi.
+    local body tag
+    body="$(curl -fsSL --retry 2 --max-time 30 "$API")" \
+        || die "không tải được danh sách phát hành từ GitHub"
+    [[ "$body" == *'"tag_name"'* ]] || die "phản hồi GitHub không có tag_name"
+    tag="${body#*\"tag_name\"}"     # `": "v0.1.15", ...`
+    tag="${tag#*:}"                 # ` "v0.1.15", ...`
+    tag="${tag#*\"}"                # `v0.1.15", ...`
+    tag="${tag%%\"*}"               # `v0.1.15`
+    printf '%s' "$tag"
 }
 
 TAG="$(resolve_tag)"
