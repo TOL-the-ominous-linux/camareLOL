@@ -26,23 +26,33 @@ camareLOL 从终端安装 Arch Linux。它会检测你的硬件、提出一个�
 在 Arch 实时 ISO 中运行它——安装器就该在那里运行：
 
 ```console
-$ curl -sSLO https://github.com/tamkogay9876-code/camareLOL/releases/latest/download/camarelol
-$ chmod +x camarelol
-$ ./camarelol --self-test      # 非破坏性检查；在真实机器上运行也安全
-$ sudo ./camarelol             # 打开 TUI
+$ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh | bash
+$ camarelol --self-test      # 非破坏性检查；在真实机器上运行也安全
+$ sudo camarelol             # 打开 TUI
 ```
 
 `--self-test` 绝不会写入磁盘。请先运行它。
+
+如果你想自己下载二进制文件，请保留 `-f` 和 `-L`：
+
+```console
+$ curl -fLO https://github.com/tamkogay9876-code/camareLOL/releases/latest/download/camarelol
+```
+
+少了 `-f`，代理返回的 404 页面会被保存成名为 `camarelol` 的文件，而 curl
+仍然返回 0；`chmod +x` 也会在一个文本文件上成功，于是第一次运行会报
+`line 1: Not: command not found`。
 
 camareLOL 不会自我更新。没有更新器，没有索引地址，代码里也没有任何
 替换自身二进制文件的路径。
 
 这是一个决定，不是一个没做完的功能。本程序会擦除磁盘；一个职责就是
 替换自身的组件，是从被攻破的服务器到数据被擦除之间最短的一条路。
-像更新其他 Arch 软件包那样更新它：
+没有 `pacman` 软件包，也没有 AUR 软件包。重新运行上面那一行命令即可，
+它会解析最新发布并校验：
 
 ```console
-$ sudo pacman -S camarelol      # 从软件仓库或 AUR
+$ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh | bash
 ```
 
 或者从 <https://github.com/tamkogay9876-code/camareLOL/releases>

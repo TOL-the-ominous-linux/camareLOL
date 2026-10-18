@@ -61,7 +61,31 @@ unchanged.
 
 ## Install
 
-### From a release (fastest)
+### One line (the bridge)
+
+The fastest way in, and the one that cannot install the wrong thing:
+
+```console
+$ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh | bash
+```
+
+It resolves the newest release, **verifies it three ways** — HTTP status, ELF
+magic, SHA-256 — and then hands control back to you. That third check is not
+decoration:
+
+```console
+$ curl -sSLO https://github.com/.../camarelol    # no -f, no -L
+$ chmod +x camarelol
+$ ./camarelol --self-test
+./camarelol: line 1: Not: command not found
+```
+
+Without `-f`, curl saves a proxy's 404 page to a file named `camarelol` and
+still exits 0. `chmod +x` succeeds on it. Bash then tries to run the HTML as a
+script. An installer that erases disks has no business telling you "done" when
+what it downloaded is an error page.
+
+### From a release
 
 Download the binary from
 [Releases](https://github.com/tamkogay9876-code/camareLOL/releases) and run it
@@ -106,10 +130,11 @@ code path in the binary that replaces it.
 
 That is a decision, not an unfinished feature. This program erases disks; a
 component whose job is to replace itself is the shortest path from a compromised
-server to erased data. Update it the way every other Arch package is updated:
+server to erased data. There is no `pacman` package and no AUR package. Re-run
+the one-liner; it picks the newest release and verifies it:
 
 ```console
-$ sudo pacman -S camarelol        # from a repository or the AUR
+$ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh | bash
 ```
 
 Or download the release you want from
@@ -131,7 +156,7 @@ Each release ships a `PKGBUILD`:
 
 ```console
 $ VERSION=0.1.10
-$ curl -sSLO "https://github.com/tamkogay9876-code/camareLOL/releases/download/v$VERSION/camarelol-$VERSION.tar.gz"
+$ curl -fLO "https://github.com/tamkogay9876-code/camareLOL/releases/download/v$VERSION/camarelol-$VERSION.tar.gz"
 $ tar xf "camarelol-$VERSION.tar.gz" && cd "camarelol-$VERSION"
 $ makepkg -si
 ```

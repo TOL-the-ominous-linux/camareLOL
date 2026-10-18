@@ -75,7 +75,7 @@ Inside the live ISO:
 ```console
 # mount -o remount,rw /          # a live ISO usually mounts read-only
 # pacman -Sy --needed curl
-# curl -sSLO https://github.com/tamkogay9876-code/camareLOL/releases/latest/download/camarelol
+# curl -fLO https://github.com/tamkogay9876-code/camareLOL/releases/latest/download/camarelol
 # chmod +x camarelol
 # ./camarelol --self-test
 # sudo ./camarelol --allow-destructive    # add --execute to actually write

@@ -29,12 +29,11 @@ bản camareLOL ngoài đời đều báo "bạn đang dùng bản mới nhất"
 
 ## Thay vào đó, cập nhật thế này
 
-### Từ kho phần mềm hoặc AUR
-
-Cách thông thường, giống mọi gói Arch khác:
+camareLOL không có gói cho `pacman`, và cũng không có gói AUR. Chạy lại
+dòng lệnh một dòng ở trên; nó tự lấy bản mới nhất rồi kiểm tra:
 
 ```console
-$ sudo pacman -S camarelol
+$ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh | bash
 ```
 
 ### Tải tay

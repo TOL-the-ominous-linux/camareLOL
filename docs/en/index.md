@@ -25,24 +25,33 @@ The installer itself speaks Vietnamese and English (`--lang vi|en`).
 Run it from the Arch live ISO, which is where an installer belongs:
 
 ```console
-$ curl -sSLO https://github.com/tamkogay9876-code/camareLOL/releases/latest/download/camarelol
-$ chmod +x camarelol
-$ ./camarelol --self-test      # non-destructive checks; safe on a real machine
-$ sudo ./camarelol             # the TUI
+$ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh | bash
+$ camarelol --self-test      # non-destructive checks; safe on a real machine
+$ sudo camarelol             # the TUI
 ```
 
 `--self-test` never writes to a disk. Run it first.
+
+If you would rather download the binary yourself, keep `-f` and `-L`:
+
+```console
+$ curl -fLO https://github.com/tamkogay9876-code/camareLOL/releases/latest/download/camarelol
+```
+
+Dropping `-f` lets a proxy's 404 page be saved under the name `camarelol` and
+still exit 0; `chmod +x` then succeeds on a text file, and the first run reports
+`line 1: Not: command not found`.
 
 camareLOL does not update itself. There is no updater, no index URL, and no
 code path in the binary that replaces it.
 
 That is a decision, not an unfinished feature. This program erases disks; a
 component whose job is to replace itself is the shortest path from a
-compromised server to erased data. Update it the way every other Arch package
-is updated:
+compromised server to erased data. There is no `pacman` package and no AUR
+package. Re-run the one-liner; it picks the newest release and verifies it:
 
 ```console
-$ sudo pacman -S camarelol      # from a repository or the AUR
+$ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh | bash
 ```
 
 Or download the release you want from

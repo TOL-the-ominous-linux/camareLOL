@@ -26,12 +26,11 @@ camareLOL 都报告"你已经是最新版本"。
 
 ## 改用这些方式更新
 
-### 从软件仓库或 AUR
-
-常规做法，和其他 Arch 软件包一样：
+camareLOL 没有 `pacman` 软件包，也没有 AUR 软件包。重新运行上面那一行命令即可，
+它会解析最新发布并校验：
 
 ```console
-$ sudo pacman -S camarelol
+$ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh | bash
 ```
 
 ### 手动下载

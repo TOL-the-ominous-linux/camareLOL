@@ -29,12 +29,11 @@ of the index, and every camareLOL in the field reported "you are up to date".
 
 ## How to update instead
 
-### From a repository or the AUR
-
-The normal way, like every other Arch package:
+camareLOL is not packaged for `pacman`, and there is no AUR package. Re-run
+the one-liner; it resolves the newest release and verifies it:
 
 ```console
-$ sudo pacman -S camarelol
+$ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh | bash
 ```
 
 ### By hand

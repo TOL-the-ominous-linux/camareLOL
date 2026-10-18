@@ -26,23 +26,33 @@ Bản thân trình cài đặt nói tiếng Việt và tiếng Anh (`--lang vi|e
 Chạy nó từ ISO sống của Arch — đó là nơi một trình cài đặt thuộc về:
 
 ```console
-$ curl -sSLO https://github.com/tamkogay9876-code/camareLOL/releases/latest/download/camarelol
-$ chmod +x camarelol
-$ ./camarelol --self-test      # kiểm không phá huỷ; an toàn trên máy thật
-$ sudo ./camarelol             # mở TUI
+$ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh | bash
+$ camarelol --self-test      # kiểm không phá huỷ; an toàn trên máy thật
+$ sudo camarelol             # mở TUI
 ```
 
 `--self-test` không bao giờ ghi vào ổ đĩa. Hãy chạy nó trước.
+
+Nếu bạn muốn tự tải binary, nhớ giữ `-f` và `-L`:
+
+```console
+$ curl -fLO https://github.com/tamkogay9876-code/camareLOL/releases/latest/download/camarelol
+```
+
+Bỏ `-f` thì một proxy trả trang 404 vẫn được lưu thành tệp tên `camarelol` và
+curl vẫn trả mã 0; `chmod +x` cũng thành công trên một tệp văn bản, rồi lần
+chạy đầu báo `line 1: Not: command not found`.
 
 camareLOL không tự cập nhật. Không có trình cập nhật, không có mã chỉ mục,
 và trong binary không có đường nào thay chính nó.
 
 Đó là quyết định, không phải phần chưa làm. Chương trình này xoá ổ đĩa; một
 thành phần việc của nó là thay thế chính nó là con đường ngắn nhất từ máy
-chủ bị chiếm tới dữ liệu bị xoá. Cập nhật nó như mọi gói Arch khác:
+chủ bị chiếm tới dữ liệu bị xoá. Không có gói `pacman` và cũng không có gói
+AUR. Chạy lại dòng một dòng ở trên; nó tự lấy bản mới nhất rồi kiểm tra:
 
 ```console
-$ sudo pacman -S camarelol      # từ kho phần mềm hoặc AUR
+$ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh | bash
 ```
 
 Hoặc tải bản bạn muốn từ
