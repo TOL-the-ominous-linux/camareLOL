@@ -102,13 +102,17 @@ impl SafetyGate {
 
     /// Record a typed confirmation. The phrase must match the risk level.
     pub fn confirm(&mut self, op: Operation, risk: RiskLevel, phrase: &str) -> Result<()> {
-        if phrase.trim() != required_phrase(risk) {
+        // Không phân biệt hoa thường. `erase` và `ERASE` là cùng một ý định:
+        // người dùng vẫn phải GÕ ĐÚNG cụm, chỉ là không phải nhớ bật Shift cho
+        // từng chữ cái. Khoảng trắng thừa vẫn được bỏ.
+        //
+        // Ranh giới vẫn phải đúng: `ERASE` không được chấp nhận cho pha cần
+        // `ERASE AND WIPE`, và `ERASEE` hay `ERASE X` vẫn phải bị từ chối.
+        let wanted = required_phrase(risk);
+        if !phrase.trim().eq_ignore_ascii_case(wanted) {
             return Err(CamarelolError::new(
                 ErrorCode::ConfirmationRequired,
-                format!(
-                    "confirmation rejected: type exactly `{}` to continue",
-                    required_phrase(risk)
-                ),
+                format!("confirmation rejected: type exactly `{wanted}` to continue"),
             ));
         }
         let at = SystemTime::now()
@@ -292,5 +296,55 @@ mod tests {
     #[test]
     fn high_risk_needs_longer_phrase() {
         assert_eq!(required_phrase(RiskLevel::High), "ERASE AND WIPE");
+    }
+}
+
+#[cfg(test)]
+mod phrase_case_tests {
+    use super::*;
+
+    fn armed() -> SafetyGate {
+        SafetyGate {
+            armed: true,
+            dry_run: false,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn confirmation_ignores_case_but_not_content() {
+        let mut g = armed();
+        for typed in ["ERASE", "erase", "Erase", "eRaSe", "  ERASE  "] {
+            assert!(
+                g.confirm(Operation::WritePartitionTable, RiskLevel::Low, typed)
+                    .is_ok(),
+                "phải nhận `{typed}`"
+            );
+        }
+    }
+
+    #[test]
+    fn high_risk_still_needs_both_words() {
+        let mut g = armed();
+        assert!(
+            g.confirm(Operation::FormatPartition, RiskLevel::High, "ERASE")
+                .is_err(),
+            "ERASE một mình không đủ cho pha high-risk"
+        );
+        assert!(g
+            .confirm(
+                Operation::FormatPartition,
+                RiskLevel::High,
+                "erase and wipe"
+            )
+            .is_ok());
+        // và phải thực sự khớp, không phải chỉ chứa
+        for wrong in ["ERASEE", "ERASE X", "WIPE", "ERASE AND WIP"] {
+            assert!(
+                g.confirm(Operation::FormatPartition, RiskLevel::High, wrong)
+                    .is_err(),
+                "`{wrong}` phải bị từ chối"
+            );
+        }
     }
 }

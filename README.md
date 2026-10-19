@@ -1,6 +1,14 @@
+<p align="center">
+  <img src="assets/camareLOL.png" alt="camareLOL" width="140">
+</p>
+
 # camareLOL
 
+[![m0QpBjbzyd](https://yourimageshare.com/ib/m0QpBjbzyd.gif)](https://yourimageshare.com/ib/m0QpBjbzyd)
+
 > A modern, safety-first TUI installer for Arch Linux — with a Vietnamese soul.
+
+**English** · [Tiếng Việt](README.vi.md) · [中文](docs/zh/index.md)
 
 > ## ⚠ ALPHA — đã qua nhiều bản cập nhật, vẫn còn lỗi
 >
@@ -256,6 +264,16 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 A full install is verified in a VirtualBox VM — see
 [docs/en/testing.md](docs/en/testing.md).
+
+## I USE ARCH BTW
+
+<p align="center">
+  <img src="assets/arch.png" alt="Arch Linux" width="110">
+</p>
+
+Installing Arch is a choice, not a chore. camareLOL exists so that the choice
+stays yours: you can read the whole plan before anything is written, and you
+can walk away at any point before the confirmation phrase.
 
 ## License
 
