@@ -16,7 +16,9 @@ use serde_json::Value;
 
 /// Run the real scan against this machine.
 pub fn scan_devices() -> Result<Vec<StorageDevice>> {
-    let out = sys::run(
+    // Read-only: `lsblk` only reports. It goes through `inspect` so that
+    // `--preview` still sees the real disks of this machine.
+    let out = sys::inspect(
         "lsblk",
         &[
             "-J", "-b", "-e", "7", // skip loop devices
@@ -302,20 +304,20 @@ fn parse_disk(d: &Value) -> Result<StorageDevice> {
 /// Any mount *not* under `/mnt` is considered part of the live system, because
 /// camareLOL runs from the installation medium.
 pub fn enrich_mounts(devices: &mut [StorageDevice]) -> Result<()> {
-    let targets: Vec<(String, String)> = match sys::run("findmnt", &["-rn", "-o", "SOURCE,TARGET"])
-    {
-        Ok(out) if out.success() => out
-            .stdout
-            .lines()
-            .filter_map(|l| {
-                let mut it = l.split_whitespace();
-                let src = it.next()?.to_string();
-                let tgt = it.next()?.to_string();
-                Some((src, tgt))
-            })
-            .collect(),
-        _ => Vec::new(),
-    };
+    let targets: Vec<(String, String)> =
+        match sys::inspect("findmnt", &["-rn", "-o", "SOURCE,TARGET"]) {
+            Ok(out) if out.success() => out
+                .stdout
+                .lines()
+                .filter_map(|l| {
+                    let mut it = l.split_whitespace();
+                    let src = it.next()?.to_string();
+                    let tgt = it.next()?.to_string();
+                    Some((src, tgt))
+                })
+                .collect(),
+            _ => Vec::new(),
+        };
 
     fn resolve<'a>(source: &str, targets: &'a [(String, String)]) -> Option<&'a str> {
         let by_path = targets.iter().find(|(s, _)| s == source);

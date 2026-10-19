@@ -39,6 +39,11 @@ pub enum ErrorCode {
     NetworkUnreachable,
     /// A destructive operation was requested while the safety gate is closed.
     SafetyGateClosed,
+    /// A command was refused because `--preview` is active.
+    ///
+    /// Not a failure of the user or of the machine: it means the run is a
+    /// simulation and the command was deliberately never started.
+    PreviewActive,
     /// User has not confirmed a high risk operation.
     ConfirmationRequired,
     /// The update index could not be understood.
@@ -85,6 +90,7 @@ impl fmt::Display for ErrorCode {
             ErrorCode::InvalidAccount => "invalid_account",
             ErrorCode::NetworkUnreachable => "network_unreachable",
             ErrorCode::SafetyGateClosed => "safety_gate_closed",
+            ErrorCode::PreviewActive => "preview_active",
             ErrorCode::ConfirmationRequired => "confirmation_required",
             ErrorCode::UpdateManifestInvalid => "update_manifest_invalid",
             ErrorCode::UpdateUrlRefused => "update_url_refused",

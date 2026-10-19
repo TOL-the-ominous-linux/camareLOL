@@ -68,7 +68,21 @@ pub struct SafetyGate {
     pub armed: bool,
     /// When true (default) nothing is written; plans are executed in dry-run and
     /// only the commands are recorded. `--execute` sets this to false.
+    ///
+    /// Advisory only. [`SafetyGate::writes_to_disk`] is the authoritative
+    /// predicate and it also refuses when `preview` is set, so flipping this
+    /// field by hand cannot make a preview write.
     pub dry_run: bool,
+    /// True in `--preview` mode: simulate a complete installation, print every
+    /// command, write nothing.
+    ///
+    /// This is the switch the whole preview story rests on, so it is not a
+    /// second opinion next to `dry_run` — it *overrides* it. Nothing in the
+    /// codebase can clear it: there is no CLI flag, no API call and no code
+    /// path that turns a preview back into a real run. The matching process-wide
+    /// latch lives in [`crate::sys::enter_preview`], which refuses to spawn a
+    /// mutating command regardless of what this field says.
+    pub preview: bool,
     confirmations: HashMap<(Operation, RiskLevel), ConfirmationRecord>,
 }
 
@@ -77,6 +91,7 @@ impl Default for SafetyGate {
         SafetyGate {
             armed: false,
             dry_run: true,
+            preview: false,
             confirmations: HashMap::new(),
         }
     }
@@ -88,6 +103,7 @@ impl SafetyGate {
         SafetyGate {
             armed: true,
             dry_run: true,
+            preview: false,
             confirmations: HashMap::new(),
         }
     }
@@ -96,8 +112,34 @@ impl SafetyGate {
         SafetyGate {
             armed: true,
             dry_run: false,
+            preview: false,
             confirmations: HashMap::new(),
         }
+    }
+
+    /// The `--preview` gate: simulate a complete installation and write
+    /// nothing, not even when the caller also passes `--execute`.
+    ///
+    /// `armed` is true so that the whole wizard runs start to finish instead of
+    /// stopping at the first closed-gate error, and `dry_run` is true so that
+    /// every layer below still records commands instead of running them.
+    pub fn preview() -> Self {
+        SafetyGate {
+            armed: true,
+            dry_run: true,
+            preview: true,
+            confirmations: HashMap::new(),
+        }
+    }
+
+    /// True when this gate may really change the machine.
+    ///
+    /// This is the only predicate the storage and install layers consult. It is
+    /// false in preview *even if* someone sets `dry_run = false` on a preview
+    /// gate by hand, which is the whole point of having it separate from the
+    /// field.
+    pub fn writes_to_disk(&self) -> bool {
+        !self.preview && !self.dry_run
     }
 
     /// Record a typed confirmation. The phrase must match the risk level.
@@ -134,12 +176,19 @@ impl SafetyGate {
     /// Authorize an operation. This is the single choke point used by every
     /// module that wants to change the system.
     ///
+    /// - Preview gate: always permitted, because nothing can be written. The
+    ///   permission here is *not* what makes it safe — [`Self::writes_to_disk`]
+    ///   and [`crate::sys`] are; permitting simply stops a simulation from
+    ///   dying with "destructive mode is not enabled" on phase one.
     /// - Locked gate: always refused.
     /// - Dry-run gate: allowed *only* to produce the preview (nothing is
     ///   written by definition), so no confirmation is required yet.
     /// - Execute gate: armed **and** a recorded confirmation for this
     ///   (operation, risk) pair are required.
     pub fn authorize(&self, op: Operation, risk: RiskLevel) -> Result<()> {
+        if self.preview {
+            return Ok(());
+        }
         if !self.armed {
             return Err(CamarelolError::new(
                 ErrorCode::SafetyGateClosed,
@@ -174,7 +223,9 @@ impl SafetyGate {
 
     /// Convenience: dry-run or execute marker.
     pub fn mode(&self) -> GateMode {
-        if !self.armed {
+        if self.preview {
+            GateMode::Preview
+        } else if !self.armed {
             GateMode::Locked
         } else if self.dry_run {
             GateMode::DryRun
@@ -189,6 +240,8 @@ pub enum GateMode {
     Locked,
     DryRun,
     Execute,
+    /// `--preview`: every phase runs, every command is printed, nothing runs.
+    Preview,
 }
 
 impl GateMode {
@@ -197,6 +250,7 @@ impl GateMode {
             GateMode::Locked => "locked (no destructive operations possible)",
             GateMode::DryRun => "dry-run (commands are shown, nothing is written)",
             GateMode::Execute => "EXECUTE (destructive operations enabled)",
+            GateMode::Preview => "PREVIEW (a full simulation, nothing is written)",
         }
     }
 }
@@ -296,6 +350,68 @@ mod tests {
     #[test]
     fn high_risk_needs_longer_phrase() {
         assert_eq!(required_phrase(RiskLevel::High), "ERASE AND WIPE");
+    }
+
+    #[test]
+    fn a_normal_gate_writes_only_when_armed_and_told_to_execute() {
+        // The behaviour --preview must not disturb, pinned so a future change
+        // to `writes_to_disk` cannot quietly turn a default install into a real
+        // one (or the other way round).
+        assert!(!SafetyGate::default().writes_to_disk());
+        assert!(!SafetyGate::armed().writes_to_disk());
+        assert!(SafetyGate::armed_and_execute().writes_to_disk());
+        assert_eq!(SafetyGate::default().mode(), GateMode::Locked);
+        assert_eq!(SafetyGate::armed().mode(), GateMode::DryRun);
+        assert_eq!(SafetyGate::armed_and_execute().mode(), GateMode::Execute);
+    }
+
+    #[test]
+    fn preview_gate_permits_everything_and_writes_nothing() {
+        let gate = SafetyGate::preview();
+        assert!(gate.preview);
+        assert!(gate.armed, "the wizard must still run start to finish");
+        assert!(gate.dry_run);
+        assert_eq!(gate.mode(), GateMode::Preview);
+        assert!(!gate.writes_to_disk());
+        // Every operation at the highest risk level is permitted without a
+        // confirmation: nothing can be destroyed by permitting it.
+        for op in [
+            Operation::WritePartitionTable,
+            Operation::FormatPartition,
+            Operation::CreateLuks,
+            Operation::ResizePartition,
+            Operation::InstallBootloader,
+            Operation::Pacstrap,
+            Operation::Mount,
+        ] {
+            for risk in [RiskLevel::Low, RiskLevel::Medium, RiskLevel::High] {
+                assert!(
+                    gate.authorize(op, risk).is_ok(),
+                    "preview must not be blocked: {:?} {:?}",
+                    op,
+                    risk
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn no_setting_of_a_preview_gate_can_make_it_write() {
+        // `--preview --allow-destructive --execute` lands here, as does any
+        // code that assigns `dry_run = false` to "upgrade" a gate. The field is
+        // advisory; this predicate is the one that counts.
+        let mut gate = SafetyGate::preview();
+        gate.dry_run = false;
+        assert!(!gate.writes_to_disk());
+        assert_eq!(gate.mode(), GateMode::Preview);
+
+        let mut execute = SafetyGate::armed_and_execute();
+        assert!(execute.writes_to_disk());
+        execute.preview = true;
+        assert!(
+            !execute.writes_to_disk(),
+            "turning preview on must always win"
+        );
     }
 }
 

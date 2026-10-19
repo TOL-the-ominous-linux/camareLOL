@@ -2,6 +2,11 @@
 //!
 //! Everything is read from `/proc`, `/sys` or documented tools; nothing is
 //! guessed from model name strings alone.
+//!
+//! The two tools used here (`lspci`, `systemd-detect-virt`) only *report*, so
+//! they go through [`crate::sys::inspect`] — the one path the `--preview`
+//! latch still allows. A preview that could not see the GPU would be a poorer
+//! preview, and neither tool can change anything.
 
 use crate::sys;
 use serde::{Deserialize, Serialize};
@@ -140,7 +145,7 @@ pub enum GpuVendor {
 /// Best effort GPU discovery via `lspci` when available.
 pub fn detect_gpus() -> Vec<GpuInfo> {
     let mut gpus = Vec::new();
-    if let Ok(out) = sys::run("lspci", &["-mm", "-nn"]) {
+    if let Ok(out) = sys::inspect("lspci", &["-mm", "-nn"]) {
         if out.success() {
             for line in out.stdout.lines() {
                 if line.to_ascii_lowercase().contains("vga")
@@ -172,7 +177,7 @@ pub fn detect_gpus() -> Vec<GpuInfo> {
 
 /// True when we appear to run inside a virtual machine (used by tests).
 pub fn running_in_vm() -> bool {
-    if let Ok(out) = sys::run("systemd-detect-virt", &[]) {
+    if let Ok(out) = sys::inspect("systemd-detect-virt", &[]) {
         if out.success() {
             let kind = out.stdout.trim();
             return !kind.is_empty() && kind != "none";

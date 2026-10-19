@@ -35,11 +35,15 @@ impl ProgressSink for TextSink {
 /// Install from a saved configuration file.
 ///
 /// * `allow_execute` must be true — dry runs are reported instead of run.
+/// * `preview` simulates a *complete* install: all twelve phases run and every
+///   command is printed, but nothing is written and nothing is executed. It
+///   ignores `allow_execute` completely.
 /// * The target disk is re-scanned and verified before anything is written.
 pub fn run_scripted(
     config_path: &Path,
     mock: Option<&Path>,
     allow_execute: bool,
+    preview: bool,
 ) -> Result<InstallReport, CamarelolError> {
     let cfg = InstallationConfig::load(config_path.to_str().unwrap_or_default())?;
     cfg.validate()?;
@@ -78,6 +82,35 @@ pub fn run_scripted(
 
     let plan = core.plan_for(&device.path)?;
     core.validate_plan(&plan)?;
+
+    // A preview runs the real orchestrator, so it gets its own branch here: it
+    // is not the "dry-run" of the block below, which only prints the partition
+    // plan and returns before any phase happens.
+    if preview {
+        println!("PREVIEW — KHÔNG GÌ ĐƯỢC GHI VÀO ĐĨA / nothing will be written to disk");
+        println!(
+            "simulating all phases for {} ({})",
+            device.path,
+            device.identity()
+        );
+        println!("Plan:\n{}", plan.render());
+        let gate = SafetyGate::preview();
+        let log = Logger::default();
+        let mut sink = TextSink;
+        let mut runner = RealSystemRunner::new(gate.clone());
+        let report = run_install(&cfg, &device, &plan, &gate, &log, &mut runner, &mut sink);
+        println!("\nCommands that would run:");
+        for line in runner.command_lines() {
+            println!("  {line}");
+        }
+        println!();
+        println!("{}", report.render());
+        println!(
+            "preview completed — {} commands recorded, 0 executed.",
+            runner.records().len()
+        );
+        return Ok(report);
+    }
 
     if !allow_execute {
         println!("dry-run: nothing was written. Re-run with --allow-destructive --execute.");

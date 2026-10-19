@@ -169,6 +169,10 @@ pub struct App {
     pub log_path: String,
     pub armed: bool,
     pub execute_mode: bool,
+    /// `--preview`: simulate the whole installation, print every command,
+    /// write nothing. Set once from the command line and never cleared, so
+    /// there is no key press that can turn a preview into a real install.
+    pub preview: bool,
     pub phase_progress: usize,
 }
 
@@ -232,6 +236,7 @@ impl App {
             log_path: String::new(),
             armed: false,
             execute_mode: false,
+            preview: false,
             phase_progress: 0,
         };
         app.sync_language_to_system();
@@ -266,6 +271,14 @@ impl App {
     }
 
     pub fn gate(&self) -> SafetyGate {
+        // Preview wins over both flags, and it is checked first on purpose: a
+        // user who typed `--preview --allow-destructive --execute` (or an old
+        // wrapper script that appends them automatically) still gets a run that
+        // cannot write. There is no combination of arguments that reaches the
+        // execute gate from here.
+        if self.preview {
+            return SafetyGate::preview();
+        }
         if self.armed && self.execute_mode {
             SafetyGate::armed_and_execute()
         } else if self.armed {

@@ -43,15 +43,25 @@ pub const TARGET_ROOT: &str = "/mnt";
 pub struct RealSystemRunner {
     ops: OpRunner,
     gate: SafetyGate,
+    /// `--preview`: simulate a complete installation.
+    ///
+    /// Mirrors `gate.preview` (it is read from there, never set separately), so
+    /// there is no second switch that could disagree with the gate. Every method
+    /// below checks it before touching the system: it records the command it
+    /// would run and returns `Ok(())`, which is what lets all twelve phases run
+    /// end to end instead of dying on the first `ensure_exec()`.
+    preview: bool,
     /// Non-fatal problems worth telling the user about.
     pub warnings: Vec<String>,
 }
 
 impl RealSystemRunner {
     pub fn new(gate: SafetyGate) -> Self {
+        let preview = gate.preview;
         RealSystemRunner {
             ops: OpRunner::new(),
             gate,
+            preview,
             warnings: Vec::new(),
         }
     }
@@ -60,7 +70,63 @@ impl RealSystemRunner {
         &self.ops.records
     }
 
+    /// True when this runner only simulates.
+    pub fn is_preview(&self) -> bool {
+        self.preview
+    }
+
+    /// One printable line per command, in execution order, for the progress
+    /// log and the `--scripted` output. Empty when nothing was attempted.
+    pub fn command_lines(&self) -> Vec<String> {
+        if self.ops.records.is_empty() {
+            return Vec::new();
+        }
+        self.ops.report().lines().map(|l| l.to_string()).collect()
+    }
+
+    /// Record a command that a preview would run. Same shape as the record
+    /// `OpRunner` keeps for a real dry run, so the preview list is exactly what
+    /// the machine would have been asked to do.
+    fn record(&mut self, program: &str, args: Vec<String>, stdin: Option<String>) {
+        self.ops.push_record(crate::storage::ops::RecordedCommand {
+            program: program.to_string(),
+            args,
+            stdin,
+            applied: false,
+            status: None,
+            stderr: String::new(),
+        });
+    }
+
+    /// Record a chroot script on stdin. The script is printed so the user can
+    /// see it, with any password taken out: the same rule the real run follows
+    /// by never putting a secret in argv, applied to what the user is shown.
+    fn record_chroot(&mut self, script: &str) {
+        self.record(
+            "arch-chroot",
+            vec![TARGET_ROOT.into()],
+            Some(redact_secrets(script)),
+        );
+    }
+
+    /// The gate to hand to `OpRunner` for a simulated step. `OpRunner` already
+    /// records instead of running when the gate does not write to disk, so a
+    /// preview here produces the real `sgdisk`/`sfdisk`/`mkfs`/`mount` list
+    /// without a single spawn.
+    fn preview_gate(&self) -> SafetyGate {
+        let mut gate = self.gate.clone();
+        gate.preview = true;
+        gate.dry_run = true;
+        gate
+    }
+
     fn ensure_exec(&self) -> Result<()> {
+        if self.preview {
+            // Unreachable in practice: every method returns before this. Kept
+            // so that adding a method without a preview branch still cannot
+            // reach `sys` with the latch closed by accident.
+            return Ok(());
+        }
         match self.gate.mode() {
             GateMode::Locked => Err(CamarelolError::new(
                 ErrorCode::SafetyGateClosed,
@@ -72,6 +138,11 @@ impl RealSystemRunner {
                 "camareLOL is in dry-run mode; nothing will be written",
             )
             .with_remediation("pass --execute to really install")),
+            GateMode::Preview => Err(CamarelolError::new(
+                ErrorCode::PreviewActive,
+                "camareLOL is in preview mode; nothing will be run",
+            )
+            .with_remediation("pass --preview to simulate the install")),
             GateMode::Execute => Ok(()),
         }
     }
@@ -79,6 +150,10 @@ impl RealSystemRunner {
     /// Run a script inside the target system via `arch-chroot`, piping the
     /// script on stdin (no argv exposure of secrets).
     fn chroot_run(&mut self, script: &str, _phase: &str) -> Result<()> {
+        if self.preview {
+            self.record_chroot(script);
+            return Ok(());
+        }
         self.ensure_exec()?;
         self.gate.authorize(
             crate::safety::Operation::Pacstrap,
@@ -101,8 +176,44 @@ impl RealSystemRunner {
     }
 }
 
+/// Hide a password in a script that is about to be shown to the user.
+///
+/// The account script builds `echo 'user:secret' | chpasswd`. The real run
+/// keeps the secret off argv and off disk, but a preview *prints* the script, so
+/// the text between the first pair of quotes on a chpasswd line is replaced. The
+/// shape of the command stays readable; the secret does not leak into a log, a
+/// screenshot or a bug report.
+fn redact_secrets(script: &str) -> String {
+    let mut out = script
+        .lines()
+        .map(|line| {
+            if !line.contains("chpasswd") {
+                return line.to_string();
+            }
+            match (line.find('\''), line.rfind('\'')) {
+                (Some(first), Some(last)) if first < last => {
+                    format!("{}'<redacted>'{}", &line[..first], &line[last + 1..])
+                }
+                _ => line.to_string(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    // `lines()` swallows the final newline; put it back so a script that had no
+    // secret in it comes out byte-identical.
+    if script.ends_with('\n') {
+        out.push('\n');
+    }
+    out
+}
+
 impl SystemRunner for RealSystemRunner {
     fn apply_partition_table(&mut self, disk: &StorageDevice, plan: &PartitionPlan) -> Result<()> {
+        if self.preview {
+            let gate = self.preview_gate();
+            let log = Logger::default();
+            return self.ops.apply_partition_table(disk, plan, &gate, &log);
+        }
         self.ensure_exec()?;
         let log = Logger::default();
         self.ops
@@ -110,6 +221,11 @@ impl SystemRunner for RealSystemRunner {
     }
 
     fn format_partition(&mut self, spec: &PartitionSpec, target: &str) -> Result<()> {
+        if self.preview {
+            let gate = self.preview_gate();
+            let log = Logger::default();
+            return self.ops.format_partition(spec, target, &gate, &log);
+        }
         self.ensure_exec()?;
         let log = Logger::default();
         self.ops
@@ -117,12 +233,23 @@ impl SystemRunner for RealSystemRunner {
     }
 
     fn mount(&mut self, source: &str, target: &str) -> Result<()> {
+        if self.preview {
+            let gate = self.preview_gate();
+            let log = Logger::default();
+            return self.ops.mount(source, target, &gate, &log);
+        }
         self.ensure_exec()?;
         let log = Logger::default();
         self.ops.mount(source, target, &self.gate.clone(), &log)
     }
 
     fn pacstrap(&mut self, packages: &[String]) -> Result<()> {
+        if self.preview {
+            let mut args = vec![TARGET_ROOT.to_string()];
+            args.extend(packages.iter().cloned());
+            self.record("pacstrap", args, None);
+            return Ok(());
+        }
         self.ensure_exec()?;
         self.gate.authorize(
             crate::safety::Operation::Pacstrap,
@@ -144,6 +271,13 @@ impl SystemRunner for RealSystemRunner {
     }
 
     fn genfstab(&mut self) -> Result<()> {
+        if self.preview {
+            // Only the `genfstab` call. Appending its (non-existent) output to
+            // /mnt/etc/fstab is the one thing here that would create a file on
+            // the disk, so it is deliberately not part of the preview.
+            self.record("genfstab", vec!["-U".into(), TARGET_ROOT.into()], None);
+            return Ok(());
+        }
         self.ensure_exec()?;
         let out = crate::sys::run("genfstab", &["-U", TARGET_ROOT])?;
         if !out.success() {
@@ -173,6 +307,26 @@ impl SystemRunner for RealSystemRunner {
     }
 
     fn install_bootloader(&mut self, bl: Bootloader, disk: &StorageDevice) -> Result<()> {
+        if self.preview {
+            let firmware = crate::hardware::detect_firmware();
+            match bl {
+                Bootloader::Grub => {
+                    let target = match firmware {
+                        crate::hardware::Firmware::Bios => {
+                            format!("--target=i386-pc {}", disk.path)
+                        }
+                        _ => "--target=x86_64-efi --efi-directory=/boot --bootloader-id=camareLOL"
+                            .to_string(),
+                    };
+                    let mut args = vec![TARGET_ROOT.to_string(), "grub-install".to_string()];
+                    args.extend(target.split(' ').map(|s| s.to_string()));
+                    self.record("arch-chroot", args, None);
+                    self.record_chroot("grub-mkconfig -o /boot/grub/grub.cfg");
+                }
+                Bootloader::SystemdBoot => self.record_chroot("bootctl install"),
+            }
+            return Ok(());
+        }
         self.ensure_exec()?;
         self.gate.authorize(
             crate::safety::Operation::InstallBootloader,
@@ -215,6 +369,23 @@ impl SystemRunner for RealSystemRunner {
     }
 
     fn enable_services(&mut self, services: &[String]) -> Result<()> {
+        if self.preview {
+            for service in services {
+                self.record(
+                    "arch-chroot",
+                    vec![
+                        TARGET_ROOT.into(),
+                        "systemctl".into(),
+                        "enable".into(),
+                        service.clone(),
+                    ],
+                    None,
+                );
+            }
+            // `ensure_template_symlink` is *not* run: it creates symlinks under
+            // the target root, which is a write no matter how small.
+            return Ok(());
+        }
         self.ensure_exec()?;
         if services.is_empty() {
             return Ok(());
@@ -267,6 +438,14 @@ impl SystemRunner for RealSystemRunner {
     }
 
     fn mkinitcpio(&mut self) -> Result<()> {
+        if self.preview {
+            self.record(
+                "arch-chroot",
+                vec![TARGET_ROOT.into(), "mkinitcpio".into(), "-P".into()],
+                None,
+            );
+            return Ok(());
+        }
         self.ensure_exec()?;
         let out = crate::sys::run_with_timeout(
             "arch-chroot",
@@ -1009,6 +1188,339 @@ mod tests {
         let err = runner.pacstrap(&["base".into()]).unwrap_err();
         assert_eq!(err.code, ErrorCode::SafetyGateClosed);
         assert!(runner.records().is_empty());
+    }
+
+    #[test]
+    fn a_normal_runner_is_not_in_preview() {
+        // The regression guard for the other direction: without --preview
+        // nothing about the runner may change, including the refusal of a
+        // dry-run (which is what stopped the real code before).
+        let _scope = crate::sys::PreviewScope::off();
+        let mut runner = RealSystemRunner::new(SafetyGate::armed());
+        assert!(!runner.is_preview());
+        assert_eq!(
+            runner.pacstrap(&["base".into()]).unwrap_err().code,
+            ErrorCode::SafetyGateClosed
+        );
+        let mut runner = RealSystemRunner::new(SafetyGate::default());
+        assert_eq!(
+            runner.genfstab().unwrap_err().code,
+            ErrorCode::SafetyGateClosed,
+            "a locked gate still refuses before anything is recorded"
+        );
+        assert!(runner.records().is_empty());
+    }
+
+    // ---------------------------------------------------------------- preview
+
+    /// The config every preview test runs: pinned firmware so the run is the
+    /// same on a UEFI workstation, a BIOS box and inside a container.
+    fn preview_cfg() -> InstallationConfig {
+        InstallationConfig {
+            firmware: "uefi".into(),
+            users: vec!["alice".into()],
+            admin_users: vec!["alice".into()],
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn preview_runs_all_twelve_phases_and_records_every_command() {
+        let _scope = crate::sys::PreviewScope::on();
+        let cfg = preview_cfg();
+        cfg.validate().unwrap();
+        let gate = SafetyGate::preview();
+        let mut runner = RealSystemRunner::new(gate.clone());
+        assert!(runner.is_preview());
+
+        let report = run_install(
+            &cfg,
+            &disk(),
+            &plan(),
+            &gate,
+            &Logger::default(),
+            &mut runner,
+            &mut NullSink,
+        );
+
+        assert!(
+            report.all_completed(),
+            "a preview must not stop early:\n{}",
+            report.render()
+        );
+        assert_eq!(
+            report.phases.len(),
+            crate::install::PHASE_ORDER.len(),
+            "every phase must be walked:\n{}",
+            report.render()
+        );
+
+        let commands = runner.command_lines();
+        assert!(!commands.is_empty(), "the preview produced no command");
+        for expected in [
+            "sgdisk",       // partition table
+            "sfdisk",       // partitions
+            "mkfs",         // filesystems
+            "mount",        // target root
+            "pacstrap",     // base system
+            "genfstab",     // fstab
+            "grub-install", // bootloader
+            "mkinitcpio",   // initramfs
+        ] {
+            assert!(
+                commands.iter().any(|c| c.contains(expected)),
+                "`{expected}` is missing from the preview:\n{}",
+                commands.join("\n")
+            );
+        }
+        assert!(
+            commands.iter().all(|c| c.starts_with("DRYRUN")),
+            "no previewed command may be marked as run:\n{}",
+            commands.join("\n")
+        );
+        assert!(
+            runner
+                .records()
+                .iter()
+                .all(|r| !r.applied && r.status.is_none()),
+            "a recorded command must carry no result: nothing ran"
+        );
+    }
+
+    #[test]
+    fn preview_spawns_no_process_at_all() {
+        // The acceptance criterion, stated as a number. `spawn_count` is bumped
+        // immediately before every `Command::spawn` in the crate, so zero here
+        // means zero processes started — not "the ones we know about".
+        let _scope = crate::sys::PreviewScope::on();
+        let cfg = preview_cfg();
+        let gate = SafetyGate::preview();
+        let mut runner = RealSystemRunner::new(gate.clone());
+        let report = run_install(
+            &cfg,
+            &disk(),
+            &plan(),
+            &gate,
+            &Logger::default(),
+            &mut runner,
+            &mut NullSink,
+        );
+        assert!(report.all_completed());
+        assert!(!runner.records().is_empty(), "there was work to simulate");
+        assert_eq!(
+            crate::sys::spawn_count(),
+            0,
+            "preview started a process:\n{}",
+            runner.command_lines().join("\n")
+        );
+    }
+
+    #[test]
+    fn preview_records_every_runner_method_and_returns_ok() {
+        // Every method of the trait, called directly, including the ones that
+        // never went through OpRunner and used to call `sys::*` themselves:
+        // pacstrap, genfstab, install_bootloader, chroot_script, enable_services
+        // and mkinitcpio. Each must record a command, succeed, and leave the
+        // spawn counter at zero.
+        let _scope = crate::sys::PreviewScope::on();
+        let disk = disk();
+        let plan = plan();
+        let services = vec!["NetworkManager.service".to_string()];
+        let mut runner = RealSystemRunner::new(SafetyGate::preview());
+
+        runner.apply_partition_table(&disk, &plan).unwrap();
+        runner
+            .format_partition(&plan.partitions[0], "/dev/vdb1")
+            .unwrap();
+        runner
+            .mount("/dev/vdb1", &format!("{TARGET_ROOT}/boot"))
+            .unwrap();
+        runner.pacstrap(&["base".into(), "linux".into()]).unwrap();
+        runner.genfstab().unwrap();
+        runner.install_bootloader(Bootloader::Grub, &disk).unwrap();
+        runner
+            .chroot_script("set -e\necho hi > /etc/hostname")
+            .unwrap();
+        runner.enable_services(&services).unwrap();
+        runner.mkinitcpio().unwrap();
+
+        let commands = runner.command_lines();
+        assert!(
+            commands
+                .iter()
+                .any(|c| c.contains("systemctl enable NetworkManager.service")),
+            "enable_services must still show its commands:\n{}",
+            commands.join("\n")
+        );
+        assert!(
+            runner.records().iter().all(|r| !r.applied),
+            "nothing in a preview may be marked applied"
+        );
+        assert_eq!(
+            crate::sys::spawn_count(),
+            0,
+            "a runner method reached spawn():\n{}",
+            commands.join("\n")
+        );
+    }
+
+    #[test]
+    fn preview_leaves_the_destructive_tools_untouched() {
+        // The same proof a user would want, made mechanical: every program the
+        // install can reach is replaced by a stub that appends to a marker file
+        // the moment it is executed. A preview that ran a single one of them
+        // would leave the marker behind.
+        let _scope = crate::sys::PreviewScope::on();
+        let dir =
+            std::env::temp_dir().join(format!("camarelol-preview-stubs-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let marker = dir.join("breach.log");
+        for tool in [
+            "sgdisk",
+            "sfdisk",
+            "mkfs.fat",
+            "mkfs.ext4",
+            "mkfs.btrfs",
+            "mkswap",
+            "mount",
+            "mkdir",
+            "partprobe",
+            "blockdev",
+            "udevadm",
+            "pacstrap",
+            "genfstab",
+            "arch-chroot",
+            "mkinitcpio",
+        ] {
+            let stub = dir.join(tool);
+            std::fs::write(
+                &stub,
+                format!(
+                    "#!/bin/sh\nprintf 'ran {tool} %s\\n' \"$*\" >> {}\nexit 0\n",
+                    marker.display()
+                ),
+            )
+            .unwrap();
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).unwrap();
+            }
+        }
+        // The stubs only become reachable through PATH; put the real one back
+        // afterwards so the rest of the suite is unaffected.
+        let real_path = std::env::var("PATH").unwrap_or_default();
+        std::env::set_var("PATH", format!("{}:{real_path}", dir.display()));
+
+        let fstab = std::path::Path::new("/mnt/etc/fstab");
+        let fstab_existed = fstab.exists();
+
+        let cfg = preview_cfg();
+        let gate = SafetyGate::preview();
+        let mut runner = RealSystemRunner::new(gate.clone());
+        let report = run_install(
+            &cfg,
+            &disk(),
+            &plan(),
+            &gate,
+            &Logger::default(),
+            &mut runner,
+            &mut NullSink,
+        );
+
+        std::env::set_var("PATH", real_path);
+
+        assert!(report.all_completed(), "{}", report.render());
+        assert!(
+            !runner.records().is_empty(),
+            "the run must have had something to simulate"
+        );
+        assert!(
+            !marker.exists(),
+            "a destructive tool ran during the preview:\n{}",
+            std::fs::read_to_string(&marker).unwrap_or_default()
+        );
+        assert_eq!(
+            fstab.exists(),
+            fstab_existed,
+            "genfstab output must not be appended to the target"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn preview_cannot_be_switched_off_by_any_flag() {
+        // `--preview --allow-destructive --execute` all at once: the gate must
+        // still refuse to write, and `dry_run` being flipped by hand must not
+        // help either — that is what `writes_to_disk` is for.
+        let mut gate = SafetyGate::preview();
+        gate.dry_run = false;
+        assert!(!gate.writes_to_disk(), "a preview gate never writes");
+        assert_eq!(gate.mode(), GateMode::Preview);
+        for op in [
+            crate::safety::Operation::WritePartitionTable,
+            crate::safety::Operation::FormatPartition,
+            crate::safety::Operation::Pacstrap,
+            crate::safety::Operation::InstallBootloader,
+        ] {
+            assert!(
+                gate.authorize(op, crate::storage::device::RiskLevel::High)
+                    .is_ok(),
+                "a preview must not be blocked by the gate"
+            );
+        }
+        let mut runner = RealSystemRunner::new(gate);
+        assert!(runner.is_preview());
+        runner.pacstrap(&["base".into()]).unwrap();
+        assert!(!runner.records().is_empty());
+
+        // And the other way round: a preview gate forced onto a real gate.
+        let mut real = SafetyGate::armed_and_execute();
+        real.preview = true;
+        assert!(!real.writes_to_disk());
+    }
+
+    #[test]
+    fn preview_never_reaches_the_op_runner_write_path() {
+        // Defence in depth, tested at the layer below the runner: even a gate
+        // that claims to be executing cannot make OpRunner spawn anything while
+        // preview is on, because the syscall latch refuses.
+        let _scope = crate::sys::PreviewScope::on();
+        let mut gate = SafetyGate::armed_and_execute();
+        gate.preview = true;
+        let mut ops = crate::storage::ops::OpRunner::new();
+        ops.apply_partition_table(&disk(), &plan(), &gate, &Logger::default())
+            .unwrap();
+        assert!(!ops.records.is_empty(), "the plan is still shown");
+        assert!(ops.records.iter().all(|r| !r.applied));
+        assert_eq!(crate::sys::spawn_count(), 0);
+        assert_eq!(
+            crate::sys::mutating_refusals(),
+            0,
+            "OpRunner must not even try when writes_to_disk() is false"
+        );
+    }
+
+    #[test]
+    fn preview_does_not_print_a_password() {
+        let mut cfg = preview_cfg();
+        cfg.set_passwords(Some("rootpw"), &[("alice", "alicepw")]);
+        let script = account_script(&cfg);
+        assert!(script.contains("rootpw"), "fixture really has a password");
+        let shown = redact_secrets(&script);
+        assert!(!shown.contains("rootpw"), "the root password leaked");
+        assert!(!shown.contains("alicepw"), "the user password leaked");
+        assert!(shown.contains("chpasswd"), "the command shape must stay");
+        assert!(shown.contains("useradd -m -s /bin/bash alice"));
+        assert!(shown.contains("wheel"));
+    }
+
+    #[test]
+    fn redaction_leaves_scripts_without_secrets_alone() {
+        let cfg = InstallationConfig::default();
+        let script = system_config_script(&cfg);
+        assert_eq!(redact_secrets(&script), script);
     }
 
     #[test]

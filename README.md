@@ -10,30 +10,32 @@
 
 **English** · [Tiếng Việt](README.vi.md) · [中文](docs/zh/index.md)
 
-> ## ⚠ ALPHA — đã qua nhiều bản cập nhật, vẫn còn lỗi
->
-> camareLOL ở giai đoạn **demo/alpha**. Đã có 16 bản phát hành, nhưng số bản
-> **không** phản ánh độ ổn định. Những lỗi như tên gói Arch viết sai chỉ lộ
-> ra khi chạy thật trong máy ảo — và chúng đã làm hỏng cả bản cài:
->
-> - `greetd-tuigreeter` thay vì `greetd-tuigreet` → **Hyprland và Sway không
->   cài được**
-> - `p7zip` thay vì `7zip` → đã bị gỡ khỏi kho Arch
-> - yêu cầu cài gói `systemd-boot` không tồn tại → **mọi** bản cài chọn
->   systemd-boot đều chết ở `pacstrap`
->
-> Cả ba đều qua được mọi unit test. Chúng chỉ chết trong VirtualBox.
->
-> **Vì vậy:**
->
-> 1. Chỉ chạy trên **ổ trống** — ổ đang có Windows hay dữ liệu thì đừng.
-> 2. Chạy từ **Arch live ISO**, không phải trên máy bạn đang dùng.
-> 3. Sao lưu mọi thứ trước khi cài bất cứ thứ gì.
->
-> Số phiên bản giữ dạng `0.1.x` là có chủ ý. `0.x` theo SemVer nghĩa là
-> "chưa ổn định". Đặt thành `5.6` sẽ khiến người khác tin rằng đây là phần
-> mềm đã bảo trì lâu và chạy ổn định — một thông đoạp sai, và nguy hiểm với
-> một công cụ xoá ổ đĩa.
+## ⚠ ALPHA — many releases, still bugs
+
+camareLOL is at the **demo/alpha** stage. Seventeen releases have shipped, but
+the version number does **not** mean it is stable. Mistakes such as a mistyped
+Arch package name only surfaced on a real VirtualBox run — and they broke
+entire installations:
+
+- `greetd-tuigreeter` instead of `greetd-tuigreet` → **Hyprland and Sway could
+  not be installed at all**
+- `p7zip` instead of `7zip` → `p7zip` was dropped from the Arch repositories
+- asking to install a package named `systemd-boot`, which does not exist →
+  **every** systemd-boot install died at `pacstrap`
+
+All three passed the entire unit test suite. They only died in a VM.
+
+**So:**
+
+1. Only run it on an **empty disk** — not one holding Windows or any data.
+2. Run it from the **Arch live ISO**, never on the machine you are trying to
+   fix.
+3. Back up everything first.
+
+Keeping the version at `0.1.x` is deliberate. Under SemVer, `0.x` means "not
+stable". Shipping it as `5.6` would tell other people this is software that has
+been maintained for years and runs reliably — a false signal, and a dangerous
+one for a tool that erases disks.
 
 camareLOL installs Arch Linux from the terminal without making you type dozens
 of shell commands. It detects your hardware, proposes a safe layout, shows you
@@ -214,6 +216,10 @@ yourself is in [docs/en/vm-testing.md](docs/en/vm-testing.md).
   locale, keymap, timezone, hostname, users, sudo policy, services, initramfs.
 - Safety gate: locked by default; `--allow-destructive` + typed confirmation
   phrases (`ERASE`, `ERASE AND WIPE`) arm it; `--execute` is required to write.
+- `--preview`: simulates a complete installation — all twelve phases, every real
+  command printed, **nothing executed and nothing written**. It ignores
+  `--allow-destructive` and `--execute`, and a red banner stays on screen for
+  the whole run.
 - Configuration profiles: save/load, schema-versioned, **never containing
   passwords**.
 - Logs everything with secret redaction; diagnostics report for bug reports.

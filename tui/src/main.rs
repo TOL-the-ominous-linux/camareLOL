@@ -24,6 +24,9 @@ struct Args {
     save_config: Option<PathBuf>,
     allow_destructive: bool,
     execute: bool,
+    /// Simulate a complete installation: all twelve phases, every command
+    /// printed, nothing written and nothing run.
+    preview: bool,
     scan: bool,
     self_test: bool,
     scripted: Option<PathBuf>,
@@ -33,8 +36,15 @@ struct Args {
 }
 
 fn parse_args() -> Result<Args, String> {
+    let argv: Vec<String> = std::env::args().skip(1).collect();
+    parse_args_from(argv)
+}
+
+/// Split out from [`parse_args`] so the flag handling is testable without
+/// spawning the binary with a doctored `argv`.
+fn parse_args_from(argv: Vec<String>) -> Result<Args, String> {
     let mut a = Args::default();
-    let mut args = std::env::args().skip(1);
+    let mut args = argv.into_iter();
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--mock" => a.mock = args.next().map(PathBuf::from),
@@ -42,6 +52,7 @@ fn parse_args() -> Result<Args, String> {
             "--save-config" => a.save_config = args.next().map(PathBuf::from),
             "--allow-destructive" => a.allow_destructive = true,
             "--execute" => a.execute = true,
+            "--preview" => a.preview = true,
             "--scan" => a.scan = true,
             "--self-test" => a.self_test = true,
             "--scripted" => a.scripted = args.next().map(PathBuf::from),
@@ -75,6 +86,7 @@ OPTIONS:
     --scan                    Print the storage survey as JSON and exit
     --self-test               Run the non-destructive acceptance checks
     --scripted <FILE>         Install without a UI (for automated testing)
+    --preview                 Simulate the whole installation and write nothing
     --allow-destructive       Arm the safety gate (still requires confirmation)
     --execute                 Really write to disk (default is dry-run)
     --lang <vi|en>            Installer language
@@ -83,6 +95,13 @@ OPTIONS:
 
     -h, --help                Show this help
     -V, --version             Show version and commit
+
+PREVIEW:
+    --preview walks all twelve phases and prints the exact commands a real
+    install would run. It starts none of them and writes nothing: the safety
+    latch in the core refuses to spawn any changing command for the rest of
+    the run. --allow-destructive and --execute are ignored next to it, so
+    `--preview --execute` is still a preview.
 
 UPDATING:
     camareLOL does not update itself. There is no updater, no index URL and
@@ -101,6 +120,21 @@ UPDATING:
 "
 }
 
+/// The startup warning. Printed on stderr, before anything is drawn, so it is
+/// the first thing a user sees even if the interface never comes up.
+fn preview_warning() -> String {
+    "\
+╔══════════════════════════════════════════════════════════════════════════╗
+║  PREVIEW — KHÔNG GÌ ĐƯỢC GHI VÀO ĐĨA — NOTHING WILL BE WRITTEN TO DISK  ║
+╚══════════════════════════════════════════════════════════════════════════╝
+  Toàn bộ 12 pha sẽ chạy và in ra từng lệnh thật. Không lệnh nào được chạy,
+  không byte nào được ghi. --allow-destructive và --execute bị bỏ qua.
+
+  All twelve phases run and every real command is printed. Nothing is executed
+  and nothing is written; --allow-destructive and --execute are ignored."
+        .to_string()
+}
+
 fn main() {
     restore_default_sigpipe();
     let args = match parse_args() {
@@ -111,6 +145,14 @@ fn main() {
             std::process::exit(2);
         }
     };
+
+    // Chốt chặn an toàn trước mọi thứ khác, kể cả trước lần quét đĩa đầu
+    // tiên: từ thời điểm này `sys` sẽ từ chối mọi lệnh có thể thay đổi máy,
+    // không cần lớp nào phía trên phải nhớ kiểm tra.
+    if args.preview {
+        camarelol_core::sys::enter_preview();
+        eprintln!("{}", preview_warning());
+    }
 
     if args.scan {
         if let Err(e) = cmd_scan(args.mock.clone()) {
@@ -151,6 +193,7 @@ fn main() {
             &cfg_path,
             args.mock.as_deref(),
             args.allow_destructive && args.execute,
+            args.preview,
         ) {
             Ok(report) => {
                 println!("{}", report.render());
@@ -387,6 +430,8 @@ fn run_tui(args: Args) -> Result<(), CamarelolError> {
     }
     app.armed = args.allow_destructive;
     app.execute_mode = args.execute;
+    // Set last and unconditionally: `--preview` overrides both flags above.
+    app.preview = args.preview;
     app.save_config_path = args.save_config;
 
     let mut terminal = ratatui::init();
@@ -418,4 +463,76 @@ fn run_tui(args: Args) -> Result<(), CamarelolError> {
     })();
     ratatui::restore();
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse(argv: &[&str]) -> Args {
+        parse_args_from(argv.iter().map(|s| s.to_string()).collect()).unwrap()
+    }
+
+    #[test]
+    fn preview_is_off_unless_asked_for() {
+        assert!(!parse(&[]).preview);
+        assert!(!parse(&["--allow-destructive", "--execute"]).preview);
+        assert!(parse(&["--preview"]).preview);
+    }
+
+    #[test]
+    fn preview_is_the_only_flag_that_can_say_no_to_the_others() {
+        // A wrapper script that always appends the destructive flags must not be
+        // able to defeat --preview. `App::gate()` is the place that guarantees
+        // it; this pins the flag itself so a future parser change cannot turn
+        // the two into an either/or.
+        let args = parse(&["--preview", "--allow-destructive", "--execute"]);
+        assert!(args.preview && args.allow_destructive && args.execute);
+
+        let mut app = App::new(None);
+        app.preview = args.preview;
+        app.armed = args.allow_destructive;
+        app.execute_mode = args.execute;
+        let gate = app.gate();
+        assert!(gate.preview);
+        assert!(!gate.writes_to_disk(), "the preview flag must win");
+        assert_eq!(
+            gate.mode(),
+            camarelol_core::safety::GateMode::Preview,
+            "the footer must not say EXECUTE"
+        );
+
+        // Without --preview the very same combination is a real, armed install.
+        let plain = parse(&["--allow-destructive", "--execute"]);
+        let mut real = App::new(None);
+        real.preview = plain.preview;
+        real.armed = plain.allow_destructive;
+        real.execute_mode = plain.execute;
+        assert!(real.gate().writes_to_disk());
+    }
+
+    #[test]
+    fn the_startup_warning_says_nothing_is_written() {
+        let text = preview_warning();
+        assert!(text.contains("PREVIEW"), "{text}");
+        assert!(text.contains("KHÔNG GÌ ĐƯỢC GHI VÀO ĐĨA"), "{text}");
+        assert!(text.contains("--allow-destructive"), "{text}");
+    }
+
+    #[test]
+    fn usage_documents_preview() {
+        let u = usage();
+        assert!(u.contains("--preview"), "the help must list the flag");
+        assert!(u.contains("writes nothing"), "and say what it does:\n{u}");
+        assert!(
+            u.contains("--execute is ignored") || u.contains("are ignored"),
+            "and that it cannot be combined with a real run:\n{u}"
+        );
+    }
+
+    #[test]
+    fn unknown_arguments_are_still_rejected() {
+        let err = parse_args_from(vec!["--preview-everything".to_string()]).unwrap_err();
+        assert!(err.contains("unknown argument"), "{err}");
+    }
 }

@@ -136,6 +136,18 @@ $ sudo ./camarelol --allow-destructive --execute
 
 Gõ sai thì bị từ chối và **không ghi gì cả**.
 
+## Xem trước: `--preview`
+
+```console
+$ sudo ./camarelol --preview
+```
+
+Chạy đủ 12 pha và in ra **từng lệnh thật** sẽ chạy (`sgdisk`, `sfdisk`, `mkfs`,
+`pacstrap`, `genfstab`, `arch-chroot`, `mkinitcpio`, …) — nhưng không lệnh nào
+được chạy và không byte nào được ghi vào đĩa. `--allow-destructive` và
+`--execute` bị bỏ qua khi có `--preview`, nên `--preview --execute` vẫn chỉ là
+xem trước. Dải cảnh báo đỏ hiện trên mọi màn hình suốt lần chạy.
+
 Không cần giao diện:
 
 ```console

@@ -25,50 +25,95 @@ const WARN: Color = Color::Yellow;
 const BAD: Color = Color::Red;
 const GOOD: Color = Color::Green;
 
+/// The one line that must be on screen in preview mode, on every screen.
+///
+/// Not decoration: a user who believes a preview will erase a disk behaves
+/// completely differently from one who does not, and the difference matters
+/// exactly once — when it is too late. Kept in both languages because the
+/// installer is bilingual and the warning is the one string that must never be
+/// missed.
+pub const PREVIEW_BANNER: &str = "PREVIEW — KHÔNG GÌ ĐƯỢC GHI VÀO ĐĨA";
+
+fn preview_banner(app: &App) -> String {
+    app.tr_owned(
+        format!(" ⚠ {PREVIEW_BANNER} · lệnh chỉ được in ra, không lệnh nào chạy "),
+        format!(" ⚠ {PREVIEW_BANNER} — commands are shown, none is run "),
+    )
+}
+
 pub fn draw(f: &mut Frame, app: &mut App) {
     let size = f.area();
-    if size.height < 8 || size.width < 30 {
+    if size.height < 9 || size.width < 30 {
         let p = Paragraph::new("Terminal too small").style(Style::default().fg(BAD));
         f.render_widget(p, size);
         return;
     }
 
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(3),
-            Constraint::Min(5),
-            Constraint::Length(2),
-        ])
-        .split(size);
+    // The banner row only exists in preview. `app.preview` is decided once, from
+    // the command line, and never changes — so the layout cannot shift under
+    // the user and the row cannot disappear halfway through the wizard.
+    let (body, banner, footer) = if app.preview {
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(3),
+                Constraint::Min(5),
+                Constraint::Length(1),
+                Constraint::Length(2),
+            ])
+            .split(size);
+        (chunks[1], chunks[2], chunks[3])
+    } else {
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(3),
+                Constraint::Min(5),
+                Constraint::Length(2),
+            ])
+            .split(size);
+        (chunks[1], Rect::new(0, 0, 0, 0), chunks[2])
+    };
 
-    draw_header(f, app, chunks[0]);
+    draw_header(f, app, Rect::new(size.x, size.y, size.width, 3));
 
     match app.screen {
-        Screen::Help => draw_help(f, app, chunks[1]),
-        Screen::Logs => draw_logs(f, app, chunks[1]),
+        Screen::Help => draw_help(f, app, body),
+        Screen::Logs => draw_logs(f, app, body),
         other => match other {
-            Screen::Welcome => draw_welcome(f, app, chunks[1]),
+            Screen::Welcome => draw_welcome(f, app, body),
             Screen::Language
             | Screen::Keyboard
             | Screen::Timezone
             | Screen::Filesystem
-            | Screen::Bootloader => draw_choice(f, app, chunks[1]),
-            Screen::Storage => draw_storage(f, app, chunks[1]),
-            Screen::DiskMode => draw_disk_mode(f, app, chunks[1]),
-            Screen::Layout => draw_layout(f, app, chunks[1]),
-            Screen::Accounts => draw_accounts(f, app, chunks[1]),
-            Screen::Desktop => draw_desktop(f, app, chunks[1]),
-            Screen::Services => draw_services(f, app, chunks[1]),
-            Screen::Packages => draw_packages(f, app, chunks[1]),
-            Screen::Review => draw_review(f, app, chunks[1]),
-            Screen::Progress => draw_progress(f, app, chunks[1]),
-            Screen::Done => draw_done(f, app, chunks[1]),
+            | Screen::Bootloader => draw_choice(f, app, body),
+            Screen::Storage => draw_storage(f, app, body),
+            Screen::DiskMode => draw_disk_mode(f, app, body),
+            Screen::Layout => draw_layout(f, app, body),
+            Screen::Accounts => draw_accounts(f, app, body),
+            Screen::Desktop => draw_desktop(f, app, body),
+            Screen::Services => draw_services(f, app, body),
+            Screen::Packages => draw_packages(f, app, body),
+            Screen::Review => draw_review(f, app, body),
+            Screen::Progress => draw_progress(f, app, body),
+            Screen::Done => draw_done(f, app, body),
             _ => {}
         },
     }
 
-    draw_footer(f, app, chunks[2]);
+    if app.preview {
+        f.render_widget(
+            Paragraph::new(preview_banner(app)).style(
+                Style::default()
+                    .fg(BAD)
+                    .bg(Color::DarkGray)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            banner,
+        );
+    }
+
+    draw_footer(f, app, footer);
 
     if let Some(msg) = app.message.clone() {
         let area = centered_rect(70, 5, size);
@@ -155,6 +200,7 @@ fn draw_footer(f: &mut Frame, app: &App, area: Rect) {
     let mode = match gate.mode() {
         GateMode::Locked => "locked",
         GateMode::DryRun => "dry-run",
+        GateMode::Preview => "PREVIEW",
         GateMode::Execute => "EXECUTE",
     };
     let mode_text = mode.to_string();
@@ -165,7 +211,7 @@ fn draw_footer(f: &mut Frame, app: &App, area: Rect) {
         " ↑↓ move · Enter select · Tab switch field · Space toggle · Esc back · F1 help · F10 review · F5 rescan | safety gate: {mode_text}"
     );
     let text = app.tr_owned(vi, en);
-    let style = if matches!(gate.mode(), GateMode::Locked) {
+    let style = if matches!(gate.mode(), GateMode::Locked | GateMode::Preview) {
         Style::default().fg(WARN)
     } else {
         Style::default().fg(Color::DarkGray)
@@ -215,11 +261,26 @@ fn draw_welcome(f: &mut Frame, app: &App, area: Rect) {
             "  Press Enter to start. Nothing destructive happens before you confirm it.",
         )),
         Line::from(""),
+    ];
+    if app.preview {
+        // Said here too, because this is where a preview begins and the user
+        // may have walked past the startup warning a long time ago.
+        text.push(Line::from(Span::styled(
+            format!("  ⚠ {PREVIEW_BANNER}"),
+            Style::default().fg(BAD).add_modifier(Modifier::BOLD),
+        )));
+        text.push(Line::from(app.tr(
+            "  Cài đặt sẽ được mô phỏng đầy đủ và in ra từng lệnh thật.",
+            "  The whole installation is simulated and every real command is printed.",
+        )));
+    }
+    text.extend([
+        Line::from(""),
         Line::from(app.tr(
             "  Cập nhật: chạy lại scripts/camarelol.sh, hoặc tải bản mới ở trang phát hành.",
             "  To update: re-run scripts/camarelol.sh, or download a release from the releases page.",
         )),
-    ];
+    ]);
     // Nói thẳng khi Wi-Fi là đường duy nhất mà máy không có công cụ để nối:
     // "no network connection detected" một mình không giúp ai đoán phải làm
     // gì. Hàm `wifi_setup_available()` và trường `wireless` đã tồn tại từ
@@ -598,19 +659,32 @@ fn draw_review(f: &mut Frame, app: &mut App, area: Rect) {
             lines.push(Line::from(format!("   • {op}")));
         }
         lines.push(Line::from(""));
-        let phrase = required_phrase(plan.disk_risk);
-        lines.push(Line::from(vec![
-            Span::raw(" Type "),
-            Span::styled(
-                phrase,
+        if app.preview {
+            // Asking for the phrase in a preview would be theatre: there is
+            // nothing to protect. Saying so is more honest than showing a box
+            // that no longer decides anything.
+            lines.push(Line::from(Span::styled(
+                app.tr(
+                    " Xem trước: không cần gõ cụm xác nhận, vì không gì được ghi.",
+                    " Preview: no confirmation phrase needed — nothing is written.",
+                ),
                 Style::default().fg(BAD).add_modifier(Modifier::BOLD),
-            ),
-            Span::raw(" to confirm: "),
-            Span::styled(
-                app.confirm_phrase.clone(),
-                Style::default().fg(Color::Black).bg(Color::White),
-            ),
-        ]));
+            )));
+        } else {
+            let phrase = required_phrase(plan.disk_risk);
+            lines.push(Line::from(vec![
+                Span::raw(" Type "),
+                Span::styled(
+                    phrase,
+                    Style::default().fg(BAD).add_modifier(Modifier::BOLD),
+                ),
+                Span::raw(" to confirm: "),
+                Span::styled(
+                    app.confirm_phrase.clone(),
+                    Style::default().fg(Color::Black).bg(Color::White),
+                ),
+            ]));
+        }
     } else {
         lines.push(Line::from(" No plan yet — open the layout step first."));
     }
@@ -635,12 +709,26 @@ fn draw_progress(f: &mut Frame, app: &mut App, area: Rect) {
         .constraints([Constraint::Length(3), Constraint::Min(3)])
         .split(area);
     f.render_widget(gauge, chunks[0]);
-    let items: Vec<ListItem> = app
-        .install_output
-        .iter()
-        .map(|l| ListItem::new(Line::from(l.clone())))
-        .collect();
-    let list = List::new(items).block(screen_block("Progress"));
+    // The warning is repeated as the first line of the log, not just in the
+    // banner: this is the one screen that fills up with command lines, and it is
+    // the screen a user glances at while the "install" appears to work.
+    let mut lines: Vec<ListItem> = Vec::new();
+    if app.preview {
+        lines.push(ListItem::new(Line::from(Span::styled(
+            format!("⚠ {PREVIEW_BANNER}"),
+            Style::default().fg(BAD).add_modifier(Modifier::BOLD),
+        ))));
+    }
+    lines.extend(
+        app.install_output
+            .iter()
+            .map(|l| ListItem::new(Line::from(l.clone()))),
+    );
+    let list = List::new(lines).block(screen_block(if app.preview {
+        app.tr("Tiến trình xem trước", "Preview progress")
+    } else {
+        "Progress".to_string()
+    }));
     f.render_widget(list, chunks[1]);
 }
 
@@ -723,16 +811,22 @@ mod tests {
 
     /// Render the welcome screen and return it as plain text.
     fn welcome_text() -> String {
-        let mut app = welcome_app();
-        let backend = TestBackend::new(90, 24);
+        render(welcome_app(), Screen::Welcome, 90, 24)
+    }
+
+    /// Draw `app` on a screen of the given size and return the visible text.
+    fn render(mut app: App, screen: Screen, width: u16, height: u16) -> String {
+        app.screen = screen;
+        let backend = TestBackend::new(width, height);
         let mut terminal = Terminal::new(backend).unwrap();
         terminal.draw(|f| super::draw(f, &mut app)).unwrap();
         let buf = terminal.backend().buffer().clone();
+        let w = width as usize;
         buf.content()
             .iter()
             .map(|c| c.symbol())
             .collect::<Vec<_>>()
-            .chunks(90)
+            .chunks(w)
             .map(|row| row.concat())
             .collect::<Vec<_>>()
             .join("\n")
@@ -753,5 +847,82 @@ mod tests {
         let text = welcome_text();
         assert!(!text.contains("--update"), "got:\n{text}");
         assert!(!text.contains("Press u"), "got:\n{text}");
+    }
+
+    #[test]
+    fn no_banner_appears_without_preview() {
+        // The banner must mean something. A normal run has to look normal.
+        let mut app = welcome_app();
+        app.preview = false;
+        let text = render(app, Screen::Welcome, 100, 30);
+        assert!(!text.contains(super::PREVIEW_BANNER), "got:\n{text}");
+        assert!(!text.contains("PREVIEW"), "got:\n{text}");
+    }
+
+    #[test]
+    fn the_preview_banner_is_on_every_screen() {
+        // Every screen, including Progress: a warning that flickers off while
+        // the install appears to run is worse than no warning, because it
+        // teaches the user that the warning is optional.
+        let screens = [
+            Screen::Welcome,
+            Screen::Language,
+            Screen::Keyboard,
+            Screen::Timezone,
+            Screen::Storage,
+            Screen::DiskMode,
+            Screen::Layout,
+            Screen::Filesystem,
+            Screen::Accounts,
+            Screen::Bootloader,
+            Screen::Desktop,
+            Screen::Services,
+            Screen::Packages,
+            Screen::Review,
+            Screen::Progress,
+            Screen::Done,
+            Screen::Help,
+            Screen::Logs,
+        ];
+        for screen in screens {
+            let mut app = welcome_app();
+            app.preview = true;
+            app.install_output
+                .push("DRYRUN sfdisk --force /dev/vdb".into());
+            let text = render(app, screen, 120, 40);
+            assert!(
+                text.contains(super::PREVIEW_BANNER),
+                "no preview banner on {screen:?}:\n{text}"
+            );
+            // And the safety gate in the footer must not claim EXECUTE.
+            assert!(
+                !text.contains("EXECUTE"),
+                "the footer claims EXECUTE on {screen:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_preview_banner_survives_a_narrow_terminal() {
+        // 40 columns is narrow but legal (the minimum is 30). The warning is
+        // the one string that must still be there.
+        let mut app = welcome_app();
+        app.preview = true;
+        let text = render(app, Screen::Progress, 40, 24);
+        assert!(
+            text.contains("PREVIEW"),
+            "the warning vanished on a narrow terminal:\n{text}"
+        );
+    }
+
+    #[test]
+    fn the_review_screen_does_not_ask_for_a_confirmation_in_preview() {
+        // Asking for `ERASE` in a run that cannot erase anything is theatre, and
+        // it is worse than theatre: it suggests the phrase is what stops the
+        // writing.
+        let mut app = welcome_app();
+        app.preview = true;
+        let text = render(app, Screen::Review, 120, 40);
+        assert!(!text.contains("Type ERASE"), "got:\n{text}");
     }
 }

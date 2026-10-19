@@ -53,6 +53,16 @@ impl OpRunner {
         Self::default()
     }
 
+    /// Append a record without running anything.
+    ///
+    /// Used by the install runner's preview paths, which bypass [`Self::go`]
+    /// because they never call `OpRunner` at all (pacstrap, genfstab, the
+    /// chroot scripts and mkinitcpio do not go through this helper). Recording
+    /// into the same list keeps one single, ordered command list for the user.
+    pub fn push_record(&mut self, record: RecordedCommand) {
+        self.records.push(record);
+    }
+
     fn go(&mut self, gate: &SafetyGate, log: &Logger, cmd: Cmd<'_>) -> Result<()> {
         let Cmd {
             op,
@@ -62,11 +72,14 @@ impl OpRunner {
             stdin,
         } = cmd;
         gate.authorize(op, risk)?;
+        // `writes_to_disk()` and not `gate.dry_run`: in preview the field can be
+        // anything a caller set it to, this one cannot say yes.
+        let writing = gate.writes_to_disk();
         log.log(
             "storage",
-            &format!("{} {} (dry_run={})", program, args.join(" "), gate.dry_run),
+            &format!("{} {} (writing={})", program, args.join(" "), writing),
         );
-        if gate.dry_run {
+        if !writing {
             self.records.push(RecordedCommand {
                 program: program.to_string(),
                 args,
@@ -183,8 +196,8 @@ impl OpRunner {
         );
         // 4. Fail early and clearly if the kernel still does not see the
         //    partitions — formatting a missing device would be a silent no-op.
-        //    A dry run wrote nothing, so there is nothing to wait for.
-        if !gate.dry_run {
+        //    Nothing was written, so there is nothing to wait for.
+        if gate.writes_to_disk() {
             self.wait_for_partitions(device, plan.partitions.len(), log)?;
         }
         Ok(())

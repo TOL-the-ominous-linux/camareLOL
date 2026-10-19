@@ -27,7 +27,7 @@
 use crate::error::{CamarelolError, ErrorCode, Result};
 use std::io::Read;
 use std::process::{Command, Stdio};
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 // ---------------------------------------------------------------------------
@@ -41,14 +41,25 @@ use std::time::{Duration, Instant};
 /// exits, so no later code path can talk it back into writing.
 static PREVIEW: AtomicBool = AtomicBool::new(false);
 
-/// Every process actually spawned through this module, whatever the reason.
-/// The tests assert this stays at zero for a full simulated install.
-static SPAWNS: AtomicUsize = AtomicUsize::new(0);
+thread_local! {
+    /// Every process actually spawned through this module by the calling
+    /// thread.
+    ///
+    /// Thread-local on purpose. `cargo test` runs the suite on parallel threads
+    /// in one process, so a process-wide tally would let an unrelated `lsblk`
+    /// probe running in the next thread invalidate the measurement that is
+    /// supposed to prove a preview spawned nothing. The install always runs on
+    /// the thread that started it, so a per-thread count answers exactly the
+    /// question being asked: did *this* run start anything?
+    static SPAWNS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
 
-/// How many times a mutating command was *refused* by the latch. A non-zero
-/// count in preview is the proof that the backstop fired rather than simply
-/// never being reached.
-static MUTATING_REFUSALS: AtomicUsize = AtomicUsize::new(0);
+thread_local! {
+    /// How many mutating commands *this thread* was stopped from running. A
+    /// non-zero count in preview is the proof that the backstop fired rather
+    /// than simply never being reached.
+    static MUTATING_REFUSALS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
 
 /// Enter preview mode for the rest of the process' life.
 ///
@@ -62,22 +73,22 @@ pub fn preview_active() -> bool {
     PREVIEW.load(Ordering::SeqCst)
 }
 
-/// Number of processes spawned through this module so far.
+/// Number of processes the calling thread has spawned through this module.
 ///
 /// Zero after a complete `--preview` install: that number is the whole safety
 /// claim, so it is observable instead of being taken on trust.
 pub fn spawn_count() -> usize {
-    SPAWNS.load(Ordering::SeqCst)
+    SPAWNS.with(|c| c.get())
 }
 
-/// How many mutating commands the latch refused.
+/// How many mutating commands the latch refused on this thread.
 pub fn mutating_refusals() -> usize {
-    MUTATING_REFUSALS.load(Ordering::SeqCst)
+    MUTATING_REFUSALS.with(|c| c.get())
 }
 
 /// The error every mutating entry point returns in preview mode.
 fn preview_refusal(program: &str) -> CamarelolError {
-    MUTATING_REFUSALS.fetch_add(1, Ordering::SeqCst);
+    MUTATING_REFUSALS.with(|c| c.set(c.get() + 1));
     CamarelolError::new(
         ErrorCode::PreviewActive,
         format!("`{program}` was not run: --preview is active"),
@@ -91,6 +102,11 @@ fn allow_mutating(program: &str) -> Result<()> {
         return Err(preview_refusal(program));
     }
     Ok(())
+}
+
+/// Note one process about to be started.
+fn count_spawn() {
+    SPAWNS.with(|c| c.set(c.get() + 1));
 }
 
 /// Result of running an external tool.
@@ -206,7 +222,7 @@ fn spawn_and_capture(mut cmd: Command, timeout: Duration) -> Result<CommandOutpu
         }
     }
 
-    SPAWNS.fetch_add(1, Ordering::SeqCst);
+    count_spawn();
     let mut child = cmd.spawn().map_err(|e| {
         CamarelolError::new(
             ErrorCode::SpawnFailed,
@@ -286,7 +302,7 @@ pub fn run_with_input(
             cmd.env(key, val);
         }
     }
-    SPAWNS.fetch_add(1, Ordering::SeqCst);
+    count_spawn();
     let mut child = cmd.spawn().map_err(|e| {
         CamarelolError::new(
             ErrorCode::SpawnFailed,
@@ -354,4 +370,128 @@ pub fn read_file(path: &str) -> Result<String> {
 /// True when `path` exists.
 pub fn path_exists(path: &str) -> bool {
     std::path::Path::new(path).exists()
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+/// Serialises the tests that flip the process-wide preview latch.
+#[cfg(test)]
+static TEST_LATCH: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// RAII scope that puts the preview latch in a known state for one test.
+///
+/// `cargo test` runs the tests of a crate on parallel threads inside a single
+/// process, so a test that enabled preview globally would otherwise poison
+/// every other test that spawns a process. Holding [`TEST_LATCH`] for the whole
+/// test makes the process-wide flag behave like a per-test one, and the `Drop`
+/// below restores it either way.
+#[cfg(test)]
+pub(crate) struct PreviewScope {
+    _guard: std::sync::MutexGuard<'static, ()>,
+}
+
+#[cfg(test)]
+impl PreviewScope {
+    /// Run the body with preview **on** and both counters at zero.
+    pub(crate) fn on() -> Self {
+        let guard = TEST_LATCH.lock().unwrap_or_else(|e| e.into_inner());
+        reset_counters();
+        PREVIEW.store(true, Ordering::SeqCst);
+        PreviewScope { _guard: guard }
+    }
+
+    /// Run the body with preview **off** and both counters at zero.
+    pub(crate) fn off() -> Self {
+        let guard = TEST_LATCH.lock().unwrap_or_else(|e| e.into_inner());
+        reset_counters();
+        PREVIEW.store(false, Ordering::SeqCst);
+        PreviewScope { _guard: guard }
+    }
+}
+
+#[cfg(test)]
+impl Drop for PreviewScope {
+    fn drop(&mut self) {
+        PREVIEW.store(false, Ordering::SeqCst);
+        reset_counters();
+    }
+}
+
+#[cfg(test)]
+fn reset_counters() {
+    SPAWNS.with(|c| c.set(0));
+    MUTATING_REFUSALS.with(|c| c.set(0));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn preview_refuses_to_spawn_a_mutating_command() {
+        let _scope = PreviewScope::on();
+        let err = run("/bin/sh", &["-c", "touch /tmp/camarelol-must-not-exist"]).unwrap_err();
+        assert_eq!(err.code, ErrorCode::PreviewActive);
+        assert_eq!(spawn_count(), 0, "nothing may be spawned in preview");
+        assert_eq!(mutating_refusals(), 1);
+        assert!(
+            !std::path::Path::new("/tmp/camarelol-must-not-exist").exists(),
+            "the refused command must not have run"
+        );
+    }
+
+    #[test]
+    fn preview_refuses_every_mutating_entry_point() {
+        let _scope = PreviewScope::on();
+        assert_eq!(
+            run_with_input(
+                "/bin/sh",
+                &["-c", "cat > /dev/null"],
+                "x",
+                Duration::from_secs(5)
+            )
+            .unwrap_err()
+            .code,
+            ErrorCode::PreviewActive
+        );
+        assert_eq!(
+            run_with_timeout("pacstrap", &["/mnt"], Duration::from_secs(5))
+                .unwrap_err()
+                .code,
+            ErrorCode::PreviewActive
+        );
+        assert_eq!(
+            run_command(Command::new("sgdisk"), Duration::from_secs(5))
+                .unwrap_err()
+                .code,
+            ErrorCode::PreviewActive
+        );
+        assert_eq!(spawn_count(), 0, "not one of them may reach spawn()");
+        assert_eq!(mutating_refusals(), 3);
+    }
+
+    #[test]
+    fn read_only_probes_still_work_in_preview() {
+        // A preview that cannot list the disks is a preview that cannot show a
+        // plan; the read-only path is the documented exception.
+        let _scope = PreviewScope::on();
+        let out = inspect("/bin/sh", &["-c", "echo read-only"]).unwrap();
+        assert_eq!(out.status, 0);
+        assert!(out.success());
+        assert_eq!(spawn_count(), 1, "inspect does spawn — and is counted");
+    }
+
+    #[test]
+    fn without_preview_commands_run_exactly_as_before() {
+        // The regression guard for the other direction: the latch must not
+        // change anything when it is not set, or real installs would break.
+        let _scope = PreviewScope::off();
+        assert!(!preview_active());
+        let out = run("/bin/sh", &["-c", "exit 0"]).unwrap();
+        assert!(out.success());
+        assert_eq!(spawn_count(), 1);
+        assert_eq!(mutating_refusals(), 0);
+    }
 }

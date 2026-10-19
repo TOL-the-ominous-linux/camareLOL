@@ -507,6 +507,8 @@ impl App {
             return;
         };
         // Re-scan and verify the device identity right before anything happens.
+        // A preview does this too: it is read-only, and it keeps the simulated
+        // run honest about the disk it would have written to.
         match camarelol_core::storage::rescan_and_verify(&device) {
             Ok(fresh) => {
                 self.core.devices = self
@@ -550,7 +552,7 @@ impl App {
             return;
         }
 
-        if !self.armed {
+        if !self.armed && !self.preview {
             self.error = Some(camarelol_core::error::CamarelolError::new(
                 ErrorCode::SafetyGateClosed,
                 "destructive mode is not enabled; restart camareLOL with --allow-destructive",
@@ -560,24 +562,30 @@ impl App {
 
         // Confirm the destructive operations with the typed phrase.
         let mut gate = self.gate();
-        let risk = plan.disk_risk;
-        match gate.confirm(Operation::WritePartitionTable, risk, &self.confirm_phrase) {
-            Ok(()) => {}
-            Err(e) => {
-                self.error = Some(e);
-                return;
+        if !self.preview {
+            // A preview writes nothing, so it must not be blocked by a phrase
+            // the user has no reason to type — and, just as important, it must
+            // not *look* like it was armed: no confirmation is recorded, and
+            // `SafetyGate::preview()` refuses to write even if one were.
+            let risk = plan.disk_risk;
+            match gate.confirm(Operation::WritePartitionTable, risk, &self.confirm_phrase) {
+                Ok(()) => {}
+                Err(e) => {
+                    self.error = Some(e);
+                    return;
+                }
             }
-        }
-        // Record confirmations for every operation the install performs, at every
-        // risk level: confirmations are keyed by (operation, risk).
-        for op in [
-            Operation::FormatPartition,
-            Operation::InstallBootloader,
-            Operation::Pacstrap,
-            Operation::Mount,
-        ] {
-            for risk in [RiskLevel::Low, RiskLevel::Medium, RiskLevel::High] {
-                let _ = gate.confirm(op, risk, required_phrase(risk));
+            // Record confirmations for every operation the install performs, at every
+            // risk level: confirmations are keyed by (operation, risk).
+            for op in [
+                Operation::FormatPartition,
+                Operation::InstallBootloader,
+                Operation::Pacstrap,
+                Operation::Mount,
+            ] {
+                for risk in [RiskLevel::Low, RiskLevel::Medium, RiskLevel::High] {
+                    let _ = gate.confirm(op, risk, required_phrase(risk));
+                }
             }
         }
 
@@ -599,6 +607,7 @@ impl App {
         self.installing = true;
 
         let thread_gate = gate.clone();
+        let preview = self.preview;
         std::thread::spawn(move || {
             let mut runner = RealSystemRunner::new(thread_gate.clone());
             let mut sink = ThreadSink::new(tx.clone());
@@ -613,6 +622,16 @@ impl App {
                 &mut runner,
                 &mut sink,
             );
+            // Danh sách lệnh thật, theo đúng thứ tự đã (hoặc sẽ) chạy. Ở chế
+            // độ xem trước đây là toàn bộ giá trị của cả lần chạy: người dùng
+            // thấy đúng những gì máy sẽ bị yêu cầu làm, và không có gì cả.
+            if preview {
+                for line in runner.command_lines() {
+                    let _ = tx.send(InstallUpdate::Progress(ProgressEvent::CommandPreview {
+                        command: line,
+                    }));
+                }
+            }
             let _ = tx.send(InstallUpdate::Finished(report));
         });
     }
@@ -672,7 +691,11 @@ impl App {
         });
         self.install_output.push(String::new());
         self.install_output.push(report.render());
-        if completed {
+        if self.preview {
+            self.install_output.push(
+                "\npreview completed — every command was shown, none of them was run.".to_string(),
+            );
+        } else if completed {
             self.install_output
                 .push("\ncamareLOL finished the installation phases.".to_string());
         } else {
@@ -688,6 +711,16 @@ impl App {
 
     /// Report of the install for the Done screen.
     pub fn outcome_text(&self) -> String {
+        if self.preview {
+            // "You may reboot" would be a lie after a preview: there is no
+            // installed system to reboot into.
+            return self
+                .tr(
+                    "Xem trước hoàn tất. KHÔNG có gì được ghi vào đĩa — hãy khởi động lại bình thường.",
+                    "Preview completed. Nothing was written to disk — reboot as usual.",
+                )
+                .to_string();
+        }
         match self.outcome {
             Some(Outcome::Completed) => self
                 .tr(
