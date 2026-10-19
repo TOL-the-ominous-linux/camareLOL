@@ -27,15 +27,38 @@ Complete.
       behind it failed repeatedly while reporting success.
 - [x] Python automation layer, Java catalog, versioned IPC
 
+## A stage is only ticked with evidence
+
+Every `[x]` above was checked against a real VirtualBox install, not against
+the presence of a struct. Four package names passed the entire unit suite and
+only failed in a VM — `greetd-tuigreeter` (Hyprland and Sway could not install),
+`p7zip` (removed from the Arch repositories), and `systemd-boot` (not a
+package at all; every systemd-boot install died at `pacstrap`). A checkbox that
+means "the code mentions this" is worth nothing on an installer.
+
+Two failures during this work were the **test** being wrong, not the installer:
+asserting that a display manager creates a symlink in `multi-user.target.wants/`
+(it uses `Alias=display-manager.service` and creates none), and `test -e` on that
+absolute alias, which resolves against the host root instead of the mount.
+
+`[~]` is partial: part of the item ships and is verified, part does not exist.
+
+
 ## Stage 2 — Desktop
 
-- [ ] Desktop profiles: KDE, GNOME, Xfce, Cinnamon, LXQt, Hyprland, Sway
-- [ ] Wayland or X11, chosen with compatibility checks
-- [ ] Display manager: SDDM, GDM, LightDM, greetd
-- [ ] Driver detection and firmware suggestions
-- [ ] PipeWire, PulseAudio, or neither
-- [ ] Bluetooth, zram, swap choices
-- [ ] NetworkManager configuration
+- [x] Desktop profiles: KDE, GNOME, Xfce, Cinnamon, LXQt, Hyprland, Sway —
+      proved on a VirtualBox install (`pacstrap` 26 packages, `hyprland` on disk)
+- [x] Wayland or X11, chosen with compatibility checks — Sway refuses X11;
+      an explicit choice pulls that stack and only that stack
+- [x] Display manager: SDDM, GDM, LightDM, greetd — installed, enabled, and
+      greetd writes its own `/etc/greetd/config.toml`
+- [~] Driver detection and firmware suggestions — **partial**: CPU microcode
+      hints and a base set (`mesa`, `linux-firmware`) are chosen from the host.
+      GPU model detection is not implemented.
+- [x] PipeWire, PulseAudio, or neither
+- [x] Bluetooth, zram, swap choices
+- [~] NetworkManager configuration — **partial**: the package is installed and
+      the unit is enabled. No `/etc/NetworkManager` file is written.
 
 ## Stage 3 — Advanced storage
 
@@ -48,8 +71,11 @@ Complete.
 
 ## Stage 4 — Experience
 
-- [ ] Save and resume a configuration across runs
-- [ ] Package search and selection
+- [~] Save and resume a configuration across runs — **partial**: a profile can
+      be written (`--save`, `Ctrl+S`) and read back by `--scripted`. There is
+      no "load" step inside the TUI yet.
+- [~] Package search and selection — **partial**: packages can be toggled and
+      typed by hand. There is no search.
 - [ ] AUR support, built as a normal user and never as root
 - [ ] Diagnostics report export
 - [ ] More interface languages

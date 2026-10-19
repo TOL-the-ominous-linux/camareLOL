@@ -29,15 +29,38 @@ Hoàn tất.
       khi vẫn báo thành công.
 - [x] Lớp tự động hoá Python, danh mục Java, IPC có phiên bản
 
+## Một mục chỉ được tick khi có bằng chứng
+
+Mọi `[x]` ở trên đều đã đối chiếu với một lần cài thật trong VirtualBox, không
+phải với việc "code có nhắc tới". Bốn tên gói đã qua sạch mọi unit test rồi
+chỉ chết trong máy ảo — `greetd-tuigreeter` (Hyprland và Sway không cài được),
+`p7zip` (đã bị gỡ khỏi kho Arch), và `systemd-boot` (không hề là một gói; mọi
+bản cài chọn systemd-boot đều chết ở `pacstrap`). Một ô tick chỉ có nghĩa là
+"code có nhắc tới" thì vô dụng với một trình cài đặt.
+
+Hai lần thất bại trong quá trình là **bài kiểm tra sai**, không phải installer
+sai: khẳng định display manager phải tạo symlink trong `multi-user.target.wants/`
+(nó dùng `Alias=display-manager.service` và không tạo gì cả), và `test -e` trên
+symlink tuyệt đối đó — nó đi theo root của máy chủ thay vì đi vào trong mount.
+
+`[~]` là một phần: đã có và đã kiểm chứng phần đó, phần còn lại chưa tồn tại.
+
+
 ## Stage 2 — Desktop
 
-- [ ] Hồ sơ desktop: KDE, GNOME, Xfce, Cinnamon, LXQt, Hyprland, Sway
-- [ ] Wayland hoặc X11, được chọn kèm kiểm tra tương thích
-- [ ] Trình quản lý phiên hiển thị: SDDM, GDM, LightDM, greetd
-- [ ] Phát hiện driver và gợi ý firmware
-- [ ] PipeWire, PulseAudio, hoặc không dùng cái nào
-- [ ] Lựa chọn Bluetooth, zram, swap
-- [ ] Cấu hình NetworkManager
+- [x] Hồ sơ desktop: KDE, GNOME, Xfce, Cinnamon, LXQt, Hyprland, Sway — đã
+      chứng minh bằng một lần cài thật trong VirtualBox (`pacstrap` 26 gói,
+      `hyprland` có thật trên đĩa)
+- [x] Wayland hoặc X11, được chọn kèm kiểm tra tương thích — Sway bị từ chối
+      với X11; lựa chọn cụ thể kéo đúng một stack
+- [x] Trình quản lý phiên hiển thị: SDDM, GDM, LightDM, greetd — được cài,
+      được bật, và greetd tự viết `/etc/greetd/config.toml`
+- [~] Phát hiện driver và gợi ý firmware — **một phần**: có gợi ý microcode theo
+      CPU và một bộ gói nền (`mesa`, `linux-firmware`). Chưa dò được model GPU.
+- [x] PipeWire, PulseAudio, hoặc không dùng cái nào
+- [x] Lựa chọn Bluetooth, zram, swap
+- [~] Cấu hình NetworkManager — **một phần**: gói đã cài, unit đã bật. Chưa
+      viết tệp `/etc/NetworkManager`.
 
 ## Stage 3 — Lưu trữ nâng cao
 
@@ -51,8 +74,11 @@ Hoàn tất.
 
 ## Stage 4 — Trải nghiệm
 
-- [ ] Lưu và tiếp tục một cấu hình qua nhiều lượt chạy
-- [ ] Tìm kiếm và chọn gói
+- [~] Lưu và tiếp tục một cấu hình qua nhiều lượt chạy — **một phần**: có thể
+      ghi profile (`--save`, `Ctrl+S`) và `--scripted` đọc lại được. TUI chưa
+      có bước "nạp".
+- [~] Tìm kiếm và chọn gói — **một phần**: có thể bật/tắt và gõ tay. Chưa có
+      tìm kiếm.
 - [ ] Hỗ trợ AUR, build bằng người dùng thường và không bao giờ bằng root
 - [ ] Xuất báo cáo chẩn đoán
 - [ ] Thêm ngôn ngữ cho giao diện
