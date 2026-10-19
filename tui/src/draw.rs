@@ -52,7 +52,7 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     // The banner row only exists in preview. `app.preview` is decided once, from
     // the command line, and never changes — so the layout cannot shift under
     // the user and the row cannot disappear halfway through the wizard.
-    let (body, banner, footer) = if app.preview {
+    let (header, body, banner, footer) = if app.preview {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
@@ -62,7 +62,7 @@ pub fn draw(f: &mut Frame, app: &mut App) {
                 Constraint::Length(2),
             ])
             .split(size);
-        (chunks[1], chunks[2], chunks[3])
+        (chunks[0], chunks[1], chunks[2], chunks[3])
     } else {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
@@ -72,10 +72,10 @@ pub fn draw(f: &mut Frame, app: &mut App) {
                 Constraint::Length(2),
             ])
             .split(size);
-        (chunks[1], Rect::new(0, 0, 0, 0), chunks[2])
+        (chunks[0], chunks[1], Rect::default(), chunks[2])
     };
 
-    draw_header(f, app, Rect::new(size.x, size.y, size.width, 3));
+    draw_header(f, app, header);
 
     match app.screen {
         Screen::Help => draw_help(f, app, body),
@@ -156,6 +156,7 @@ fn centered_rect(percent_x: u16, height: u16, area: Rect) -> Rect {
 }
 
 fn draw_header(f: &mut Frame, app: &App, area: Rect) {
+    let preview = app.preview;
     let step = if matches!(app.screen, Screen::Help | Screen::Logs) {
         0
     } else {
@@ -178,13 +179,16 @@ fn draw_header(f: &mut Frame, app: &App, area: Rect) {
         step.min(total),
         total
     );
+    // The header turns red in preview so the state is visible even where the
+    // banner row is covered by a dialog.
+    let accent = if preview { BAD } else { ACCENT };
     let block = Block::default()
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(ACCENT));
+        .border_style(Style::default().fg(accent));
     let inner = block.inner(area);
     f.render_widget(block, area);
     let gauge = Gauge::default()
-        .gauge_style(Style::default().fg(ACCENT).bg(Color::DarkGray))
+        .gauge_style(Style::default().fg(accent).bg(Color::DarkGray))
         .ratio((step as f64 / total as f64).min(1.0))
         .label(Span::styled(
             title,
@@ -761,8 +765,8 @@ fn draw_done(f: &mut Frame, app: &mut App, area: Rect) {
     f.render_widget(p, area);
 }
 
-fn draw_help(f: &mut Frame, _app: &App, area: Rect) {
-    let lines = vec![
+fn draw_help(f: &mut Frame, app: &App, area: Rect) {
+    let mut lines = vec![
         Line::from(""),
         Line::from("  ↑ / ↓      move / navigate"),
         Line::from("  Enter      select, or start the step"),
@@ -778,6 +782,16 @@ fn draw_help(f: &mut Frame, _app: &App, area: Rect) {
         Line::from("  phrase on the review screen, and it re-checks the disk identity"),
         Line::from("  immediately before every write."),
     ];
+    if app.preview {
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled(
+            format!("  ⚠ {PREVIEW_BANNER}"),
+            Style::default().fg(BAD).add_modifier(Modifier::BOLD),
+        )));
+        lines.push(Line::from(
+            "  --preview runs every phase and prints every command, and runs none of them.",
+        ));
+    }
     f.render_widget(Paragraph::new(lines).block(screen_block("Help")), area);
 }
 

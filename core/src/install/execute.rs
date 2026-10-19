@@ -122,9 +122,11 @@ impl RealSystemRunner {
 
     fn ensure_exec(&self) -> Result<()> {
         if self.preview {
-            // Unreachable in practice: every method returns before this. Kept
-            // so that adding a method without a preview branch still cannot
-            // reach `sys` with the latch closed by accident.
+            // Every method returns before reaching this, so it is dead code in a
+            // preview. It is kept honest anyway: a future method that forgot its
+            // preview branch would get `Ok` here and then be stopped by the
+            // `sys` latch with a `PreviewActive` error — a failed phase, never a
+            // written disk.
             return Ok(());
         }
         match self.gate.mode() {
