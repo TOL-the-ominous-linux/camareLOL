@@ -23,6 +23,10 @@ struct Args {
     mock: Option<PathBuf>,
     config: Option<PathBuf>,
     save_config: Option<PathBuf>,
+    /// Write a redacted diagnostics report here. Works from the command line
+    /// (it is one of the actions that needs no terminal) and from the TUI,
+    /// where `d` on the result screen writes to the same path.
+    save_diagnostics: Option<PathBuf>,
     allow_destructive: bool,
     execute: bool,
     /// Simulate a complete installation: all twelve phases, every command
@@ -51,6 +55,7 @@ fn parse_args_from(argv: Vec<String>) -> Result<Args, String> {
             "--mock" => a.mock = args.next().map(PathBuf::from),
             "--config" => a.config = args.next().map(PathBuf::from),
             "--save-config" => a.save_config = args.next().map(PathBuf::from),
+            "--save-diagnostics" => a.save_diagnostics = args.next().map(PathBuf::from),
             "--allow-destructive" => a.allow_destructive = true,
             "--execute" => a.execute = true,
             "--preview" => a.preview = true,
@@ -83,6 +88,7 @@ USAGE:
 OPTIONS:
     --config <FILE>           Load a saved installation profile
     --save-config <FILE>      Save the profile when the install finishes
+    --save-diagnostics <FILE> Write a redacted diagnostics report there
     --mock <FILE>             Use a JSON device survey instead of real disks
     --scan                    Print the storage survey as JSON and exit
     --self-test               Run the non-destructive acceptance checks
@@ -186,6 +192,20 @@ fn main() {
             .clone()
             .unwrap_or_else(|| PathBuf::from("/"));
         cmd_postcheck(&root);
+        return;
+    }
+
+    // Diagnostics before the terminal check, because a user who wants to attach
+    // a report to a bug report is very often not sitting at a console — they
+    // are pasting into an issue tracker from another machine.
+    if let Some(path) = args.save_diagnostics.clone() {
+        match cmd_save_diagnostics(&path) {
+            Ok(written) => println!("diagnostics report written to {}", written.display()),
+            Err(e) => {
+                eprintln!("cannot write the diagnostics report: {e}");
+                std::process::exit(1);
+            }
+        }
         return;
     }
 
@@ -429,6 +449,20 @@ fn cmd_self_test(mock: Option<PathBuf>) -> Result<bool, CamarelolError> {
     Ok(ok)
 }
 
+/// Write a redacted diagnostics report and return where it went.
+///
+/// Everything in the report passes through the core's redaction pass, so this
+/// is safe to attach to a public issue: no password, token, key or Wi-Fi
+/// passphrase can be in it. The function says so in its own output rather than
+/// leaving the user to take it on trust.
+fn cmd_save_diagnostics(path: &std::path::Path) -> Result<PathBuf, CamarelolError> {
+    let mut input = camarelol_core::recovery::collect_input();
+    input.mode = "diagnostics only — nothing was installed".to_string();
+    camarelol_core::recovery::export_text(path.to_str().unwrap_or_default(), &input)?;
+    println!("  redacted: no password, token, key or passphrase is in this file.");
+    Ok(path.to_path_buf())
+}
+
 fn run_tui(args: Args) -> Result<(), CamarelolError> {
     let mut app = App::new(args.mock.clone());
     if let Some(lang) = &args.language {
@@ -440,15 +474,20 @@ fn run_tui(args: Args) -> Result<(), CamarelolError> {
             app.sync_language_to_system();
         }
     }
+    // `--config` goes through the *same* load path as pressing `L` on the
+    // welcome screen, so the wizard really is populated. Assigning
+    // `app.core.config` instead used to load a profile that the wizard then
+    // overwrote from its own defaults on the first keypress — the feature
+    // existed and did nothing.
     if let Some(cfg_path) = &args.config {
-        let cfg = InstallationConfig::load(cfg_path.to_str().unwrap_or_default())?;
-        app.core.config = cfg;
+        app.load_profile(cfg_path.to_str().unwrap_or_default())?;
     }
     app.armed = args.allow_destructive;
     app.execute_mode = args.execute;
     // Set last and unconditionally: `--preview` overrides both flags above.
     app.preview = args.preview;
     app.save_config_path = args.save_config;
+    app.diagnostics_path = args.save_diagnostics;
 
     let mut terminal = ratatui::init();
     let result = (|| -> Result<(), CamarelolError> {

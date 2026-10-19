@@ -216,13 +216,13 @@ fn draw_footer(f: &mut Frame, app: &App, area: Rect) {
     };
     let mode_text = mode.to_string();
     let vi = format!(
-        " ↑↓ di chuyển · Enter chọn · Tab đổi trường · Space bật/tắt · Esc quay lại · F1 trợ giúp · F10 xem lại · F5 quét lại | cổng an toàn: {mode_text}"
+        " ↑↓ di chuyển · Enter chọn · Tab đổi trường · Space bật/tắt · / tìm gói · L nạp cấu hình · Esc quay lại · F1 trợ giúp · F10 xem lại · F5 quét lại | cổng an toàn: {mode_text}"
     );
     let en = format!(
-        " ↑↓ move · Enter select · Tab switch field · Space toggle · Esc back · F1 help · F10 review · F5 rescan | safety gate: {mode_text}"
+        " ↑↓ move · Enter select · Tab switch field · Space toggle · / search packages · L load profile · Esc back · F1 help · F10 review · F5 rescan | safety gate: {mode_text}"
     );
     let zh = format!(
-        " ↑↓ 移动 · Enter 选择 · Tab 切换字段 · Space 切换 · Esc 返回 · F1 帮助 · F10 复核 · F5 重新扫描 | 安全闸门：{mode_text}"
+        " ↑↓ 移动 · Enter 选择 · Tab 切换字段 · Space 切换 · / 搜索软件包 · L 加载配置 · Esc 返回 · F1 帮助 · F10 复核 · F5 重新扫描 | 安全闸门：{mode_text}"
     );
     let text = app.tr_owned(vi, en, zh);
     let style = if matches!(gate.mode(), GateMode::Locked | GateMode::Preview) {
@@ -257,18 +257,10 @@ fn draw_welcome(f: &mut Frame, app: &App, area: Rect) {
             Span::raw("  Firmware:   "),
             Span::styled(hw.firmware.as_str(), Style::default().fg(GOOD)),
         ]),
-        // Only one row for the host: when it is unsupported the warning below
-        // already names it. Twenty-four rows is a legal terminal and this
-        // screen has to fit in one — the update line is the last thing on it
-        // and must never be the thing that scrolls away.
-        Line::from(if host.supported {
-            vec![
-                Span::raw("  Host:       "),
-                Span::styled(host.summary(), Style::default().fg(GOOD)),
-            ]
-        } else {
-            vec![Span::raw("")]
-        }),
+        // Only one row for the host, and none at all when it is unsupported:
+        // the warning below already names it. Twenty-four rows is a legal
+        // terminal and this screen has to fit in one — the update line is the
+        // last thing on it and must never be the thing that scrolls away.
         Line::from(format!("  CPU:        {}", hw.cpu.model)),
         Line::from(format!(
             "  Memory:     {}",
@@ -278,18 +270,48 @@ fn draw_welcome(f: &mut Frame, app: &App, area: Rect) {
             "  Network:    {}",
             network::describe(app.connectivity)
         )),
-        Line::from(format!(
-            "  Disks:      {} detected",
-            app.devices().len()
-        )),
-        Line::from(""),
+        Line::from(format!("  Disks:      {} detected", app.devices().len())),
+    ];
+    if host.supported {
+        text.insert(
+            4,
+            Line::from(vec![
+                Span::raw("  Host:       "),
+                Span::styled(host.summary(), Style::default().fg(GOOD)),
+            ]),
+        );
+    }
+    // The loaded-profile line and the load prompt share one slot so the screen
+    // still fits the smallest terminal this interface supports.
+    match (&app.loaded_from, app.field == Field::LoadPath) {
+        (_, true) => text.push(Line::from(vec![
+            Span::styled("  ▸ profile: ", Style::default().fg(WARN)),
+            Span::styled(
+                app.load_path_input.clone(),
+                Style::default().fg(Color::Black).bg(Color::White),
+            ),
+        ])),
+        (Some(path), false) => text.push(Line::from(vec![
+            Span::raw("  Profile:    "),
+            Span::styled(
+                path.display().to_string(),
+                Style::default().fg(GOOD).add_modifier(Modifier::BOLD),
+            ),
+        ])),
+        (None, false) => text.push(Line::from(app.tr(
+            "  Press L to load a saved profile, or Enter to start fresh.",
+            "  Press L to load a saved profile, or Enter to start fresh.",
+            "  按 L 载入已保存的配置，或按 Enter 重新开始。",
+        ))),
+    }
+    text.extend([
         Line::from(app.tr(
             "  Nhấn Enter để bắt đầu. Không có thao tác phá hủy nào diễn ra trước khi bạn xác nhận.",
             "  Press Enter to start. Nothing destructive happens before you confirm it.",
             "  按 Enter 开始。在你确认之前，不会执行任何破坏性操作。",
         )),
         Line::from(""),
-    ];
+    ]);
     // Said here, on the first screen, rather than only at the moment the plan is
     // refused: a user who is told at the end of a wizard has already answered
     // every other question, and the answer to this one is "boot the Arch ISO".
@@ -681,44 +703,83 @@ fn draw_services(f: &mut Frame, app: &mut App, area: Rect) {
     f.render_stateful_widget(list, area, &mut state);
 }
 
-fn draw_packages(f: &mut Frame, app: &mut App, area: Rect) {
-    let suggestions = app.package_suggestions();
-    let items: Vec<ListItem> = suggestions
-        .iter()
-        .enumerate()
-        .map(|(i, (name, desc))| {
-            let on = app.custom_packages.contains(&name.to_string());
-            let checkbox = if on { "[x]" } else { "[ ]" };
-            let style = if i == app.package_index {
-                Style::default().fg(Color::Black).bg(ACCENT)
-            } else {
-                Style::default()
-            };
-            ListItem::new(Line::from(vec![Span::styled(
-                format!(" {checkbox} {name:<12} {desc}"),
-                style,
-            )]))
-        })
-        .collect();
+fn draw_packages(f: &mut Frame, app: &App, area: Rect) {
+    let rows = app.package_rows();
+    // Row 0 of the list is the AUR switch, so the cursor index lines up with
+    // what is on screen without an extra offset anywhere anywhere else.
+    let mut items: Vec<ListItem> = vec![ListItem::new(Line::from(format!(
+        " [{}] AUR packages — user-submitted build scripts, never built as root",
+        if app.aur_enabled { "x" } else { " " }
+    )))];
+    for entry in &rows {
+        let on = if entry.source == camarelol_core::packages::PackageSource::Aur {
+            app.aur_selected.iter().any(|p| p == entry.name)
+        } else {
+            app.package_is_selected(entry.name)
+        };
+        let checkbox = if on { "[x]" } else { "[ ]" };
+        items.push(ListItem::new(Line::from(format!(
+            " {checkbox} {:<22} {:<36} {}",
+            entry.name,
+            entry.description,
+            entry.source.as_str()
+        ))));
+    }
+    if rows.is_empty() {
+        items.push(ListItem::new(Line::from(Span::styled(
+            format!("   nothing in the catalog matches `{}`", app.package_query),
+            Style::default().fg(WARN),
+        ))));
+    }
     let mut state = ListState::default();
-    state.select(Some(app.package_index));
-    let block = screen_block(app.tr("Gói bổ sung", "Additional packages", "附加软件包"));
+    state.select(Some(app.package_index.min(rows.len())));
+    let block = screen_block(app.tr(
+        "Gói bổ sung — / để tìm",
+        "Additional packages — / to search",
+        "附加软件包 — 按 / 搜索",
+    ));
     let inner = block.inner(area);
     f.render_widget(block, area);
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Min(3), Constraint::Length(3)])
+        .constraints([
+            Constraint::Min(3),
+            Constraint::Length(3),
+            Constraint::Length(3),
+            Constraint::Length(3),
+        ])
         .split(inner);
-    let list = List::new(items);
+    let list = List::new(items)
+        .highlight_style(selected_row())
+        .highlight_symbol("▸ ");
     f.render_stateful_widget(list, chunks[0], &mut state);
-    let input = Paragraph::new(app.custom_package_input.clone()).block(
+
+    let search = Paragraph::new(app.package_query.clone()).block(
         Block::default().borders(Borders::ALL).title(app.tr(
-            " add package (Tab) ",
-            " add package (Tab) ",
-            " 添加软件包（Tab） ",
+            " tìm gói (/) — Esc xoá ",
+            " search (/) — Esc clears ",
+            " 搜索（/）— Esc 清除 ",
         )),
     );
-    f.render_widget(input, chunks[1]);
+    f.render_widget(search, chunks[1]);
+
+    let input = Paragraph::new(app.custom_package_input.clone()).block(
+        Block::default().borders(Borders::ALL).title(app.tr(
+            " add a package by name (Tab) ",
+            " add a package by name (Tab) ",
+            " 按名称添加软件包（Tab） ",
+        )),
+    );
+    f.render_widget(input, chunks[2]);
+
+    let builder = Paragraph::new(app.aur_build_user.clone()).block(
+        Block::default().borders(Borders::ALL).title(app.tr(
+            " tài khoản dựng AUR — KHÔNG BAO GIỜ root ",
+            " AUR build account — never root ",
+            " AUR 构建账户 — 绝不使用 root ",
+        )),
+    );
+    f.render_widget(builder, chunks[3]);
 }
 
 fn draw_review(f: &mut Frame, app: &mut App, area: Rect) {
@@ -834,6 +895,28 @@ fn draw_done(f: &mut Frame, app: &mut App, area: Rect) {
             )));
         }
     }
+    // The recovery section is the point of the screen when the run stopped:
+    // what finished, what did not, what may be retried, what to look at by
+    // hand — and, said plainly, that this program cannot promise it will boot.
+    if let Some(advice) = &app.recovery {
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled(
+            " Recovery",
+            Style::default().fg(WARN).add_modifier(Modifier::BOLD),
+        )));
+        for line in advice.render().lines() {
+            lines.push(Line::from(format!("  {}", line.trim_end())));
+        }
+    }
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(
+        app.tr_owned(
+            " d — lưu báo cáo chẩn đoán (không có mật khẩu) · Enter — thoát ",
+            " d — save a diagnostics report (no secrets) · Enter — quit ",
+            " d — 保存诊断报告（不含机密）· Enter — 退出 ",
+        ),
+        Style::default().fg(ACCENT),
+    )));
     let p = Paragraph::new(lines)
         .block(screen_block("Result"))
         .wrap(Wrap { trim: false });
@@ -847,6 +930,9 @@ fn draw_help(f: &mut Frame, app: &App, area: Rect) {
         Line::from("  Enter      select, or start the step"),
         Line::from("  Space      toggle an option"),
         Line::from("  Tab        next field"),
+        Line::from("  /          search the package catalog"),
+        Line::from("  L          load a saved profile (welcome screen)"),
+        Line::from("  d          write a diagnostics report (result screen)"),
         Line::from("  Esc        back (before anything irreversible)"),
         Line::from("  F1         this help"),
         Line::from("  F5         re-scan hardware and disks"),
@@ -856,6 +942,9 @@ fn draw_help(f: &mut Frame, app: &App, area: Rect) {
         Line::from("  camareLOL never writes to a disk until you type the confirmation"),
         Line::from("  phrase on the review screen, and it re-checks the disk identity"),
         Line::from("  immediately before every write."),
+        Line::from(""),
+        Line::from("  A saved profile never contains a password. Loading one restores"),
+        Line::from("  every other choice; passwords are typed again on the accounts step."),
     ];
     if app.preview {
         lines.push(Line::from(""));

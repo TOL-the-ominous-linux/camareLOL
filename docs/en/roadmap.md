@@ -71,15 +71,22 @@ absolute alias, which resolves against the host root instead of the mount.
 
 ## Stage 4 — Experience
 
-- [~] Save and resume a configuration across runs — **partial**: a profile can
-      be written (`--save`, `Ctrl+S`) and read back by `--scripted`. There is
-      no "load" step inside the TUI yet.
-- [~] Package search and selection — **partial**: packages can be toggled and
-      typed by hand. There is no search.
-- [ ] AUR support, built as a normal user and never as root
-- [ ] Diagnostics report export
-- [ ] More interface languages
-- [ ] Better recovery guidance
+- [x] Save and resume a configuration across runs — a saved profile can be
+      loaded back into the wizard with `L` on the welcome screen; a corrupt
+      file or a wrong `schema_version` is refused instead of silently replaced
+      by defaults, and passwords are never restored (`#[serde(skip)]`).
+- [x] Package search and selection — `/` filters the catalog, arrows move,
+      Space toggles. AUR packages are only offered when AUR is enabled, and
+      names come from the catalog, never invented.
+- [x] AUR support, built as a normal user and never as root — manual
+      `makepkg` plus `yay`/`paru`/`pikaur`/`trizen` detection. Three independent
+      root guards; no helper is installed automatically.
+- [x] Diagnostics report export — `--save-diagnostics <FILE>` writes a
+      redacted report (host, survey, plan, phases, warnings, log paths).
+- [x] More interface languages — Vietnamese, English and Simplified Chinese.
+- [x] Better recovery guidance — when an install stops early the TUI lists the
+      finished phases, the failed one and what is safe to retry, and says
+      plainly that it cannot promise the machine will boot.
 
 ## Deliberately deferred
 

@@ -74,15 +74,22 @@ symlink tuyệt đối đó — nó đi theo root của máy chủ thay vì đi 
 
 ## Stage 4 — Trải nghiệm
 
-- [~] Lưu và tiếp tục một cấu hình qua nhiều lượt chạy — **một phần**: có thể
-      ghi profile (`--save`, `Ctrl+S`) và `--scripted` đọc lại được. TUI chưa
-      có bước "nạp".
-- [~] Tìm kiếm và chọn gói — **một phần**: có thể bật/tắt và gõ tay. Chưa có
-      tìm kiếm.
-- [ ] Hỗ trợ AUR, build bằng người dùng thường và không bao giờ bằng root
-- [ ] Xuất báo cáo chẩn đoán
-- [ ] Thêm ngôn ngữ cho giao diện
-- [ ] Hướng dẫn khôi phục tốt hơn
+- [x] Lưu và tiếp tục một cấu hình qua nhiều lượt chạy — nạp lại profile đã
+      lưu vào wizard bằng phím `L` ở màn hình chào; file hỏng hoặc sai
+      `schema_version` bị từ chối thay vì lặng lẽ thay bằng mặc định, và mật
+      khẩu không bao giờ được khôi phục (`#[serde(skip)]`).
+- [x] Tìm kiếm và chọn gói — `/` lọc danh mục, phím mũi tên di chuyển, Space
+      bật/tắt. Gói AUR chỉ được đưa ra khi bật AUR; tên lấy từ danh mục,
+      không tự bịa.
+- [x] Hỗ trợ AUR, build bằng người dùng thường và không bao giờ bằng root —
+      `makepkg` thủ công cộng nhận diện `yay`/`paru`/`pikaur`/`trizen`. Ba lớp
+      chặn root độc lập; không tự cài helper nào.
+- [x] Xuất báo cáo chẩn đoán — `--save-diagnostics <FILE>` ghi báo cáo đã che
+      bí mật (host, khảo sát đĩa, kế hoạch, các pha, cảnh báo, đường dẫn log).
+- [x] Thêm ngôn ngữ cho giao diện — tiếng Việt, tiếng Anh, tiếng Trung giản thể.
+- [x] Hướng dẫn khôi phục tốt hơn — khi cài đứt giữa chừng, TUI liệt kê pha đã
+      xong, pha hỏng và phần an toàn để thử lại, và nói rõ không hứa máy sẽ
+      khởi động được.
 
 ## Cố ý hoãn lại
 

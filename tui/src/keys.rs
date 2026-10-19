@@ -96,22 +96,61 @@ impl App {
         }
 
         match self.screen {
-            Screen::Welcome => {
-                if key.code == KeyCode::Enter {
-                    self.go_next();
+            Screen::Welcome => match key.code {
+                KeyCode::Enter if self.field != Field::LoadPath => self.go_next(),
+                // `l` is the load step. It is here, on the first screen, rather
+                // than behind a flag, because a profile that can only be loaded
+                // by remembering a command-line option is a feature nobody
+                // finds.
+                KeyCode::Char('l') if self.field != Field::LoadPath => {
+                    self.field = Field::LoadPath;
+                    self.load_path_input.clear();
+                    self.message = Some(self.tr_owned(
+                        "Nhập đường dẫn tệp cấu hình đã lưu, Enter để nạp, Esc để hủy.",
+                        "Type the path of a saved profile, Enter to load it, Esc to cancel.",
+                        "输入已保存的配置路径，Enter 加载，Esc 取消。",
+                    ));
                 }
-            }
+                _ if self.field == Field::LoadPath => match key.code {
+                    KeyCode::Char(c) => self.load_path_input.push(c),
+                    KeyCode::Backspace => {
+                        self.load_path_input.pop();
+                    }
+                    KeyCode::Enter => {
+                        self.field = Field::None;
+                        self.try_load_typed_path();
+                    }
+                    KeyCode::Esc => {
+                        self.field = Field::None;
+                        self.load_path_input.clear();
+                        self.message = None;
+                    }
+                    _ => {}
+                },
+                _ => {}
+            },
             Screen::Language
             | Screen::Keyboard
             | Screen::Timezone
             | Screen::Filesystem
             | Screen::Bootloader => match key.code {
-                KeyCode::Up => self.move_cursor(-1),
-                KeyCode::Down => self.move_cursor(1),
+                KeyCode::Up => {
+                    self.move_cursor(-1);
+                    self.mark_list_edited();
+                }
+                KeyCode::Down => {
+                    self.move_cursor(1);
+                    self.mark_list_edited();
+                }
                 KeyCode::Enter => {
                     if self.screen == Screen::Language {
                         self.sync_language_to_system();
+                        // Choosing the language deliberately re-suggests the
+                        // locale, so it also clears "the user moved this cursor".
+                        self.keymap_edited = false;
+                        self.timezone_edited = false;
                     }
+                    self.commit_list_choice();
                     if self.screen == Screen::Bootloader {
                         self.rebuild_plan();
                     }
@@ -204,8 +243,22 @@ impl App {
                 KeyCode::Char(c) if self.field == Field::CustomPackage => {
                     self.custom_package_input.push(c);
                 }
+                KeyCode::Char(c) if self.field == Field::PackageSearch => {
+                    self.package_query.push(c);
+                    self.package_index = 0;
+                }
+                KeyCode::Char(c) if self.field == Field::AurBuildUser => {
+                    self.aur_build_user.push(c);
+                }
                 KeyCode::Backspace if self.field == Field::CustomPackage => {
                     self.custom_package_input.pop();
+                }
+                KeyCode::Backspace if self.field == Field::PackageSearch => {
+                    self.package_query.pop();
+                    self.package_index = 0;
+                }
+                KeyCode::Backspace if self.field == Field::AurBuildUser => {
+                    self.aur_build_user.pop();
                 }
                 KeyCode::Enter if self.field == Field::CustomPackage => {
                     if !self.custom_package_input.trim().is_empty() {
@@ -216,12 +269,35 @@ impl App {
                         self.custom_package_input.clear();
                     }
                 }
+                KeyCode::Enter if self.field == Field::PackageSearch => {
+                    // Commit the search and hand the keyboard back to the list
+                    // on the first match, so Space immediately toggles it.
+                    self.field = Field::None;
+                    self.package_index = 0;
+                }
+                KeyCode::Enter if self.field == Field::AurBuildUser => {
+                    self.field = Field::None;
+                }
+                KeyCode::Esc if self.field == Field::PackageSearch => {
+                    // Escape clears the search rather than leaving the screen:
+                    // a filter the user cannot see the state of is worse than
+                    // no filter.
+                    self.field = Field::None;
+                    self.package_query.clear();
+                    self.package_index = 0;
+                }
+                KeyCode::Char('/') if self.field != Field::PackageSearch => {
+                    self.field = Field::PackageSearch;
+                    self.package_index = 0;
+                }
                 KeyCode::Up => self.packages_cursor_up(),
                 KeyCode::Down => self.packages_cursor_down(),
-                KeyCode::Char(' ') => self.toggle_package_suggestion(),
+                KeyCode::Char(' ') if self.field == Field::None => self.toggle_package_suggestion(),
                 KeyCode::Tab => {
                     self.field = match self.field {
-                        Field::CustomPackage => Field::None,
+                        Field::CustomPackage => Field::PackageSearch,
+                        Field::PackageSearch => Field::AurBuildUser,
+                        Field::AurBuildUser => Field::None,
                         _ => Field::CustomPackage,
                     };
                 }
@@ -254,6 +330,10 @@ impl App {
             Screen::Done if key.code == KeyCode::Enter => {
                 self.quit = true;
             }
+            // `d` on the result screen: the moment somebody is most likely to
+            // want to file a bug report, and the one place the phase outcomes
+            // and the warnings still exist in memory.
+            Screen::Done if key.code == KeyCode::Char('d') => self.write_diagnostics(),
             _ => {}
         }
     }
@@ -293,6 +373,39 @@ impl App {
         // A text field must not keep the cursor it had on the screen we left.
         self.field = Field::None;
         self.focus_default_field();
+    }
+
+    /// Remember that the cursor on a choice screen moved.
+    ///
+    /// Without this, walking past the keyboard screen would rewrite the keymap
+    /// from the three-item list — silently replacing a profile's `de` with `us`
+    /// because the user pressed Enter to move on.
+    fn mark_list_edited(&mut self) {
+        match self.screen {
+            Screen::Keyboard => self.keymap_edited = true,
+            Screen::Timezone => self.timezone_edited = true,
+            _ => {}
+        }
+    }
+
+    /// Copy the cursor's choice back into the config.
+    ///
+    /// Only for a screen the user actually moved on; see
+    /// [`App::mark_list_edited`].
+    fn commit_list_choice(&mut self) {
+        match self.screen {
+            Screen::Keyboard if self.keymap_edited => {
+                if let Some(map) = camarelol_core::locale::KEYMAPS.get(self.keymap_index) {
+                    self.core.config.keymap = (*map).to_string();
+                }
+            }
+            Screen::Timezone if self.timezone_edited => {
+                if let Some(tz) = camarelol_core::locale::TIMEZONES.get(self.timezone_index) {
+                    self.core.config.timezone = (*tz).to_string();
+                }
+            }
+            _ => {}
+        }
     }
 
     fn move_cursor(&mut self, delta: i32) {
@@ -458,15 +571,13 @@ impl App {
 
     // ------------------------------------------------------------- packages
 
-    pub fn package_suggestions(&self) -> Vec<(&'static str, &'static str)> {
-        vec![
-            ("htop", "process viewer"),
-            ("firefox", "web browser"),
-            ("git", "version control"),
-            ("neofetch", "system info"),
-            ("btop", "resource monitor"),
-            ("reflector", "mirror ranking tool"),
-        ]
+    /// Row 0 of the package list is the AUR switch; the rows after it are the
+    /// search results.
+    const AUR_ROW: usize = 0;
+
+    /// Last row the cursor may sit on.
+    fn package_row_count(&self) -> usize {
+        Self::AUR_ROW + self.package_rows().len()
     }
 
     fn packages_cursor_up(&mut self) {
@@ -474,18 +585,92 @@ impl App {
     }
 
     fn packages_cursor_down(&mut self) {
-        self.package_index = (self.package_index + 1).min(self.package_suggestions().len() - 1);
+        self.package_index =
+            (self.package_index + 1).min(self.package_row_count().saturating_sub(1));
     }
 
+    /// Space on a catalog row, or on the AUR switch.
     fn toggle_package_suggestion(&mut self) {
-        let suggestions = self.package_suggestions();
-        if let Some((name, _)) = suggestions.get(self.package_index) {
-            let name = name.to_string();
-            if let Some(pos) = self.custom_packages.iter().position(|p| *p == name) {
-                self.custom_packages.remove(pos);
-            } else {
-                self.custom_packages.push(name);
+        if self.package_index == Self::AUR_ROW {
+            self.aur_enabled = !self.aur_enabled;
+            if !self.aur_enabled {
+                // Switching AUR off takes its selections with it, so nothing
+                // stays selected on a screen that cannot show it.
+                self.aur_selected.clear();
             }
+            // Turning AUR on lengthens the list; keep the cursor on the switch.
+            self.package_index = Self::AUR_ROW;
+            return;
+        }
+        let rows = self.package_rows();
+        let Some(entry) = rows.get(self.package_index - Self::AUR_ROW).copied() else {
+            return;
+        };
+        let name = entry.name.to_string();
+        if entry.source == camarelol_core::packages::PackageSource::Aur {
+            match self.aur_selected.iter().position(|p| *p == name) {
+                Some(pos) => {
+                    self.aur_selected.remove(pos);
+                }
+                None => self.aur_selected.push(name),
+            }
+            return;
+        }
+        match self.custom_packages.iter().position(|p| *p == name) {
+            Some(pos) => {
+                self.custom_packages.remove(pos);
+            }
+            None => self.custom_packages.push(name),
+        }
+    }
+
+    // ------------------------------------------------------------ the load step
+
+    /// Load whatever path was typed into the welcome screen's prompt.
+    pub fn try_load_typed_path(&mut self) {
+        let path = self.load_path_input.trim().to_string();
+        self.load_path_input.clear();
+        if path.is_empty() {
+            self.message = Some(self.tr_owned(
+                "Chưa nhập đường dẫn — hãy gõ một tệp cấu hình đã lưu.",
+                "No path given — type the path of a saved profile.",
+                "未输入路径 — 请输入已保存的配置文件。",
+            ));
+            return;
+        }
+        if let Err(e) = self.load_profile(&path) {
+            // The wizard is left exactly as it was: a refused profile must not
+            // half-replace the answers already on screen.
+            self.error = Some(e);
+            self.message = None;
+        }
+    }
+
+    /// Write a diagnostics report where `--save-diagnostics` asked for it, and
+    /// say where it went.
+    pub fn write_diagnostics(&mut self) {
+        let path = self
+            .diagnostics_path
+            .clone()
+            .unwrap_or_else(|| std::path::PathBuf::from("/tmp/camarelol-diagnostics.txt"));
+        let mut input = camarelol_core::recovery::collect_input();
+        input.mode = self.gate().mode().as_str().to_string();
+        if let Some(plan) = &self.plan {
+            input.plan = Some(plan.render());
+        }
+        if let Some(report) = &self.report {
+            input.phases = report.phases.clone();
+            input.warnings.extend(report.warnings.clone());
+        }
+        match camarelol_core::recovery::export_text(path.to_str().unwrap_or_default(), &input) {
+            Ok(()) => {
+                self.message = Some(self.tr_owned(
+                    format!("Đã lưu báo cáo chẩn đoán: {}", path.display()),
+                    format!("Diagnostics report written to {}", path.display()),
+                    format!("诊断报告已写入 {}", path.display()),
+                ));
+            }
+            Err(e) => self.error = Some(e),
         }
     }
 
@@ -569,6 +754,25 @@ impl App {
                 ErrorCode::SafetyGateClosed,
                 "destructive mode is not enabled; restart camareLOL with --allow-destructive",
             ));
+            return;
+        }
+
+        // An AUR build with no unprivileged account would have to run as root —
+        // camareLOL itself runs as root. Said here, before the install thread
+        // starts, so the answer arrives as an explanation rather than as a
+        // failed pacstrap phase ten minutes in. The core refuses it again in
+        // `run_install`; this is the early, readable one.
+        if self.aur_enabled && !self.aur_selected.is_empty() && self.aur_build_user_name().is_none()
+        {
+            self.error = Some(
+                camarelol_core::error::CamarelolError::new(
+                    ErrorCode::AurBuildRefused,
+                    "AUR packages are selected but no unprivileged build account is named",
+                )
+                .with_remediation(
+                    "name an existing non-root account on the packages screen, or switch AUR off",
+                ),
+            );
             return;
         }
 
@@ -711,11 +915,24 @@ impl App {
             self.install_output
                 .push("\ncamareLOL finished the installation phases.".to_string());
         } else {
+            // Recovery guidance, computed here rather than at the point of
+            // failure: this is the only moment where the whole phase list, the
+            // warnings and the log path are all known.
+            self.recovery = Some(camarelol_core::recovery::advise(&report.phases));
+            if let Some(advice) = &self.recovery {
+                let _ = camarelol_core::recovery::explain_resume(
+                    &camarelol_core::logging::Logger::default(),
+                    &report.phases,
+                );
+                for line in advice.render().lines() {
+                    self.install_output.push(line.to_string());
+                }
+            }
             self.install_output.push(format!(
                 "\nThe installation stopped early. See {} for details.",
-                "/var/log/camarelol"
+                camarelol_core::recovery::LOG_DIR
             ));
-            self.log_path = "/var/log/camarelol".into();
+            self.log_path = camarelol_core::recovery::LOG_DIR.into();
         }
         self.report = Some(report);
         self.screen = Screen::Done;
