@@ -392,16 +392,25 @@ fn run_tui(args: Args) -> Result<(), CamarelolError> {
     let mut terminal = ratatui::init();
     let result = (|| -> Result<(), CamarelolError> {
         loop {
+            // Gom cập nhật từ thread cài đặt TRƯỚC khi vẽ, để màn Progress
+            // hiện ngay khi có pha mới thay vì đứng yên.
+            app.drain_install_updates();
             terminal
                 .draw(|f| draw::draw(f, &mut app))
                 .map_err(|e| CamarelolError::new(ErrorCode::Internal, e.to_string()))?;
             if app.quit {
                 break;
             }
-            // Blocking read keeps things simple and CPU idle.
-            let event = crossterm::event::read()
+            // Poll thay vì read() chặn: có thời hạn, nên vẽ và nhận cập nhật
+            // được kể cả khi người dùng không gõ gì.
+            let ready = crossterm::event::poll(std::time::Duration::from_millis(120))
                 .map_err(|e| CamarelolError::new(ErrorCode::Internal, e.to_string()))?;
-            if let crossterm::event::Event::Key(key) = event {
+            if !ready {
+                continue;
+            }
+            if let crossterm::event::Event::Key(key) = crossterm::event::read()
+                .map_err(|e| CamarelolError::new(ErrorCode::Internal, e.to_string()))?
+            {
                 app.handle_key(key);
             }
         }

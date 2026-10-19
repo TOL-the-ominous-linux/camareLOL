@@ -7,7 +7,6 @@ use camarelol_core::error::{CamarelolError, ErrorCode};
 use camarelol_core::hardware::Firmware;
 use camarelol_core::install::{Outcome, ProgressEvent};
 use camarelol_core::locale::{suggest, UiLanguage};
-use camarelol_core::logging::Logger;
 use camarelol_core::network::{self, Connectivity};
 use camarelol_core::packages::PackageSelection;
 use camarelol_core::safety::SafetyGate;
@@ -155,9 +154,17 @@ pub struct App {
     pub error: Option<CamarelolError>,
     pub plan_log: Vec<ProgressEvent>,
     pub install_output: Vec<String>,
+    /// Kênh nhận cập nhật từ thread cài đặt. `None` khi không cài gì.
+    ///
+    /// Cài đặt chạy ở thread nền vì nó mất hàng chục giây tới hàng chục phút.
+    /// Chạy đồng bộ trong `handle_key` nghĩa là vòng lặp chính không quay lại
+    /// để vẽ, nên màn Progress không bao giờ hiện, và không phím nào nhận
+    /// được kể cả Ctrl+C — nhìn từ ngoài như treo.
+    pub install_rx: Option<std::sync::mpsc::Receiver<crate::keys::InstallUpdate>>,
+    /// Đang cài: dùng để chặn thao tác không an toàn giữa chừng.
+    pub installing: bool,
     pub report: Option<camarelol_core::install::execute::InstallReport>,
     pub outcome: Option<Outcome>,
-    pub logger: Logger,
     pub save_config_path: Option<PathBuf>,
     pub log_path: String,
     pub armed: bool,
@@ -167,7 +174,6 @@ pub struct App {
 
 impl App {
     pub fn new(mock: Option<PathBuf>) -> Self {
-        let logger = Logger::new(std::path::Path::new("/var/log/camarelol"));
         let core = match mock {
             Some(p) => {
                 let devices =
@@ -217,9 +223,11 @@ impl App {
             error: None,
             plan_log: Vec::new(),
             install_output: Vec::new(),
+            install_rx: None,
+            installing: false,
+
             report: None,
             outcome: None,
-            logger,
             save_config_path: None,
             log_path: String::new(),
             armed: false,

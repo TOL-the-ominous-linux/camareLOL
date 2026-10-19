@@ -14,44 +14,37 @@ use camarelol_core::storage::RiskLevel;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 /// A sink that streams events into the App so the UI can render them.
-pub struct AppSink<'a> {
-    pub app: &'a mut App,
+fn state_str(s: &PhaseState) -> &'static str {
+    s.as_str()
 }
 
-impl<'a> ProgressSink for AppSink<'a> {
-    fn emit(&mut self, event: ProgressEvent) {
-        match &event {
-            ProgressEvent::PhaseStarted { name } => {
-                self.app.install_output.push(format!(
-                    "▶ {} — {}",
-                    name,
-                    camarelol_core::install::describe_phase(name)
-                ));
-                self.app.logger.log("install", &format!("started {name}"));
-            }
-            ProgressEvent::PhaseFinished { name, state } => {
-                self.app
-                    .install_output
-                    .push(format!("■ {name} — {}", state_str(state)));
-                self.app
-                    .logger
-                    .log("install", &format!("finished {name}: {}", state_str(state)));
-                self.app.phase_progress += 1;
-            }
-            ProgressEvent::CommandPreview { command } => {
-                self.app.install_output.push(format!("  $ {command}"));
-                self.app.logger.log("install", command);
-            }
-            ProgressEvent::Info { message } => {
-                self.app.install_output.push(format!("  · {message}"));
-            }
-        }
-        self.app.plan_log.push(event);
+/// Thông điệp từ thread cài đặt về vòng lặp chính.
+pub enum InstallUpdate {
+    /// Một sự kiện tiến trình, để vẽ ngay khi nhận được.
+    Progress(ProgressEvent),
+    /// Cài xong (kể cả khi hỏng) — kèm báo cáo đầy đủ.
+    Finished(camarelol_core::install::execute::InstallReport),
+}
+
+/// Gửi tiến trình qua kênh thay vì giữ `&mut App`.
+///
+/// `AppSink` cũ giữ `&'a mut App`, nên nó không vượt qua được ranh giới thread.
+/// Kênh `mpsc` giữ nguyên thứ tự sự kiện và cho phép vòng lặp chính vẽ trong
+/// khi máy đang làm việc.
+pub struct ThreadSink {
+    tx: std::sync::mpsc::Sender<InstallUpdate>,
+}
+
+impl ThreadSink {
+    pub fn new(tx: std::sync::mpsc::Sender<InstallUpdate>) -> Self {
+        ThreadSink { tx }
     }
 }
 
-fn state_str(s: &PhaseState) -> &'static str {
-    s.as_str()
+impl ProgressSink for ThreadSink {
+    fn emit(&mut self, event: ProgressEvent) {
+        let _ = self.tx.send(InstallUpdate::Progress(event));
+    }
 }
 
 impl App {
@@ -594,11 +587,83 @@ impl App {
         self.phase_progress = 0;
         self.screen = Screen::Progress;
 
-        let mut runner = RealSystemRunner::new(gate.clone());
-        let mut sink = AppSink { app: self };
-        let logger =
-            camarelol_core::logging::Logger::new(std::path::Path::new("/var/log/camarelol"));
-        let report = run_install(&cfg, &device, &plan, &gate, &logger, &mut runner, &mut sink);
+        // Cài đặt chạy ở thread nền. Chạy đồng bộ thì vòng lặp chính không
+        // quay lại để vẽ: màn Progress không bao giờ hiện và không phím nào
+        // nhận được — nhìn từ ngoài như treo, trong khi máy đang xoá đĩa.
+        if let Some(p) = &self.save_config_path {
+            let _ = cfg.save(p.to_str().unwrap_or_default());
+        }
+
+        let (tx, rx) = std::sync::mpsc::channel::<InstallUpdate>();
+        self.install_rx = Some(rx);
+        self.installing = true;
+
+        let thread_gate = gate.clone();
+        std::thread::spawn(move || {
+            let mut runner = RealSystemRunner::new(thread_gate.clone());
+            let mut sink = ThreadSink::new(tx.clone());
+            let logger =
+                camarelol_core::logging::Logger::new(std::path::Path::new("/var/log/camarelol"));
+            let report = run_install(
+                &cfg,
+                &device,
+                &plan,
+                &thread_gate,
+                &logger,
+                &mut runner,
+                &mut sink,
+            );
+            let _ = tx.send(InstallUpdate::Finished(report));
+        });
+    }
+
+    /// Gom mọi cập nhật đang chờ vào trạng thái, rồi đóng kênh khi cài xong.
+    ///
+    /// Rút kênh ra khỏi `self` trước khi xử lý: giữ `&Receiver` trong khi gọi
+    /// `&mut self` là hai cái mượn xung đột, không biên dịch nổi.
+    pub fn drain_install_updates(&mut self) {
+        let Some(rx) = self.install_rx.take() else {
+            return;
+        };
+        let mut done = None;
+        while let Ok(update) = rx.try_recv() {
+            match update {
+                InstallUpdate::Progress(event) => self.apply_progress(event),
+                InstallUpdate::Finished(report) => done = Some(report),
+            }
+        }
+        if let Some(report) = done {
+            self.finish_install(report);
+        } else {
+            self.install_rx = Some(rx);
+        }
+    }
+
+    fn apply_progress(&mut self, event: ProgressEvent) {
+        match &event {
+            ProgressEvent::PhaseStarted { name } => self.install_output.push(format!(
+                "▶ {} — {}",
+                name,
+                camarelol_core::install::describe_phase(name)
+            )),
+            ProgressEvent::PhaseFinished { name, state } => {
+                self.install_output
+                    .push(format!("■ {name} — {}", state_str(state)));
+                self.phase_progress += 1;
+            }
+            ProgressEvent::CommandPreview { command } => {
+                self.install_output.push(format!("  $ {command}"));
+            }
+            ProgressEvent::Info { message } => {
+                self.install_output.push(format!("  · {message}"));
+            }
+        }
+        self.plan_log.push(event);
+    }
+
+    fn finish_install(&mut self, report: camarelol_core::install::execute::InstallReport) {
+        self.installing = false;
+        self.install_rx = None;
         let completed = report.all_completed();
         self.outcome = Some(match report.outcome {
             Outcome::Completed => Outcome::Completed,
@@ -616,9 +681,6 @@ impl App {
                 "/var/log/camarelol"
             ));
             self.log_path = "/var/log/camarelol".into();
-        }
-        if let Some(p) = &self.save_config_path {
-            let _ = cfg.save(p.to_str().unwrap_or_default());
         }
         self.report = Some(report);
         self.screen = Screen::Done;
