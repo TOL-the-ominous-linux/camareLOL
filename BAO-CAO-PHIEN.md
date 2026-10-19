@@ -1,9 +1,35 @@
 # Báo cáo phiên làm việc — camareLOL
 
-**Ngày:** 19/10/2026 · **Nhánh:** `main` · **Commit cuối:** `0ca6f45`
+**Ngày:** 19/10/2026 · **Nhánh:** `main` · **Commit cuối:** `de57c35`
 
 Câu hối trung thực nhất cho báo cáo này: *những gì đã **chứng minh** bằng
 máy ảo thật, và những gì mới chỉ **được unit test bảo vệ**.*
+
+---
+
+## 0. Cập nhật cuối phiên (sau khi Stage 4 xong)
+
+**Stage 4 đã hoàn tất** (commit `de57c35`):
+
+| Mục | Trạng thái |
+|---|---|
+| Nạp cấu hình trong TUI | `L` ở màn hình chào; file hỏng/sai schema bị từ chối; mật khẩu không khôi phục |
+| Tìm kiếm gói | `/` lọc, mũi tên, Space; AUR chỉ hiện khi bật AUR |
+| Báo cáo chẩn đoán | `--save-diagnostics <FILE>`, che bí mật bằng pass sẵn có |
+| Hướng dẫn khôi phục | liệt kê pha xong/hỏng/an toàn thử lại; không hứa máy sẽ boot |
+
+**Unit test đã làm nốt:** 294 Rust (41 TUI + 253 core) + 19 Python, clippy
+`-D warnings` sạch, `cargo fmt --check` sạch.
+
+**Đã chạy thật:** `--save-diagnostics` trên máy này → báo cáo đủ mục, chỉ
+một dòng chứa chữ "password" là câu cam kết không có bí mật.
+
+**Vẫn chưa kiểm chứng bằng VM:** máy này là EndeavourOS nên camareLOL từ
+chối cài; toàn bộ Stage 4 mới có unit test bảo vệ.
+
+**Stage 3 vẫn chưa làm** — đúng thứ tự bạn dặn ("Stage 4 trước"). Đó là các
+thao tác phá huỷ không hoàn tác được: LUKS, thu nhỏ NTFS, dual-boot ESP,
+trình soạn phân vùng, subvolume btrfs.
 
 ---
 
