@@ -7,6 +7,7 @@ pub use execute::run_install;
 
 use crate::config::InstallationConfig;
 use crate::hardware::Firmware;
+use crate::host::HostProfile;
 use crate::storage::layout::PartitionPlan;
 use serde::{Deserialize, Serialize};
 
@@ -67,6 +68,16 @@ impl Outcome {
 /// Everything a phase needs to check its preconditions.
 pub struct Preflight {
     pub firmware: Firmware,
+    /// Which distribution and init system this install is running on.
+    ///
+    /// Carried here rather than re-detected inside `preconditions()` so the
+    /// check is against a *decision*, not against whatever `/etc/os-release`
+    /// happens to say when the check runs — and so a test can state the host it
+    /// is modelling instead of inheriting the machine running the suite.
+    ///
+    /// [`crate::host::HostProfile::arch_systemd`] is the only value a real
+    /// Arch + systemd install produces.
+    pub host: HostProfile,
     pub plan: PartitionPlan,
     pub config: InstallationConfig,
 }
@@ -132,7 +143,7 @@ pub fn describe_phase(name: &str) -> &'static str {
         "partition" => "Writing the partition table and partitions",
         "format" => "Creating filesystems",
         "mount" => "Mounting the target system",
-        "pacstrap" => "Installing the base system",
+        "pacstrap" => "Installing the base system and any selected AUR packages",
         "fstab" => "Generating fstab",
         "bootloader" => "Installing the bootloader",
         "system-config" => "Writing locale, timezone and hostname",

@@ -33,6 +33,18 @@ pub enum ErrorCode {
     UnsupportedSchema,
     /// Boot configuration is not valid for the detected firmware.
     InvalidBootConfig,
+    /// The host distribution or init system is not one camareLOL supports.
+    ///
+    /// Raised at plan time, before anything is written, so an Artix or
+    /// Hyperbola machine is turned away instead of being handed a set of
+    /// Arch-only commands. See [`crate::host`].
+    UnsupportedHost,
+    /// An AUR build was refused because it would have run as root.
+    ///
+    /// A PKGBUILD is an arbitrary script. Running it as uid 0 would make every
+    /// AUR package a privilege-escalation surface on a machine whose disks are
+    /// about to be erased. See [`crate::aur`].
+    AurBuildRefused,
     /// Account / hostname / password policy violation.
     InvalidAccount,
     /// Network is unreachable.
@@ -87,6 +99,8 @@ impl fmt::Display for ErrorCode {
             ErrorCode::InvalidConfig => "invalid_config",
             ErrorCode::UnsupportedSchema => "unsupported_schema",
             ErrorCode::InvalidBootConfig => "invalid_boot_config",
+            ErrorCode::UnsupportedHost => "unsupported_host",
+            ErrorCode::AurBuildRefused => "aur_build_refused",
             ErrorCode::InvalidAccount => "invalid_account",
             ErrorCode::NetworkUnreachable => "network_unreachable",
             ErrorCode::SafetyGateClosed => "safety_gate_closed",

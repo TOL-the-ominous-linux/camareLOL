@@ -31,7 +31,7 @@ chuyện với nó — hoặc với máy chủ riêng của danh mục Java — 
 
 | method | phá huỷ | mô tả |
 | --- | --- | --- |
-| `hello` | không | khám phá giao thức |
+| `hello` | không | khám phá giao thức; kết quả có `host`, ví dụ `Arch Linux / systemd` |
 | `scan_devices` | không | khảo sát lưu trữ đầy đủ, dưới dạng mảng JSON |
 | `create_plan` | không | dựng một kế hoạch phân vùng cho `params.disk` |
 | `validate_plan` | không | kiểm tra lại một kế hoạch đã có |
@@ -63,7 +63,7 @@ Một lỗi chính là một câu trả lời. Không có kênh lỗi riêng, v�
 | storage | `no_target_disk`, `device_gone`, `device_identity_changed`, `device_busy` |
 | boot and accounts | `invalid_boot_config`, `invalid_account` |
 | network | `network_unreachable` |
-| safety | `safety_gate_closed`, `confirmation_required` |
+| safety | `safety_gate_closed`, `confirmation_required`, `unsupported_host`, `aur_build_refused` |
 | updates | `update_download_failed`, `update_manifest_invalid`, `update_signature_missing`, `update_signature_invalid`, `update_expired`, `update_checksum_mismatch`, `update_candidate_failed`, `update_not_privileged`, `update_url_refused`, `update_rollback_failed` |
 | other | `not_supported`, `internal` |
 
@@ -73,11 +73,16 @@ Một lỗi chính là một câu trả lời. Không có kênh lỗi riêng, v�
    không phải là lý do để nới lỏng một phép kiểm tra.
 2. Một method phá huỷ bị từ chối trừ khi cổng an toàn đã mở khóa **và** cụm từ
    xác nhận cho mức rủi ro của thao tác đó đã được ghi nhận.
-3. Một câu trả lời có `status: "error"` không bao giờ được coi là thành công.
-4. Thời gian chờ tính theo từng yêu cầu. Một yêu cầu đã huỷ được **trả lời**,
+3. Một method phá huỷ cũng bị từ chối với `unsupported_host` khi bản phân phối
+   hoặc hệ thống init không phải Arch + systemd. Phép kiểm tra chạy *trước*
+   cổng an toàn, để người dùng biết lý do thật thay vì được bảo thêm một cờ mà
+   vẫn không làm cho việc cài đặt an toàn hơn. Nó nằm trong `apply_plan` chứ
+   không chỉ trong bộ điều phối cài đặt, vì bề mặt IPC tự ghi bảng phân vùng.
+4. Một câu trả lời có `status: "error"` không bao giờ được coi là thành công.
+5. Thời gian chờ tính theo từng yêu cầu. Một yêu cầu đã huỷ được **trả lời**,
    không bị vứt bỏ — một phía gọi không bao giờ nghe phản hồi thì không phân biệt
    được một thao tác chậm với một thao tác đã treo.
-5. `protocol_version` được kiểm tra trước mọi thứ khác. Một phiên bản lạ bị từ
+6. `protocol_version` được kiểm tra trước mọi thứ khác. Một phiên bản lạ bị từ
    chối chứ không được phân tích theo phỏng đoán.
 
 ## Vì sao phiên bản nằm trong mọi tin nhắn

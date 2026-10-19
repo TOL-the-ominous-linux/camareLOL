@@ -18,7 +18,7 @@ destructive operation.
 
 ## Languages
 
-The installer itself speaks Vietnamese and English (`--lang vi|en`).
+The installer itself speaks Vietnamese, English and Simplified Chinese (`--lang vi|en|zh`).
 
 ## Install
 
@@ -88,6 +88,14 @@ binary by hand.
 
 ## What it deliberately does not do yet
 
+- Run on anything other than Arch Linux with systemd. The distribution and the
+  init system are read from `/etc/os-release` and `/proc/1/comm`, and anything
+  else is refused at plan time, before a byte is written. **Parabola and
+  Hyperbola are GNU/Linux-libre distributions, not Arch** — they use `pacman`
+  and drop or replace non-free packages, so a package list that is correct on
+  Arch can be missing or renamed there. Artix, Nyarch and `ID_LIKE=arch`
+  derivatives such as EndeavourOS are refused for the same reason: they are
+  unvalidated hosts, not Arch.
 - Format a disk because you selected it in a menu.
 - Install AUR packages without an explicit opt-in and a normal-user build.
 - Resize NTFS — the acceptance criteria are documented, the feature is deferred.

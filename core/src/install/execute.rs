@@ -25,6 +25,17 @@ pub trait SystemRunner {
     fn chroot_script(&mut self, script: &str) -> Result<()>;
     fn enable_services(&mut self, services: &[String]) -> Result<()>;
     fn mkinitcpio(&mut self) -> Result<()>;
+    /// Build and install the explicitly selected AUR packages.
+    ///
+    /// Defaulted to a no-op so a runner that does not care about the AUR (every
+    /// test double, and any future one) is unchanged. Only
+    /// [`RealSystemRunner`] overrides it, and it refuses to run a build as
+    /// root — see [`crate::aur`].
+    ///
+    /// Returns the number of packages built, so the phase can report honestly.
+    fn build_aur(&mut self, _packages: &crate::packages::PackageSelection) -> Result<usize> {
+        Ok(0)
+    }
     /// Is the target system really mounted? The post-check is only meaningful
     /// when it is (unit tests with the simulated runner answer `false`).
     fn target_mounted(&self) -> bool;
@@ -68,6 +79,32 @@ impl RealSystemRunner {
 
     pub fn records(&self) -> &[crate::storage::ops::RecordedCommand] {
         &self.ops.records
+    }
+
+    /// The validated AUR plan for this run, or `None` when AUR is not in use.
+    ///
+    /// This is where every input to the decision is read, and nowhere else: the
+    /// helper probe, the privilege-drop program, the effective uid and the
+    /// configured build user. A uid that cannot be read is treated as *root*,
+    /// so an unreadable `/proc` makes the installer more careful, not less.
+    pub fn aur_plan(
+        &self,
+        packages: &crate::packages::PackageSelection,
+    ) -> Result<Option<crate::aur::AurPlan>> {
+        if packages.aur_list().is_empty() {
+            return Ok(None);
+        }
+        let uid = crate::aur::effective_uid();
+        let wrapper = crate::aur::detect_drop_program();
+        crate::aur::plan(
+            packages,
+            crate::aur::detect_helper(),
+            wrapper.as_deref(),
+            packages.aur_build_user.as_deref(),
+            // Unreadable uid is treated as root: `ensure_not_root` then refuses
+            // the spawn instead of letting an unknown identity build anything.
+            uid.is_none() || uid == Some(0),
+        )
     }
 
     /// True when this runner only simulates.
@@ -462,6 +499,115 @@ impl SystemRunner for RealSystemRunner {
         }
         Ok(())
     }
+
+    fn build_aur(&mut self, packages: &crate::packages::PackageSelection) -> Result<usize> {
+        let plan = self.aur_plan(packages)?;
+        let Some(plan) = plan else {
+            // AUR is opt-in and off by default: the ordinary install never
+            // reaches this code with anything to build.
+            return Ok(0);
+        };
+        let count = plan.packages.len();
+        if plan.method == crate::aur::AurMethod::Manual {
+            self.warnings.push(crate::aur::no_helper_message());
+        }
+        self.warnings.push(format!(
+            "{} package(s) built as {}: {}. {}",
+            count,
+            plan.build_user
+                .as_deref()
+                .unwrap_or("the current (unprivileged) user"),
+            plan.packages.join(", "),
+            crate::aur::warning()
+        ));
+
+        if self.preview {
+            // Record, never spawn. The wrapped form is recorded so the preview
+            // shows which account would run the unreviewed build script.
+            for step in &plan.steps {
+                let argv = crate::aur::privilege_wrapper(
+                    if step.as_build_user {
+                        plan.wrapper.as_deref()
+                    } else {
+                        None
+                    },
+                    if step.as_build_user {
+                        plan.build_user.as_deref()
+                    } else {
+                        None
+                    },
+                    &step.program,
+                )?;
+                let mut args = argv[1..].to_vec();
+                args.extend(step.args.iter().cloned());
+                self.record(&argv[0], args, None);
+            }
+            return Ok(count);
+        }
+
+        self.ensure_exec()?;
+        // Installing packages is what pacstrap already needed confirmed for;
+        // the AUR build reuses that same authorization rather than inventing a
+        // new one that nothing would have recorded a confirmation for.
+        self.gate.authorize(
+            crate::safety::Operation::Pacstrap,
+            crate::storage::device::RiskLevel::Low,
+        )?;
+
+        for step in &plan.steps {
+            // Guard 3, evaluated immediately before every spawn — but only for
+            // the steps that are *not* wrapped.
+            //
+            // This is the subtle half of the never-root rule. A wrapped step
+            // (`runuser -u builder -- makepkg`) legitimately starts as root:
+            // that is how the uid is dropped. Checking it here would refuse
+            // every correct wrapped build and force the installer to invent a
+            // half-rule. An unwrapped step runs as whatever this process is, so
+            // *that* is the one that must not be root.
+            if !step.as_build_user {
+                crate::aur::ensure_not_root(crate::aur::effective_uid())?;
+            }
+            let argv = crate::aur::privilege_wrapper(
+                if step.as_build_user {
+                    plan.wrapper.as_deref()
+                } else {
+                    None
+                },
+                if step.as_build_user {
+                    plan.build_user.as_deref()
+                } else {
+                    None
+                },
+                &step.program,
+            )?;
+            let mut cmd = std::process::Command::new(&argv[0]);
+            cmd.args(&argv[1..]);
+            cmd.args(&step.args);
+            if let Some(dir) = &step.cwd {
+                // `runuser -u … -- prog` changes the uid and leaves the working
+                // directory alone, so setting it here means makepkg builds *as
+                // the build user* inside its own checkout.
+                cmd.current_dir(dir);
+            }
+            // No environment is set here on purpose: `sys` clears the child
+            // environment and re-seeds it with the *parent's* `HOME`, which
+            // during a root run is `/root`. `runuser` rewrites `HOME`, `USER`,
+            // `LOGNAME` and `PATH` from the target account before exec, so the
+            // build sees its own home and its own cache — and never root's.
+            let out = crate::sys::run_command(cmd, crate::aur::BUILD_TIMEOUT)?;
+            if !out.success() {
+                return Err(CamarelolError::new(
+                    ErrorCode::CommandFailed,
+                    format!("`{}` failed during the AUR build", argv[0]),
+                )
+                .with_context(out.stderr.trim().to_string())
+                .with_remediation(
+                    "AUR builds run user-submitted scripts; read the output above before retrying",
+                ));
+            }
+        }
+        Ok(count)
+    }
 }
 
 /// Create the enable symlink for a template unit if it doesn't exist.
@@ -612,7 +758,46 @@ impl InstallReport {
 
 /// Execute the whole install. Stops at the first failure — never continues into
 /// an unsafe step — and reports honestly what happened.
+///
+/// The host is **detected here**, never taken from the caller: this is the
+/// entry point both the TUI and `--scripted` use, and an install that could be
+/// told it is running on Arch would make the whole host check advisory. The
+/// detection is read-only, so it works identically under `--preview`.
 pub fn run_install(
+    cfg: &InstallationConfig,
+    disk: &StorageDevice,
+    plan: &PartitionPlan,
+    gate: &SafetyGate,
+    log: &Logger,
+    runner: &mut dyn SystemRunner,
+    sink: &mut dyn ProgressSink,
+) -> InstallReport {
+    run_install_on_host(
+        &crate::host::detect(),
+        cfg,
+        disk,
+        plan,
+        gate,
+        log,
+        runner,
+        sink,
+    )
+}
+
+/// [`run_install`] with an explicitly supplied [`crate::host::HostProfile`].
+///
+/// The seam exists for one reason: a unit test must be able to say *which host
+/// it is modelling* rather than inheriting whatever machine runs the suite,
+/// which would otherwise make the suite pass on a developer's Arch box and fail
+/// on a container. Production code — the TUI and `--scripted` — calls
+/// [`run_install`], which cannot be told anything.
+// Eight parameters because the host is deliberately *not* bundled into a struct
+// with the rest: a `Preflight`-shaped argument bag would let a caller swap the
+// host out along with the plan, and the point of this function is that it does
+// not.
+#[allow(clippy::too_many_arguments)]
+pub fn run_install_on_host(
+    host: &crate::host::HostProfile,
     cfg: &InstallationConfig,
     disk: &StorageDevice,
     plan: &PartitionPlan,
@@ -633,6 +818,7 @@ pub fn run_install(
     };
     let pf = Preflight {
         firmware,
+        host: host.clone(),
         plan: plan.clone(),
         config: cfg.clone(),
     };
@@ -716,13 +902,14 @@ pub fn run_install(
             {
                 match phase {
                     "preflight" => Ok(format!(
-                        "firmware={} bootloader={} fs={} partitions={}",
+                        "firmware={} bootloader={} fs={} partitions={} host={}",
                         firmware.as_str(),
                         cfg.bootloader()
                             .map(|b| b.as_str().to_string())
                             .unwrap_or_default(),
                         cfg.filesystem,
-                        plan.partitions.len()
+                        plan.partitions.len(),
+                        pf.host.summary()
                     )),
                     "partition" => {
                         runner.apply_partition_table(disk, plan)?;
@@ -775,7 +962,20 @@ pub fn run_install(
                         let bootloader = cfg.bootloader()?;
                         pkgs.extend(bootloader.target_packages().iter().map(|p| p.to_string()));
                         runner.pacstrap(&pkgs)?;
-                        Ok(format!("installed {} packages", pkgs.len()))
+                        // AUR is opt-in and off by default, so this is a no-op
+                        // unless the profile explicitly enabled it *and* listed
+                        // packages. Kept inside the pacstrap phase rather than
+                        // added as a thirteenth phase, so the phase list, the
+                        // docs and the preview banner all keep saying twelve.
+                        let built = runner.build_aur(&cfg.packages)?;
+                        Ok(if built > 0 {
+                            format!(
+                                "installed {} packages and built {built} from the AUR",
+                                pkgs.len()
+                            )
+                        } else {
+                            format!("installed {} packages", pkgs.len())
+                        })
                     }
                     "fstab" => {
                         runner.genfstab()?;
@@ -1000,6 +1200,38 @@ mod tests {
             &crate::storage::layout::LayoutRequest::default(),
         )
         .unwrap()
+    }
+
+    /// Every test below runs against a pinned Arch + systemd host.
+    ///
+    /// The production entry point detects the *real* host, which would make the
+    /// suite pass on an Arch workstation and fail inside a Debian container —
+    /// a test whose result depends on the machine is a test that lies. This
+    /// local `fn` shadows the imported `run_install`, so the modelled host is
+    /// stated once here instead of at every call site.
+    ///
+    /// `refuses_an_unsupported_host_before_any_phase_runs` is the counter-test:
+    /// it hands a hostile profile to the same seam and proves the refusal is
+    /// real rather than an artefact of the pinning.
+    fn run_install(
+        cfg: &InstallationConfig,
+        disk: &StorageDevice,
+        plan: &PartitionPlan,
+        gate: &SafetyGate,
+        log: &Logger,
+        runner: &mut dyn SystemRunner,
+        sink: &mut dyn ProgressSink,
+    ) -> InstallReport {
+        run_install_on_host(
+            &crate::host::HostProfile::arch_systemd(),
+            cfg,
+            disk,
+            plan,
+            gate,
+            log,
+            runner,
+            sink,
+        )
     }
 
     #[test]
@@ -1538,5 +1770,335 @@ mod tests {
         let script = account_script(&cfg);
         assert!(script.contains("useradd -m -s /bin/bash alice"));
         assert!(script.contains("wheel"));
+    }
+
+    // ------------------------------------------------------------ the host
+
+    /// A host the decision table refuses, handed to the real orchestration path.
+    fn refused_host(os_release: &str) -> crate::host::HostProfile {
+        let profile = crate::host::HostProfile::from_parts(
+            &crate::host::parse_os_release(os_release),
+            crate::host::InitSystem::Systemd,
+        );
+        assert!(!profile.supported, "fixture must be a refused host");
+        profile
+    }
+
+    #[test]
+    fn refuses_an_unsupported_host_before_any_phase_runs() {
+        // The counter-test for the pinned-host helper above: the same seam, a
+        // refused profile, and the proof that nothing ran. `runner.calls` is
+        // empty, so the run stopped at the precondition — it did not partition,
+        // format or pacstrap its way to the refusal.
+        for (os_release, expect) in [
+            ("ID=artix\nID_LIKE=arch\n", "Artix"),
+            ("ID=parabola\nID_LIKE=arch\n", "Parabola"),
+            ("ID=hyperbola\n", "Hyperbola"),
+            ("ID=nyarch\n", "Nyarch"),
+            ("ID=endeavouros\nID_LIKE=arch\n", "endeavouros"),
+        ] {
+            let mut runner = SimulatedRunner::new();
+            let cfg = preview_cfg();
+            let report = run_install_on_host(
+                &refused_host(os_release),
+                &cfg,
+                &disk(),
+                &plan(),
+                &SafetyGate::armed_and_execute(),
+                &Logger::default(),
+                &mut runner,
+                &mut NullSink,
+            );
+            assert_eq!(
+                report.outcome,
+                Outcome::Incomplete,
+                "{os_release:?} must not be installed on"
+            );
+            assert!(
+                runner.calls.is_empty(),
+                "no phase may run on {os_release:?}, got: {:?}",
+                runner.calls
+            );
+            let phase = report
+                .phases
+                .first()
+                .expect("a preflight failure is reported");
+            assert_eq!(phase.name, "preflight");
+            assert_eq!(phase.state, "failed");
+            assert!(
+                phase.details.contains("unsupported_host"),
+                "{:?}",
+                phase.details
+            );
+            assert!(phase.details.contains(expect), "{:?}", phase.details);
+        }
+    }
+
+    #[test]
+    fn refuses_arch_without_systemd_before_any_phase_runs() {
+        let host = crate::host::HostProfile::from_parts(
+            &crate::host::parse_os_release("ID=arch\n"),
+            crate::host::InitSystem::OpenRc,
+        );
+        let mut runner = SimulatedRunner::new();
+        let report = run_install_on_host(
+            &host,
+            &preview_cfg(),
+            &disk(),
+            &plan(),
+            &SafetyGate::armed_and_execute(),
+            &Logger::default(),
+            &mut runner,
+            &mut NullSink,
+        );
+        assert_eq!(report.outcome, Outcome::Incomplete);
+        assert!(runner.calls.is_empty());
+        assert!(report.phases[0].details.contains("OpenRC"));
+    }
+
+    #[test]
+    fn the_preflight_report_names_the_host_it_verified() {
+        let mut runner = SimulatedRunner::new();
+        let report = run_install(
+            &preview_cfg(),
+            &disk(),
+            &plan(),
+            &SafetyGate::armed_and_execute(),
+            &Logger::default(),
+            &mut runner,
+            &mut NullSink,
+        );
+        let preflight = report.phases.first().unwrap();
+        assert!(
+            preflight.details.contains("host=Arch Linux / systemd"),
+            "{:?}",
+            preflight.details
+        );
+    }
+
+    #[test]
+    fn the_live_entry_point_detects_the_host_rather_than_trusting_a_caller() {
+        // The real `run_install`, not the pinning helper above: it takes no host
+        // argument at all, so the production path cannot be told which
+        // distribution it is on. Whatever this machine is, the verdict must
+        // match what `detect()` says about it.
+        let mut runner = SimulatedRunner::new();
+        let report = crate::install::execute::run_install(
+            &preview_cfg(),
+            &disk(),
+            &plan(),
+            &SafetyGate::armed_and_execute(),
+            &Logger::default(),
+            &mut runner,
+            &mut NullSink,
+        );
+        let live = crate::host::detect();
+        if live.supported {
+            assert_eq!(report.outcome, Outcome::Completed, "{}", report.render());
+        } else {
+            assert_eq!(report.outcome, Outcome::Incomplete);
+            assert!(runner.calls.is_empty(), "{:?}", runner.calls);
+            assert!(report.phases[0].details.contains("unsupported_host"));
+        }
+    }
+
+    #[test]
+    fn host_detection_is_read_only_so_a_preview_can_still_plan() {
+        // A preview that could not identify the host could not say whether the
+        // install is allowed, so detection has to work while the latch is on.
+        let _scope = crate::sys::PreviewScope::on();
+        let before = crate::sys::spawn_count();
+        let _ = crate::host::detect();
+        assert_eq!(
+            crate::sys::spawn_count(),
+            before,
+            "host detection must not spawn a process"
+        );
+    }
+
+    // ---------------------------------------------------------------- AUR
+
+    fn aur_selection(packages: &[&str], user: Option<&str>) -> crate::packages::PackageSelection {
+        crate::packages::PackageSelection {
+            aur_enabled: true,
+            aur_packages: packages.iter().map(|s| s.to_string()).collect(),
+            aur_build_user: user.map(|s| s.to_string()),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn the_default_install_builds_nothing_from_the_aur() {
+        // AUR is opt-in. Nothing about the ordinary install may change.
+        let mut runner = RealSystemRunner::new(SafetyGate::armed_and_execute());
+        assert_eq!(
+            runner
+                .build_aur(&crate::packages::PackageSelection::default())
+                .unwrap(),
+            0
+        );
+        assert!(runner.records().is_empty());
+        assert!(runner
+            .aur_plan(&crate::packages::PackageSelection::default())
+            .unwrap()
+            .is_none());
+    }
+
+    #[test]
+    fn a_simulated_install_builds_nothing_from_the_aur_by_default() {
+        // The trait's default implementation is a no-op, so the test double
+        // records nothing and the phase details stay the ones the acceptance
+        // documentation quotes.
+        let mut runner = SimulatedRunner::new();
+        let report = run_install(
+            &preview_cfg(),
+            &disk(),
+            &plan(),
+            &SafetyGate::armed_and_execute(),
+            &Logger::default(),
+            &mut runner,
+            &mut NullSink,
+        );
+        let pacstrap = report.phases.iter().find(|p| p.name == "pacstrap").unwrap();
+        assert!(
+            !pacstrap.details.contains("AUR"),
+            "the default run must not mention AUR: {:?}",
+            pacstrap.details
+        );
+    }
+
+    #[test]
+    fn a_root_run_with_aur_enabled_and_no_build_user_stops_the_phase() {
+        // The whole point: camareLOL runs as root, so "no build user" must end
+        // the pacstrap phase with a refusal instead of a root `makepkg`.
+        let runner = RealSystemRunner::new(SafetyGate::armed_and_execute());
+        let sel = aur_selection(&["some-pkg"], None);
+        let uid = crate::aur::effective_uid();
+        // Only meaningful when this process really is root; otherwise the
+        // installer is already unprivileged and there is nothing to drop.
+        if uid != Some(0) {
+            return;
+        }
+        let err = runner.aur_plan(&sel).unwrap_err();
+        assert_eq!(err.code, ErrorCode::AurBuildRefused);
+        assert!(err.to_string().contains("normal user"), "{err}");
+    }
+
+    #[test]
+    fn only_an_unwrapped_step_is_subject_to_the_uid_guard() {
+        // The trap this pins: `runuser -u builder -- makepkg` *starts* as root —
+        // that is how the uid is dropped — so a guard that refused every root
+        // process would refuse every correct wrapped build and force the
+        // installer into a half-rule. The guard belongs on the steps that run
+        // as whatever this process is.
+        let root = aur_selection(&["pkg"], Some("builder"));
+        let wrapped = crate::aur::plan(&root, None, Some("runuser"), Some("builder"), true)
+            .unwrap()
+            .unwrap();
+        assert!(
+            wrapped.steps.iter().all(|s| s.as_build_user),
+            "a root run wraps every step"
+        );
+
+        let unprivileged = crate::aur::plan(
+            &aur_selection(&["pkg"], Some("builder")),
+            None,
+            None,
+            None,
+            false,
+        )
+        .unwrap()
+        .unwrap();
+        assert!(
+            unprivileged.steps.iter().all(|s| !s.as_build_user),
+            "an unprivileged run has nothing to drop"
+        );
+        // The guard itself is unchanged: it still refuses uid 0 and "unknown".
+        assert!(crate::aur::ensure_not_root(Some(0)).is_err());
+        assert!(crate::aur::ensure_not_root(None).is_err());
+    }
+
+    #[test]
+    fn a_preview_with_aur_enabled_records_the_build_and_spawns_nothing() {
+        let _scope = crate::sys::PreviewScope::on();
+        let mut runner = RealSystemRunner::new(SafetyGate::preview());
+        // Whatever this host looks like, the preview path must not refuse the
+        // *plan* — it only refuses to run it.
+        let sel = aur_selection(&["some-pkg"], Some("builder"));
+        match runner.aur_plan(&sel) {
+            Ok(Some(plan)) => {
+                let built = runner.build_aur(&sel).unwrap();
+                assert_eq!(built, 1);
+                let commands = runner.command_lines();
+                let build_line = commands
+                    .iter()
+                    .find(|c| c.contains("some-pkg"))
+                    .unwrap_or_else(|| panic!("{commands:?}"));
+                // The recorded command is the *wrapped* one whenever a drop is
+                // needed, so the preview names the account that would run an
+                // unreviewed build script instead of hiding it behind a bare
+                // `makepkg`.
+                if plan.build_user.is_some() {
+                    assert!(
+                        build_line.contains(" -u ") && build_line.contains("builder"),
+                        "a root run must record the wrapped command: {build_line}"
+                    );
+                } else {
+                    assert!(
+                        !build_line.contains(" -u "),
+                        "an unprivileged run must not pretend to drop: {build_line}"
+                    );
+                }
+            }
+            Ok(None) => panic!("AUR is enabled with a package listed: this must plan"),
+            Err(e) => {
+                // The only legitimate refusal is the never-as-root rule — never
+                // a silent skip.
+                assert_eq!(e.code, ErrorCode::AurBuildRefused, "{e}");
+            }
+        }
+        assert!(
+            runner.records().iter().all(|r| !r.applied),
+            "nothing in a preview may be applied"
+        );
+    }
+
+    #[test]
+    fn an_invalid_aur_package_name_stops_the_phase_before_anything_runs() {
+        // `makepkg --noconfirm` would exit 0 and install nothing. A profile that
+        // can smuggle a flag through the package list is a profile that reports
+        // success while doing nothing.
+        let mut runner = SimulatedRunner::new();
+        let cfg = InstallationConfig {
+            packages: aur_selection(&["--help"], Some("builder")),
+            ..Default::default()
+        };
+        let report = run_install_on_host(
+            &crate::host::HostProfile::arch_systemd(),
+            &cfg,
+            &disk(),
+            &plan(),
+            &SafetyGate::armed_and_execute(),
+            &Logger::default(),
+            &mut runner,
+            &mut NullSink,
+        );
+        // The simulated runner's default `build_aur` is a no-op, so the refusal
+        // is proven at the plan layer instead — which is where a real run meets
+        // it first.
+        let err = crate::aur::plan(
+            &cfg.packages,
+            Some(crate::aur::AurHelper::Yay),
+            Some("runuser"),
+            cfg.packages.aur_build_user.as_deref(),
+            false,
+        )
+        .unwrap_err();
+        assert_eq!(err.code, ErrorCode::InvalidConfig);
+        assert_eq!(
+            report.outcome,
+            Outcome::Completed,
+            "the fixture is otherwise valid"
+        );
     }
 }

@@ -20,3 +20,10 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml = "0.8"
 libc = "0.2.190"
+
+[dev-dependencies]
+# The draw tests reconstruct the rendered screen cell by cell, and a CJK
+# character occupies two cells: the second one is a plain space, so the test
+# helper has to know the real display width to drop it. Without this, every
+# Chinese string came out as "简 体 中 文" and no test could assert on it.
+unicode-width = "0.2"

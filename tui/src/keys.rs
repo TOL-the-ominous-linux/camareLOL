@@ -152,6 +152,7 @@ impl App {
                         self.message = Some(self.tr(
                             "Chế độ dùng phân vùng sẵn có chưa được triển khai ở phiên bản này — đã chặn để bảo vệ dữ liệu.",
                             "Re-using existing partitions is not implemented in this version — the operation was blocked to protect your data.",
+                            "此版本尚未实现使用现有分区的模式 — 已阻止该操作以保护你的数据。",
                         ));
                         self.error = Some(camarelol_core::error::CamarelolError::new(
                             ErrorCode::NotSupported,
@@ -163,6 +164,7 @@ impl App {
                         self.message = Some(self.tr(
                             "Cài song song sẽ được bật sau khi phát hiện Windows — hiện chỉ có bố cục tự động an toàn.",
                             "Dual-boot is enabled after Windows is detected — only the safe automatic layout is available now.",
+                            "检测到 Windows 后才会启用双系统 — 目前仅提供安全的自动布局。",
                         ));
                     }
                     self.rebuild_plan();
@@ -298,7 +300,7 @@ impl App {
         // default arm and silently move the *language* selection instead, so the
         // arrow keys appeared to do nothing there.
         let count = match self.screen {
-            Screen::Language => 2,
+            Screen::Language => camarelol_core::locale::UI_LANGUAGES.len(),
             Screen::Keyboard => camarelol_core::locale::KEYMAPS.len(),
             Screen::Timezone => camarelol_core::locale::TIMEZONES.len(),
             Screen::Filesystem => 3,
@@ -492,6 +494,16 @@ impl App {
     /// Start the installation after re-validating everything.
     pub fn try_start_install(&mut self) {
         self.error = None;
+        // The host is checked *first*, before the disk is even re-scanned. A
+        // refusal here has touched nothing, which is the whole point: the user
+        // learns their machine is unsupported before any part of the wizard's
+        // work can have had a consequence. The core checks it again in the
+        // preflight phase — this one exists so the message appears on the first
+        // Enter, not after a silent wait.
+        if let Err(e) = self.host.require_supported() {
+            self.error = Some(e);
+            return;
+        }
         let Some(path) = self.selected_disk.clone() else {
             self.error = Some(camarelol_core::error::CamarelolError::new(
                 ErrorCode::NoTargetDisk,
@@ -718,6 +730,7 @@ impl App {
                 .tr(
                     "Xem trước hoàn tất. KHÔNG có gì được ghi vào đĩa — hãy khởi động lại bình thường.",
                     "Preview completed. Nothing was written to disk — reboot as usual.",
+                    "预览已完成。没有向磁盘写入任何内容 — 照常重启即可。",
                 )
                 .to_string();
         }
@@ -726,18 +739,21 @@ impl App {
                 .tr(
                     "Hoàn tất. Bạn có thể khởi động lại và rút USB cài đặt.",
                     "Completed. You may reboot and remove the installation medium.",
+                    "已完成。你可以重启并移除安装介质。",
                 )
                 .to_string(),
             Some(Outcome::CompletedWithWarnings) => self
                 .tr(
                     "Hoàn tất nhưng có cảnh báo — hãy đọc nhật ký.",
                     "Completed with warnings — please read the log.",
+                    "已完成，但有警告 — 请阅读日志。",
                 )
                 .to_string(),
             Some(_) => self
                 .tr(
                     "Chưa hoàn tất. Hãy xem nhật ký và phần cứu hộ.",
                     "Not finished. See the log and the recovery section.",
+                    "尚未完成。请查看日志和恢复说明。",
                 )
                 .to_string(),
             None => String::new(),
@@ -1074,5 +1090,103 @@ mod tests {
             "wizard did not reach the review screen, stuck at {:?}",
             app.screen
         );
+    }
+
+    // -------------------------------------------------------------- zh
+
+    #[test]
+    fn the_language_cursor_reaches_chinese() {
+        // The count was hard-coded to 2 when there were two languages. Left
+        // alone, Down would have stopped on English and Chinese would have been
+        // unreachable by keyboard — the only input this interface has.
+        let mut app = app();
+        app.screen = Screen::Language;
+        app.language_index = 0;
+        app.handle_key(KeyEvent::from(KeyCode::Down));
+        assert_eq!(app.language_index, 1);
+        app.handle_key(KeyEvent::from(KeyCode::Down));
+        assert_eq!(app.language_index, 2, "Chinese must be reachable");
+        assert_eq!(
+            app.current_language(),
+            camarelol_core::locale::UiLanguage::Chinese
+        );
+        // And it must not run off the end.
+        app.handle_key(KeyEvent::from(KeyCode::Down));
+        assert_eq!(app.language_index, 2);
+        app.handle_key(KeyEvent::from(KeyCode::Up));
+        app.handle_key(KeyEvent::from(KeyCode::Up));
+        app.handle_key(KeyEvent::from(KeyCode::Up));
+        assert_eq!(app.language_index, 0, "must not wrap above the first");
+    }
+
+    #[test]
+    fn choosing_chinese_changes_the_system_locale_and_timezone() {
+        let mut app = app();
+        app.screen = Screen::Language;
+        app.language_index = 2;
+        app.handle_key(KeyEvent::from(KeyCode::Enter));
+        let cfg = app.build_config().unwrap();
+        assert_eq!(cfg.language, "zh");
+        assert_eq!(cfg.system_locale, "zh_CN.UTF-8");
+        // A zh profile has to survive the core's own validation, which is where
+        // a missing language arm would show up.
+        assert!(cfg.validate().is_ok());
+    }
+
+    #[test]
+    fn chinese_gets_a_cjk_font_and_an_input_method() {
+        // Without these a Chinese console renders every character as a box and
+        // there is no way to type. Same reasoning the Vietnamese branch already
+        // had.
+        let mut app = app();
+        app.language_index = 2;
+        let pkgs = app.build_config().unwrap().packages.utilities;
+        assert!(pkgs.contains(&"noto-fonts-cjk".to_string()), "{pkgs:?}");
+        assert!(pkgs.contains(&"noto-fonts".to_string()), "{pkgs:?}");
+    }
+
+    // ----------------------------------------------------------- the host
+
+    #[test]
+    fn the_install_is_refused_on_an_unsupported_host_before_the_disk_is_touched() {
+        // The wizard can walk all the way to Review on any machine; what must
+        // not happen is the write. `try_start_install` is the last gate before
+        // the thread that erases the disk starts, and the host is the first
+        // thing it checks.
+        let mut app = storage_fixture();
+        app.host = refused_host();
+        app.screen = Screen::Storage;
+        app.handle_key(KeyEvent::from(KeyCode::Down));
+        app.handle_key(KeyEvent::from(KeyCode::Enter));
+        app.screen = Screen::Review;
+        app.plan = Some(app.core.plan_for("/dev/sdb").unwrap());
+
+        app.try_start_install();
+
+        assert_eq!(app.screen, Screen::Review, "must not start the install");
+        assert!(!app.installing, "no install thread may be started");
+        assert!(app.install_rx.is_none(), "no install channel may exist");
+        let err = app.error.expect("the refusal must be shown");
+        assert_eq!(err.code, camarelol_core::error::ErrorCode::UnsupportedHost);
+        assert!(err.message.contains("Hyperbola"), "{}", err.message);
+        assert!(err.remediation.is_some());
+    }
+
+    /// A profile the decision table refuses.
+    fn refused_host() -> camarelol_core::host::HostProfile {
+        camarelol_core::host::HostProfile::from_parts(
+            &camarelol_core::host::parse_os_release(
+                "NAME=\"Hyperbola GNU/Linux-libre\"\nID=hyperbola\nID_LIKE=\"parabola arch\"\n",
+            ),
+            camarelol_core::host::InitSystem::Systemd,
+        )
+    }
+
+    #[test]
+    fn the_host_is_detected_once_at_start_up_and_is_the_real_one() {
+        // Not a stub: the app must carry what `detect()` says, because the
+        // refusal and the welcome screen both read it.
+        let app = app();
+        assert_eq!(app.host, camarelol_core::host::detect());
     }
 }

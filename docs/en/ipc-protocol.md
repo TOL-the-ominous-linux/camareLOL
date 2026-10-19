@@ -30,7 +30,7 @@ to it — or to the Java catalog's own server — over this protocol.
 
 | method | destructive | description |
 | --- | --- | --- |
-| `hello` | no | protocol discovery |
+| `hello` | no | protocol discovery; the result carries `host`, e.g. `Arch Linux / systemd` |
 | `scan_devices` | no | full storage survey, as a JSON array |
 | `create_plan` | no | build a partition plan for `params.disk` |
 | `validate_plan` | no | re-validate an existing plan |
@@ -62,7 +62,7 @@ reads only `result` and ignores `status` will read a failure as a success.
 | storage | `no_target_disk`, `device_gone`, `device_identity_changed`, `device_busy` |
 | boot and accounts | `invalid_boot_config`, `invalid_account` |
 | network | `network_unreachable` |
-| safety | `safety_gate_closed`, `confirmation_required` |
+| safety | `safety_gate_closed`, `confirmation_required`, `unsupported_host`, `aur_build_refused` |
 | updates | `update_download_failed`, `update_manifest_invalid`, `update_signature_missing`, `update_signature_invalid`, `update_expired`, `update_checksum_mismatch`, `update_candidate_failed`, `update_not_privileged`, `update_url_refused`, `update_rollback_failed` |
 | other | `not_supported`, `internal` |
 
@@ -72,10 +72,16 @@ reads only `result` and ignores `status` will read a failure as a success.
    part of this project is not a reason to relax a check.
 2. A destructive method is refused unless the gate is armed **and** the
    confirmation phrase for that operation's risk level has been recorded.
-3. A response with `status: "error"` must never be treated as success.
-4. Timeouts are per request. A cancelled request is **answered**, not dropped —
+3. A destructive method is also refused with `unsupported_host` when the
+   distribution or init system is not Arch + systemd. The check runs *before*
+   the gate, so the user is told the real reason rather than being told to pass
+   a flag that would not make the install safe. It lives in `apply_plan` and not
+   only in the install orchestrator, because the IPC surface writes a partition
+   table on its own.
+4. A response with `status: "error"` must never be treated as success.
+5. Timeouts are per request. A cancelled request is **answered**, not dropped —
    a caller that never hears back cannot tell a slow operation from a dead one.
-5. `protocol_version` is checked before anything else. An unknown version is
+6. `protocol_version` is checked before anything else. An unknown version is
    refused rather than parsed on a guess.
 
 ## Why the version is in every message

@@ -13,6 +13,7 @@ use camarelol_core::hardware::Firmware;
 use camarelol_core::install::execute::SimulatedRunner;
 use camarelol_core::install::run_install;
 use camarelol_core::install::{NullSink, Outcome};
+use camarelol_core::locale::UiLanguage;
 use camarelol_core::logging::Logger;
 use camarelol_core::safety::SafetyGate;
 use camarelol_core::storage::scan_devices;
@@ -89,7 +90,7 @@ OPTIONS:
     --preview                 Simulate the whole installation and write nothing
     --allow-destructive       Arm the safety gate (still requires confirmation)
     --execute                 Really write to disk (default is dry-run)
-    --lang <vi|en>            Installer language
+    --lang <vi|en|zh>         Installer language
     --postcheck               Verify an installed system (default: /)
     --postcheck-root <PATH>   Root to check (for mounted systems)
 
@@ -310,6 +311,16 @@ fn cmd_self_test(mock: Option<PathBuf>) -> Result<bool, CamarelolError> {
     let core = camarelol_core::Core::with_devices(devices);
     let mut ok = true;
     let empty = core.devices.iter().find(|d| d.is_empty());
+    // Host identity first and explicitly. Every later check assumes Arch +
+    // systemd, so a "self-test failed" with no mention of the host would send
+    // the user hunting for a bug that is actually their distribution.
+    let host = camarelol_core::host::detect();
+    println!("0. host detected: {}", host.summary());
+    println!("   supported: {}", host.supported);
+    if !host.supported {
+        println!("   REFUSED: {}", host.reason);
+        ok = false;
+    }
     println!("1. devices discovered: {}", core.devices.len());
     for d in &core.devices {
         println!("   - {} {} {}", d.path, d.kind.as_str(), d.summary_line());
@@ -421,8 +432,13 @@ fn cmd_self_test(mock: Option<PathBuf>) -> Result<bool, CamarelolError> {
 fn run_tui(args: Args) -> Result<(), CamarelolError> {
     let mut app = App::new(args.mock.clone());
     if let Some(lang) = &args.language {
-        app.language_index = if lang == "vi" { 0 } else { 1 };
-        app.sync_language_to_system();
+        // Unknown codes stay English rather than being guessed at: a
+        // mistyped `--lang zh-chn` must not silently install the wrong system
+        // locale on the user's machine.
+        if let Some(l) = UiLanguage::from_code(lang) {
+            app.language_index = l.index();
+            app.sync_language_to_system();
+        }
     }
     if let Some(cfg_path) = &args.config {
         let cfg = InstallationConfig::load(cfg_path.to_str().unwrap_or_default())?;

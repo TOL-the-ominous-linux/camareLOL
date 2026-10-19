@@ -19,7 +19,7 @@ cổng an toàn đứng trước mọi thao tác phá huỷ.
 
 ## Ngôn ngữ
 
-Bản thân trình cài đặt nói tiếng Việt và tiếng Anh (`--lang vi|en`).
+Bản thân trình cài đặt nói tiếng Việt, tiếng Anh và tiếng Trung giản thể (`--lang vi|en|zh`).
 
 ## Cài đặt
 
@@ -90,6 +90,15 @@ bằng tay.
 
 ## Những gì nó cố ý chưa làm
 
+- Chạy trên bất cứ thứ gì ngoài Arch Linux với systemd. Hệ điều hành và hệ
+  thống init được đọc từ `/etc/os-release` và `/proc/1/comm`; bất kỳ thứ gì
+  khác đều bị từ chối ngay ở bước lập kế hoạch, trước khi ghi bất kỳ byte
+  nào. **Parabola và Hyperbola là bản phân phối GNU/Linux-libre, không phải
+  Arch** — chúng dùng `pacman` nhưng bỏ hoặc thay thế các gói không tự do, nên
+  một danh sách gói đúng trên Arch có thể không tồn tại hoặc bị đổi tên ở đó.
+  Artix, Nyarch và các bản phân phối `ID_LIKE=arch` như EndeavourOS cũng bị
+  từ chối vì cùng lý do: chúng là những hệ chưa được kiểm chứng, không phải
+  Arch.
 - Định dạng ổ đĩa chỉ vì bạn chọn nó trong một menu.
 - Cài gói AUR khi chưa có đồng ý rõ ràng và một bản build bởi người dùng thường.
 - Thu nhỏ phân vùng NTFS — tiêu chí nghiệm thu đã được ghi, nhưng tính năng bị

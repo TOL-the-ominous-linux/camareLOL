@@ -111,6 +111,11 @@ pub struct App {
     pub previous: Option<Screen>,
     pub quit: bool,
     pub firmware: Firmware,
+    /// Which distribution and init system this machine runs. Detected once at
+    /// start-up — read-only, no process spawned — and shown on the welcome
+    /// screen so a user on Artix or Hyperbola learns it before the wizard
+    /// rather than at the moment the plan is refused.
+    pub host: camarelol_core::host::HostProfile,
     pub connectivity: Connectivity,
     /// Máy chỉ có Wi-Fi, chưa nối, và không có iwctl/nmtui để nối. Không có
     /// cờ này thì màn hình chỉ hiện "no network connection detected" — người
@@ -187,6 +192,9 @@ impl App {
             None => camarelol_core::Core::new(camarelol_core::hardware::detect_firmware()),
         };
         let firmware = core.firmware();
+        // Read-only: reads /etc/os-release and /proc, starts no process, so it
+        // behaves identically in a `--preview` run.
+        let host = camarelol_core::host::detect();
         let connectivity = network::check_internet().unwrap_or(network::Connectivity::Down);
         let wifi_needs_setup = network::wifi_only_without_helper();
         let mut app = App {
@@ -195,6 +203,7 @@ impl App {
             previous: None,
             quit: false,
             firmware,
+            host,
             connectivity,
             wifi_needs_setup,
             storage_index: 0,
@@ -253,20 +262,26 @@ impl App {
     }
 
     pub fn current_language(&self) -> UiLanguage {
-        if self.language_index == 0 {
-            UiLanguage::Vietnamese
-        } else {
-            UiLanguage::English
-        }
+        // The cursor is an index into `UiLanguage::at`, which clamps — so a
+        // profile written before Chinese existed cannot leave it out of range.
+        UiLanguage::at(self.language_index)
     }
 
-    /// Localized text. Returns an owned String because both branches may be
-    /// built at runtime (e.g. with a runtime value interpolated).
-    pub fn tr(&self, vi: impl Into<String>, en: impl Into<String>) -> String {
-        if self.current_language() == UiLanguage::Vietnamese {
-            vi.into()
-        } else {
-            en.into()
+    /// Localized text. Returns an owned String because a branch may be built at
+    /// runtime (e.g. with a runtime value interpolated).
+    ///
+    /// Third argument is Chinese; the pair order is vi, en, zh, matching
+    /// `UiLanguage`'s declaration order.
+    pub fn tr(
+        &self,
+        vi: impl Into<String>,
+        en: impl Into<String>,
+        zh: impl Into<String>,
+    ) -> String {
+        match self.current_language() {
+            UiLanguage::Vietnamese => vi.into(),
+            UiLanguage::English => en.into(),
+            UiLanguage::Chinese => zh.into(),
         }
     }
 
@@ -298,12 +313,8 @@ impl App {
         self.core.device(path)
     }
 
-    pub fn tr_owned(&self, vi: String, en: String) -> String {
-        if self.current_language() == camarelol_core::locale::UiLanguage::Vietnamese {
-            vi
-        } else {
-            en
-        }
+    pub fn tr_owned(&self, vi: String, en: String, zh: String) -> String {
+        self.tr(vi, en, zh)
     }
 
     pub fn selected_device(&self) -> Option<&StorageDevice> {
@@ -317,7 +328,11 @@ impl App {
                 if self.storage_index >= self.core.devices.len() {
                     self.storage_index = 0;
                 }
-                self.message = Some(self.tr("Đã quét lại ổ đĩa.", "Disks re-scanned."));
+                self.message = Some(self.tr(
+                    "Đã quét lại ổ đĩa.",
+                    "Disks re-scanned.",
+                    "已重新扫描磁盘。",
+                ));
             }
             Err(e) => self.error = Some(e),
         }
@@ -326,7 +341,11 @@ impl App {
     /// Rebuild the partition plan from the current selections.
     pub fn rebuild_plan(&mut self) {
         let Some(path) = self.selected_disk.clone() else {
-            self.message = Some(self.tr("Chưa chọn ổ đĩa.", "No disk selected yet."));
+            self.message = Some(self.tr(
+                "Chưa chọn ổ đĩa.",
+                "No disk selected yet.",
+                "尚未选择磁盘。",
+            ));
             return;
         };
         let Some(device) = self.core.device(&path).cloned() else {
@@ -504,10 +523,17 @@ impl App {
     }
 
     fn core_utility_packages(&self) -> Vec<String> {
-        if self.current_language() == UiLanguage::Vietnamese {
-            vec!["noto-fonts".into(), "noto-fonts-cjk".into(), "ibus".into()]
-        } else {
-            vec!["noto-fonts".into()]
+        // Noto CJK and an input method are not decoration: without them a
+        // Vietnamese or Chinese console shows boxes for every accented or Han
+        // character and there is no way to type.
+        match self.current_language() {
+            UiLanguage::Vietnamese => {
+                vec!["noto-fonts".into(), "noto-fonts-cjk".into(), "ibus".into()]
+            }
+            UiLanguage::Chinese => {
+                vec!["noto-fonts".into(), "noto-fonts-cjk".into(), "ibus".into()]
+            }
+            UiLanguage::English => vec!["noto-fonts".into()],
         }
     }
 

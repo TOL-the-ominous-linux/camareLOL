@@ -34,10 +34,17 @@ const GOOD: Color = Color::Green;
 /// missed.
 pub const PREVIEW_BANNER: &str = "PREVIEW — KHÔNG GÌ ĐƯỢC GHI VÀO ĐĨA";
 
+/// The same warning in Simplified Chinese, worded as `docs/zh/index.md` words
+/// it. Kept separate from [`PREVIEW_BANNER`] because that constant is asserted
+/// on verbatim by the acceptance tests in three languages; merging them would
+/// change a string the suite depends on.
+pub const PREVIEW_BANNER_ZH: &str = "预览 — 不会向磁盘写入任何内容";
+
 fn preview_banner(app: &App) -> String {
     app.tr_owned(
         format!(" ⚠ {PREVIEW_BANNER} · lệnh chỉ được in ra, không lệnh nào chạy "),
         format!(" ⚠ {PREVIEW_BANNER} — commands are shown, none is run "),
+        format!(" ⚠ {PREVIEW_BANNER_ZH} — 只显示命令，不会执行任何命令 "),
     )
 }
 
@@ -214,7 +221,10 @@ fn draw_footer(f: &mut Frame, app: &App, area: Rect) {
     let en = format!(
         " ↑↓ move · Enter select · Tab switch field · Space toggle · Esc back · F1 help · F10 review · F5 rescan | safety gate: {mode_text}"
     );
-    let text = app.tr_owned(vi, en);
+    let zh = format!(
+        " ↑↓ 移动 · Enter 选择 · Tab 切换字段 · Space 切换 · Esc 返回 · F1 帮助 · F10 复核 · F5 重新扫描 | 安全闸门：{mode_text}"
+    );
+    let text = app.tr_owned(vi, en, zh);
     let style = if matches!(gate.mode(), GateMode::Locked | GateMode::Preview) {
         Style::default().fg(WARN)
     } else {
@@ -235,6 +245,7 @@ fn screen_block(title: impl Into<String>) -> Block<'static> {
 
 fn draw_welcome(f: &mut Frame, app: &App, area: Rect) {
     let hw = camarelol_core::hardware::summarize();
+    let host = &app.host;
     let mut text = vec![
         Line::from(vec![Span::styled(
             "  c a m a r e L O L",
@@ -246,6 +257,18 @@ fn draw_welcome(f: &mut Frame, app: &App, area: Rect) {
             Span::raw("  Firmware:   "),
             Span::styled(hw.firmware.as_str(), Style::default().fg(GOOD)),
         ]),
+        // Only one row for the host: when it is unsupported the warning below
+        // already names it. Twenty-four rows is a legal terminal and this
+        // screen has to fit in one — the update line is the last thing on it
+        // and must never be the thing that scrolls away.
+        Line::from(if host.supported {
+            vec![
+                Span::raw("  Host:       "),
+                Span::styled(host.summary(), Style::default().fg(GOOD)),
+            ]
+        } else {
+            vec![Span::raw("")]
+        }),
         Line::from(format!("  CPU:        {}", hw.cpu.model)),
         Line::from(format!(
             "  Memory:     {}",
@@ -263,9 +286,36 @@ fn draw_welcome(f: &mut Frame, app: &App, area: Rect) {
         Line::from(app.tr(
             "  Nhấn Enter để bắt đầu. Không có thao tác phá hủy nào diễn ra trước khi bạn xác nhận.",
             "  Press Enter to start. Nothing destructive happens before you confirm it.",
+            "  按 Enter 开始。在你确认之前，不会执行任何破坏性操作。",
         )),
         Line::from(""),
     ];
+    // Said here, on the first screen, rather than only at the moment the plan is
+    // refused: a user who is told at the end of a wizard has already answered
+    // every other question, and the answer to this one is "boot the Arch ISO".
+    //
+    // Only the short form goes on screen. The full [`HostProfile::reason`] is
+    // long enough to wrap onto three rows and push the update line off a
+    // 24-row terminal — and it is shown in the error dialog when the plan is
+    // refused, which is where a user reads it properly.
+    if !host.supported {
+        text.push(Line::from(Span::styled(
+            app.tr(
+                format!("  ⚠ Hệ thống không được hỗ trợ: {}", host.summary()),
+                format!("  ⚠ Unsupported host: {}", host.summary()),
+                format!("  ⚠ 不受支持的主机：{}", host.summary()),
+            ),
+            Style::default().fg(BAD).add_modifier(Modifier::BOLD),
+        )));
+        text.push(Line::from(Span::styled(
+            app.tr(
+                "    → Khởi động từ ISO Arch rồi chạy camareLOL từ đó (F10: lý do).",
+                "    → Boot the official Arch live ISO and run camareLOL there (F10: why).",
+                "    → 从官方 Arch 实时环境启动并在其中运行 camareLOL（按 F10 查看原因）。",
+            ),
+            Style::default().fg(WARN),
+        )));
+    }
     if app.preview {
         // Said here too, because this is where a preview begins and the user
         // may have walked past the startup warning a long time ago.
@@ -276,6 +326,7 @@ fn draw_welcome(f: &mut Frame, app: &App, area: Rect) {
         text.push(Line::from(app.tr(
             "  Cài đặt sẽ được mô phỏng đầy đủ và in ra từng lệnh thật.",
             "  The whole installation is simulated and every real command is printed.",
+            "  整个安装过程将被完整模拟，并打印出每一条真实命令。",
         )));
     }
     text.extend([
@@ -283,6 +334,7 @@ fn draw_welcome(f: &mut Frame, app: &App, area: Rect) {
         Line::from(app.tr(
             "  Cập nhật: chạy lại scripts/camarelol.sh, hoặc tải bản mới ở trang phát hành.",
             "  To update: re-run scripts/camarelol.sh, or download a release from the releases page.",
+            "  更新方式：重新运行 scripts/camarelol.sh，或从发布页下载新版本。",
         )),
     ]);
     // Nói thẳng khi Wi-Fi là đường duy nhất mà máy không có công cụ để nối:
@@ -296,6 +348,7 @@ fn draw_welcome(f: &mut Frame, app: &App, area: Rect) {
                 app.tr(
                     "  ⚠ Chỉ có Wi-Fi và chưa nối, mà máy không có iwctl/nmtui để nối.",
                     "  ⚠ Wi-Fi is the only interface, not connected, and no iwctl/nmtui to connect it.",
+                    "  ⚠ 只有 Wi-Fi 且尚未连接，而系统没有 iwctl/nmtui 可用于连接。",
                 ),
                 Style::default().fg(WARN),
             )),
@@ -312,7 +365,10 @@ fn draw_welcome(f: &mut Frame, app: &App, area: Rect) {
 fn draw_choice(f: &mut Frame, app: &mut App, area: Rect) {
     let (items, selected): (Vec<String>, usize) = match app.screen {
         Screen::Language => (
-            vec!["Tiếng Việt".to_string(), "English".to_string()],
+            camarelol_core::locale::UI_LANGUAGES
+                .iter()
+                .map(|l| l.name().to_string())
+                .collect(),
             app.language_index,
         ),
         Screen::Keyboard => (
@@ -426,6 +482,7 @@ fn draw_disk_mode(f: &mut Frame, app: &mut App, area: Rect) {
         .block(screen_block(app.tr(
             "Chọn chế độ sử dụng ổ đĩa",
             "Choose how this disk is used",
+            "选择这块磁盘的使用方式",
         )))
         .highlight_style(selected_row())
         .highlight_symbol("▸ ");
@@ -454,7 +511,11 @@ fn draw_layout(f: &mut Frame, app: &mut App, area: Rect) {
         }
     }
     let p = Paragraph::new(lines)
-        .block(screen_block(app.tr("Bố cục phân vùng", "Partition layout")))
+        .block(screen_block(app.tr(
+            "Bố cục phân vùng",
+            "Partition layout",
+            "分区布局",
+        )))
         .wrap(Wrap { trim: false });
     f.render_widget(p, area);
 }
@@ -539,24 +600,31 @@ fn draw_accounts(f: &mut Frame, app: &mut App, area: Rect) {
         Line::from(app.tr(
             "  Mật khẩu chỉ giữ trong RAM: không bao giờ ghi vào tệp cấu hình hay nhật ký.",
             "  Passwords live in RAM only: they are never written to config files or logs.",
+            "  密码只保存在内存中：绝不会写入配置文件或日志。",
         )),
     ];
     let p = Paragraph::new(lines)
-        .block(screen_block(app.tr("Tài khoản", "Accounts")))
+        .block(screen_block(app.tr("Tài khoản", "Accounts", "用户账户")))
         .wrap(Wrap { trim: false });
     f.render_widget(p, area);
 }
 
 fn draw_desktop(f: &mut Frame, app: &mut App, area: Rect) {
-    let mut lines: Vec<Line> = vec![Line::from(app.tr("  Chọn desktop:", "  Choose a desktop:"))];
+    let mut lines: Vec<Line> = vec![Line::from(app.tr(
+        "  Chọn desktop:",
+        "  Choose a desktop:",
+        "  选择桌面环境：",
+    ))];
     for (i, p) in DesktopProfile::ALL.iter().enumerate() {
         let marker = if i == app.desktop_index { "●" } else { "○" };
         lines.push(Line::from(format!("   {marker} {}", p.as_str())));
     }
     lines.push(Line::from(""));
-    lines.push(Line::from(
-        app.tr("  Chế độ hiển thị (→/Tab):", "  Display server (→/Tab):"),
-    ));
+    lines.push(Line::from(app.tr(
+        "  Chế độ hiển thị (→/Tab):",
+        "  Display server (→/Tab):",
+        "  显示服务器（→/Tab）：",
+    )));
     for (i, s) in DisplayServer::ALL.iter().enumerate() {
         let marker = if i == app.server_index { "●" } else { "○" };
         lines.push(Line::from(format!("   {marker} {}", s.as_str())));
@@ -568,11 +636,14 @@ fn draw_desktop(f: &mut Frame, app: &mut App, area: Rect) {
     lines.push(Line::from(app.tr(
         "  ⚠ Sway/Hyprland chỉ chạy Wayland.",
         "  ⚠ Sway/Hyprland are Wayland-only.",
+        "  ⚠ Sway/Hyprland 仅支持 Wayland。",
     )));
     let p = Paragraph::new(lines)
-        .block(screen_block(
-            app.tr("Môi trường desktop", "Desktop environment"),
-        ))
+        .block(screen_block(app.tr(
+            "Môi trường desktop",
+            "Desktop environment",
+            "桌面环境",
+        )))
         .wrap(Wrap { trim: false });
     f.render_widget(p, area);
 }
@@ -606,7 +677,7 @@ fn draw_services(f: &mut Frame, app: &mut App, area: Rect) {
         .collect();
     let mut state = ListState::default();
     state.select(Some(app.services_cached_index));
-    let list = List::new(items).block(screen_block(app.tr("Dịch vụ", "Services")));
+    let list = List::new(items).block(screen_block(app.tr("Dịch vụ", "Services", "服务")));
     f.render_stateful_widget(list, area, &mut state);
 }
 
@@ -631,7 +702,7 @@ fn draw_packages(f: &mut Frame, app: &mut App, area: Rect) {
         .collect();
     let mut state = ListState::default();
     state.select(Some(app.package_index));
-    let block = screen_block(app.tr("Gói bổ sung", "Additional packages"));
+    let block = screen_block(app.tr("Gói bổ sung", "Additional packages", "附加软件包"));
     let inner = block.inner(area);
     f.render_widget(block, area);
     let chunks = Layout::default()
@@ -641,9 +712,11 @@ fn draw_packages(f: &mut Frame, app: &mut App, area: Rect) {
     let list = List::new(items);
     f.render_stateful_widget(list, chunks[0], &mut state);
     let input = Paragraph::new(app.custom_package_input.clone()).block(
-        Block::default()
-            .borders(Borders::ALL)
-            .title(" add package (Tab) "),
+        Block::default().borders(Borders::ALL).title(app.tr(
+            " add package (Tab) ",
+            " add package (Tab) ",
+            " 添加软件包（Tab） ",
+        )),
     );
     f.render_widget(input, chunks[1]);
 }
@@ -671,6 +744,7 @@ fn draw_review(f: &mut Frame, app: &mut App, area: Rect) {
                 app.tr(
                     " Xem trước: không cần gõ cụm xác nhận, vì không gì được ghi.",
                     " Preview: no confirmation phrase needed — nothing is written.",
+                    " 预览：无需输入确认短语，因为不会写入任何内容。",
                 ),
                 Style::default().fg(BAD).add_modifier(Modifier::BOLD),
             )));
@@ -696,6 +770,7 @@ fn draw_review(f: &mut Frame, app: &mut App, area: Rect) {
         .block(screen_block(app.tr(
             "Xem lại kế hoạch (Enter để cài)",
             "Review plan (Enter to install)",
+            "复核方案（Enter 开始安装）",
         )))
         .wrap(Wrap { trim: false });
     f.render_widget(p, area);
@@ -729,9 +804,9 @@ fn draw_progress(f: &mut Frame, app: &mut App, area: Rect) {
             .map(|l| ListItem::new(Line::from(l.clone()))),
     );
     let list = List::new(lines).block(screen_block(if app.preview {
-        app.tr("Tiến trình xem trước", "Preview progress")
+        app.tr("Tiến trình xem trước", "Preview progress", "预览进度")
     } else {
-        "Progress".to_string()
+        app.tr("Tiến trình", "Progress", "进度")
     }));
     f.render_widget(list, chunks[1]);
 }
@@ -829,19 +904,37 @@ mod tests {
     }
 
     /// Draw `app` on a screen of the given size and return the visible text.
+    ///
+    /// A double-width grapheme occupies two cells and the second is a plain
+    /// space, indistinguishable from padding by content alone. Walking the
+    /// buffer by display width drops it, so a Chinese string comes back as
+    /// `简体中文` and a test can assert on it. Naively concatenating every cell
+    /// produced `简 体 中 文`, which no assertion could match.
     fn render(mut app: App, screen: Screen, width: u16, height: u16) -> String {
         app.screen = screen;
         let backend = TestBackend::new(width, height);
         let mut terminal = Terminal::new(backend).unwrap();
         terminal.draw(|f| super::draw(f, &mut app)).unwrap();
         let buf = terminal.backend().buffer().clone();
+        use unicode_width::UnicodeWidthStr;
         let w = width as usize;
+        // The cell grid is fixed: exactly `width` cells per row. The walk has
+        // to chunk first and drop the trailing cells of a wide grapheme
+        // *inside* the chunk, otherwise the row boundary moves and every row
+        // below it is shifted.
         buf.content()
-            .iter()
-            .map(|c| c.symbol())
-            .collect::<Vec<_>>()
             .chunks(w)
-            .map(|row| row.concat())
+            .map(|cells| {
+                let mut row = String::new();
+                let mut i = 0;
+                while i < cells.len() {
+                    let symbol = cells[i].symbol();
+                    let cell_width = symbol.width().max(1);
+                    row.push_str(symbol);
+                    i += cell_width;
+                }
+                row
+            })
             .collect::<Vec<_>>()
             .join("\n")
     }
@@ -938,5 +1031,163 @@ mod tests {
         app.preview = true;
         let text = render(app, Screen::Review, 120, 40);
         assert!(!text.contains("Type ERASE"), "got:\n{text}");
+    }
+
+    // ------------------------------------------------------------ the host
+
+    #[test]
+    fn the_welcome_screen_names_the_host_it_detected() {
+        // Distribution and init on the first screen, not at the end of a wizard:
+        // the user has to be told what machine they are on before they answer
+        // anything else. Both states are asserted, because the screen renders
+        // them differently — a `Host:` row when it is supported, a warning that
+        // names it when it is not.
+        let mut app = welcome_app();
+        app.host = camarelol_core::host::HostProfile::arch_systemd();
+        let text = render(app, Screen::Welcome, 120, 40);
+        assert!(text.contains("Host:"), "got:\n{text}");
+        assert!(text.contains("Arch Linux / systemd"), "got:\n{text}");
+
+        let mut app = welcome_app();
+        app.host = refused_host();
+        let text = render(app, Screen::Welcome, 120, 40);
+        assert!(
+            text.contains("Hyperbola GNU/Linux-libre / systemd"),
+            "an unsupported host must still be named on screen:\n{text}"
+        );
+    }
+
+    #[test]
+    fn an_unsupported_host_is_announced_before_the_user_answers_anything() {
+        let mut app = welcome_app();
+        app.host = refused_host();
+        let text = render(app, Screen::Welcome, 120, 40);
+        assert!(text.contains("Unsupported host"), "got:\n{text}");
+        assert!(text.contains("Hyperbola"), "got:\n{text}");
+        assert!(text.contains("Arch live ISO"), "got:\n{text}");
+    }
+
+    #[test]
+    fn a_supported_host_gets_no_warning_on_the_welcome_screen() {
+        let mut app = welcome_app();
+        app.host = camarelol_core::host::HostProfile::arch_systemd();
+        let text = render(app, Screen::Welcome, 120, 40);
+        assert!(!text.contains("Unsupported host"), "got:\n{text}");
+        assert!(text.contains("Arch Linux / systemd"), "got:\n{text}");
+    }
+
+    #[test]
+    fn the_welcome_screen_still_fits_a_twenty_four_row_terminal() {
+        // The update line used to be the last thing on the screen; a warning
+        // block that wrapped onto three rows pushed it off. Both states are
+        // checked because the refused one is the longer of the two.
+        for host in [
+            camarelol_core::host::HostProfile::arch_systemd(),
+            refused_host(),
+        ] {
+            let mut app = welcome_app();
+            app.host = host;
+            app.wifi_needs_setup = true;
+            let text = render(app, Screen::Welcome, 90, 24);
+            assert!(
+                text.contains("camarelol.sh"),
+                "the update line fell off the screen:\n{text}"
+            );
+        }
+    }
+
+    /// A profile the decision table refuses, so the drawing tests do not depend
+    /// on the machine they run on.
+    fn refused_host() -> camarelol_core::host::HostProfile {
+        camarelol_core::host::HostProfile::from_parts(
+            &camarelol_core::host::parse_os_release(
+                "NAME=\"Hyperbola GNU/Linux-libre\"\nID=hyperbola\nID_LIKE=\"parabola arch\"\n",
+            ),
+            camarelol_core::host::InitSystem::Systemd,
+        )
+    }
+
+    // -------------------------------------------------------------- zh
+
+    #[test]
+    fn chinese_is_offered_in_the_language_picker() {
+        let mut app = welcome_app();
+        app.screen = Screen::Language;
+        app.language_index = 2;
+        let text = render(app, Screen::Language, 100, 30);
+        assert!(text.contains("Tiếng Việt"), "got:\n{text}");
+        assert!(text.contains("English"), "got:\n{text}");
+        assert!(text.contains("简体中文"), "got:\n{text}");
+    }
+
+    #[test]
+    fn the_setup_screens_render_in_chinese() {
+        // Not a translation-quality test: a smoke test that the third language
+        // reaches every screen and that `tr` never returns an empty string for
+        // it. An empty branch would render as a blank title.
+        for screen in [
+            Screen::Language,
+            Screen::Keyboard,
+            Screen::Timezone,
+            Screen::Layout,
+            Screen::Accounts,
+            Screen::Desktop,
+            Screen::Services,
+            Screen::Packages,
+            Screen::Review,
+            Screen::Filesystem,
+            Screen::Bootloader,
+        ] {
+            let mut app = welcome_app();
+            app.language_index = 2;
+            app.screen = screen;
+            let text = render(app, screen, 120, 40);
+            assert!(
+                !text.trim().is_empty(),
+                "the {screen:?} screen is blank in Chinese"
+            );
+            assert!(
+                text.contains("camareLOL") || text.contains(">"),
+                "the {screen:?} screen lost its frame in Chinese:\n{text}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_chinese_review_screen_uses_the_documentation_vocabulary() {
+        // Terminology is taken from `docs/zh/index.md`, so a user who read the
+        // documentation recognises the screens.
+        let mut app = welcome_app();
+        app.language_index = 2;
+        app.screen = Screen::Review;
+        app.selected_disk = Some("/dev/vdb".into());
+        app.plan = None;
+        let text = render(app, Screen::Review, 120, 40);
+        assert!(text.contains("复核方案"), "got:\n{text}");
+    }
+
+    #[test]
+    fn the_chinese_accounts_screen_uses_the_documentation_vocabulary() {
+        let mut app = welcome_app();
+        app.language_index = 2;
+        app.screen = Screen::Accounts;
+        let text = render(app, Screen::Accounts, 120, 40);
+        assert!(text.contains("用户账户"), "got:\n{text}");
+        assert!(text.contains("密码只保存在内存中"), "got:\n{text}");
+    }
+
+    #[test]
+    fn the_chinese_footer_names_the_safety_gate() {
+        // The gate is the one string that must be translated: a user who cannot
+        // read it cannot tell EXECUTE from dry-run.
+        let mut app = welcome_app();
+        app.language_index = 2;
+        app.preview = true;
+        let text = render(app, Screen::Welcome, 140, 40);
+        assert!(text.contains("安全闸门"), "got:\n{text}");
+        assert!(
+            text.contains("PREVIEW"),
+            "the banner must survive zh: got:\n{text}"
+        );
     }
 }

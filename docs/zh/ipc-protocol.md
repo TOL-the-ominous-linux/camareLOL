@@ -32,7 +32,7 @@
 
 | method | 破坏性 | 说明 |
 | --- | --- | --- |
-| `hello` | 否 | 协议发现 |
+| `hello` | 否 | 协议发现；结果中带有 `host`，例如 `Arch Linux / systemd` |
 | `scan_devices` | 否 | 完整的存储探测，返回 JSON 数组 |
 | `create_plan` | 否 | 为 `params.disk` 构建分区方案 |
 | `validate_plan` | 否 | 重新校验一个已有方案 |
@@ -64,7 +64,7 @@
 | 存储 | `no_target_disk`、`device_gone`、`device_identity_changed`、`device_busy` |
 | 引导与账户 | `invalid_boot_config`、`invalid_account` |
 | 网络 | `network_unreachable` |
-| 安全 | `safety_gate_closed`、`confirmation_required` |
+| 安全 | `safety_gate_closed`、`confirmation_required`、`unsupported_host`、`aur_build_refused` |
 | 更新 | `update_download_failed`、`update_manifest_invalid`、`update_signature_missing`、`update_signature_invalid`、`update_expired`、`update_checksum_mismatch`、`update_candidate_failed`、`update_not_privileged`、`update_url_refused`、`update_rollback_failed` |
 | 其他 | `not_supported`、`internal` |
 
@@ -74,10 +74,14 @@
    不是放松检查的理由。
 2. 一个破坏性方法会被拒绝，除非安全闸门已解除锁定**并且**该操作
    相应风险等级的确认短语已经被记录。
-3. 带 `status: "error"` 的响应绝不能被当作成功。
-4. 超时是按请求计算的。被取消的请求是**被回应**的，而不是被丢弃——
+3. 当发行版或 init 系统不是 Arch + systemd 时，破坏性方法同样会以
+   `unsupported_host` 被拒绝。该检查运行在安全闸门*之前*，这样用户听到的
+   是真正的原因，而不是被告知再加一个仍然不会让安装变安全的开关。它位于
+   `apply_plan` 中，而不只在安装编排器里，因为 IPC 这一层会自行写入分区表。
+4. 带 `status: "error"` 的响应绝不能被当作成功。
+5. 超时是按请求计算的。被取消的请求是**被回应**的，而不是被丢弃——
    一个始终收不到回应的调用方无法区分"慢"和"死"。
-5. `protocol_version` 在其他一切之前就被检查。未知版本会被拒绝，
+6. `protocol_version` 在其他一切之前就被检查。未知版本会被拒绝，
    而不是靠猜测去解析。
 
 ## 为什么每条消息里都带版本号

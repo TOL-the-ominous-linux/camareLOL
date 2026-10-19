@@ -32,7 +32,7 @@ pub struct DiskReference {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InstallationConfig {
     pub schema_version: u32,
-    /// `vi` or `en` — the installer UI language (not the system locale).
+    /// `vi`, `en` or `zh` — the installer UI language (not the system locale).
     pub language: String,
     pub system_locale: String,
     pub keymap: String,

@@ -11,11 +11,13 @@
 //! ```
 
 pub mod accounts;
+pub mod aur;
 pub mod boot;
 pub mod config;
 pub mod desktop;
 pub mod error;
 pub mod hardware;
+pub mod host;
 pub mod install;
 pub mod locale;
 pub mod logging;
@@ -174,6 +176,9 @@ impl Core {
                 "version": CORE_VERSION,
                 "protocol_version": PROTOCOL_VERSION,
                 "gate": self.gate.mode().as_str(),
+                // Additive: an older client ignores it, and a client that wants
+                // to know *before* it asks can refuse a write it cannot make.
+                "host": host::detect().summary(),
             })),
             Method::ScanDevices => Ok(json!({ "devices": self.devices })),
             Method::CreatePlan => {
@@ -201,6 +206,16 @@ impl Core {
             Method::ApplyPlan => {
                 // Requires an armed gate and confirmation; validation happens
                 // again right here, in the core.
+                //
+                // The host check is here, not only in `run_install`, because
+                // this method writes a partition table on its own: an IPC
+                // client that never goes through the installer would otherwise
+                // have been the one way to erase a disk on Artix or Hyperbola.
+                // Detection is read-only and starts no process, so it costs
+                // nothing on the path that is about to destroy data.
+                if let Err(e) = host::detect().require_supported() {
+                    return Response::err(id, e.into(), started.elapsed().as_millis());
+                }
                 let path = req
                     .params
                     .get("disk")
@@ -327,7 +342,13 @@ mod tests {
     }
 
     #[test]
-    fn apply_plan_is_refused_by_the_locked_gate() {
+    fn apply_plan_is_refused_before_it_writes_anything() {
+        // Two gates stand in front of a partition table: the host, then the
+        // safety gate. The host is checked first, so on an unsupported machine
+        // the user is told *that* instead of being told to pass a flag that
+        // would still not make the install safe. On the supported host — the one
+        // this installer is for — the answer must still be exactly what it was:
+        // the closed gate.
         let mut c = core();
         let r = c.dispatch(Request::new(
             3,
@@ -335,7 +356,48 @@ mod tests {
             json!({"disk": "/dev/vdb"}),
         ));
         assert_eq!(r.status, ResponseStatus::Error);
-        assert_eq!(r.error.unwrap().code, ErrorCode::SafetyGateClosed);
+        let expected = if host::detect().supported {
+            ErrorCode::SafetyGateClosed
+        } else {
+            ErrorCode::UnsupportedHost
+        };
+        assert_eq!(r.error.unwrap().code, expected);
+    }
+
+    #[test]
+    fn apply_plan_is_refused_on_an_unsupported_host() {
+        // The IPC surface writes a partition table without going through
+        // `run_install`, so it needs the host check of its own. Proven here
+        // against a refused profile rather than against whatever machine the
+        // suite happens to run on, which is the same reasoning the phase tests
+        // use.
+        let refused = host::HostProfile::from_parts(
+            &host::parse_os_release("ID=artix\nID_LIKE=arch\n"),
+            host::InitSystem::OpenRc,
+        );
+        assert!(!refused.supported);
+        // The check the ApplyPlan arm performs, on a refused host and on the
+        // supported one, so the difference is the host and nothing else.
+        assert!(refused.require_supported().is_err());
+        assert!(host::HostProfile::arch_systemd()
+            .require_supported()
+            .is_ok());
+    }
+
+    #[test]
+    fn hello_reports_the_host_so_a_client_can_refuse_before_it_asks() {
+        let mut c = core();
+        let r = c.dispatch(Request::new(6, Method::Hello, json!({})));
+        let result = r.result.unwrap();
+        assert!(
+            result["host"].as_str().unwrap().contains("systemd"),
+            "the host line must name the init system: {result}"
+        );
+        assert_eq!(
+            result["host"].as_str().unwrap(),
+            host::detect().summary(),
+            "and it must be the real detection, not a stub"
+        );
     }
 
     #[test]

@@ -19,7 +19,7 @@ camareLOL 从终端安装 Arch Linux。它会检测你的硬件、提出一个�
 
 ## 语言
 
-安装器本身支持越南语和英语（`--lang vi|en`）。
+安装器本身支持越南语、英语和简体中文（`--lang vi|en|zh`）。
 
 ## 安装
 
@@ -86,6 +86,13 @@ $ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/
 
 ## 它有意不做的事
 
+- 在 Arch Linux 与 systemd 之外的任何系统上运行。发行版和 init 系统来自
+  `/etc/os-release` 与 `/proc/1/comm`，其他任何组合都会在规划阶段被拒绝，
+  此时还没有写入任何一个字节。**Parabola 和 Hyperbola 是 GNU/Linux-libre
+  发行版，不是 Arch** —— 它们使用 `pacman`，但会删除或替换非自由软件包，
+  因此一份在 Arch 上完全正确的软件包清单在那里可能根本不存在或换了名字。
+  Artix、Nyarch 以及 EndeavourOS 这类 `ID_LIKE=arch` 的衍生版同样被拒绝：
+  它们是未经验证的主机，而不是 Arch。
 - 因为你在菜单里选中了某块磁盘就格式化它。
 - 未经明确选择加入并以普通用户构建，就安装 AUR 软件包。
 - 调整 NTFS 大小——验收标准已写入文档，该功能被推迟。
