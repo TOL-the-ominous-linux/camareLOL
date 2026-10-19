@@ -220,7 +220,18 @@ guest "/root/camarelol --help > /tmp/help.txt 2>&1; echo rc=\$? > /tmp/r-help.tx
 post help
 
 say "bước 5/6 — cài thật vào đĩa trống (--scripted --execute)"
-guest "curl -sS -o /root/vm-helper.py http://$HOST_ADDR:$PORT/vm-helper.py >/dev/null 2>&1; echo helper_dlc=\$? bytes=\$(stat -c%s /root/vm-helper.py 2>/dev/null); CAMARELOL_TEST_DESKTOP=$DESKTOP CAMARELOL_TEST_DISPLAY_SERVER=$DISPLAY_SERVER CAMARELOL_TEST_DISPLAY_MANAGER=$DISPLAY_MANAGER CAMARELOL_TEST_PRINTING=$PRINTING python3 /root/vm-helper.py /tmp/survey.json /tmp/profile.toml > /tmp/helper-out.txt 2>&1; HRC=\$?; echo helper_rc=\$HRC; cat /tmp/helper-out.txt; grep -E '^(desktop|display_server|display_manager) =' /tmp/profile.toml >> /tmp/helper-out.txt; { cat /tmp/helper-out.txt; echo profile_rc=\$HRC; } > /tmp/r-install_profile.txt" 15
+# Chỉ truyền biến có giá trị. Truyền `CAMARELOL_TEST_DESKTOP=` rỗng sẽ GHI
+# ĐÈ mặc định "console" của helper, profile sinh ra `desktop = ""` và cài
+# chết ngay với "unknown desktop profile". Đó chính là lỗi làm run console-only
+# hỏng sau khi thêm tham số desktop.
+HELPER_ENV=""
+[ -n "$DESKTOP" ]         && HELPER_ENV="$HELPER_ENV CAMARELOL_TEST_DESKTOP=$DESKTOP"
+[ -n "$DISPLAY_SERVER" ]  && HELPER_ENV="$HELPER_ENV CAMARELOL_TEST_DISPLAY_SERVER=$DISPLAY_SERVER"
+[ -n "$DISPLAY_MANAGER" ] && HELPER_ENV="$HELPER_ENV CAMARELOL_TEST_DISPLAY_MANAGER=$DISPLAY_MANAGER"
+[ -n "$PRINTING" ]        && HELPER_ENV="$HELPER_ENV CAMARELOL_TEST_PRINTING=$PRINTING"
+note "profile: ${DESKTOP:-console-only}"
+
+guest "curl -sS -o /root/vm-helper.py http://$HOST_ADDR:$PORT/vm-helper.py >/dev/null 2>&1; echo helper_dlc=\$? bytes=\$(stat -c%s /root/vm-helper.py 2>/dev/null); $HELPER_ENV python3 /root/vm-helper.py /tmp/survey.json /tmp/profile.toml > /tmp/helper-out.txt 2>&1; HRC=\$?; echo helper_rc=\$HRC; cat /tmp/helper-out.txt; grep -E '^(desktop|display_server|display_manager) =' /tmp/profile.toml >> /tmp/helper-out.txt; { cat /tmp/helper-out.txt; echo profile_rc=\$HRC; } > /tmp/r-install_profile.txt" 15
 post install_profile
 note "chạy cài đặt — có thể mất vài phút"
 guest "/root/camarelol --scripted /tmp/profile.toml --allow-destructive --execute > /tmp/inst.txt 2>&1; echo INSTALL_RC=\$? > /tmp/r-install.txt; cat /tmp/inst.txt >> /tmp/r-install.txt" 10
