@@ -238,7 +238,10 @@ pub fn plan_auto_layout(device: &StorageDevice, req: &LayoutRequest) -> Result<P
             size: SizeSpec::Bytes(esp_size),
             filesystem: Some(Filesystem::Vfat),
             mount_point: Some("/boot".into()),
-            label: Some("CAMARELOL-EFI".into()),
+            // FAT labels are limited to 11 characters. `mkfs.fat` refuses
+            // anything longer, and the old "CAMARELOL-EFI" (13) stopped every
+            // UEFI install at the format phase.
+            label: Some("CAMAROL-EFI".into()),
             format: true,
         });
         n += 1;
@@ -455,6 +458,33 @@ mod tests {
             .iter()
             .any(|p| p.purpose == PartitionPurpose::Root));
         validate_plan(&plan, &req_uefi()).unwrap();
+    }
+
+    #[test]
+    fn every_partition_label_fits_its_filesystem() {
+        let req = LayoutRequest {
+            separate_boot: true,
+            separate_home: true,
+            swap_bytes: Some(GIB),
+            ..Default::default()
+        };
+        let plan = plan_auto_layout(&empty_disk(), &req).unwrap();
+        for part in &plan.partitions {
+            let (Some(filesystem), Some(label)) = (&part.filesystem, &part.label) else {
+                continue;
+            };
+            // mkfs.fat accepts at most 11 characters; ext4, btrfs and swap
+            // accept 16. A longer ESP label made every UEFI install fail.
+            let limit = match filesystem {
+                Filesystem::Vfat => 11,
+                _ => 16,
+            };
+            assert!(
+                label.len() <= limit,
+                "{filesystem:?} label {label:?} is {} characters, maximum is {limit}",
+                label.len()
+            );
+        }
     }
 
     #[test]

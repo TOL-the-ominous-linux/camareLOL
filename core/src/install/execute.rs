@@ -469,7 +469,15 @@ impl SystemRunner for RealSystemRunner {
     }
 
     fn target_mounted(&self) -> bool {
-        std::path::Path::new(TARGET_ROOT).join("etc").is_dir()
+        if self.preview {
+            return std::path::Path::new(TARGET_ROOT).join("etc").is_dir();
+        }
+        // A real check: `/mnt/etc` merely existing is not a mount. A leftover
+        // from an interrupted run has to be visible in findmnt.
+        match crate::sys::run("findmnt", &["-rn", "-o", "TARGET", TARGET_ROOT]) {
+            Ok(out) => !out.stdout.trim().is_empty(),
+            Err(_) => false,
+        }
     }
 
     fn warnings(&self) -> Vec<String> {
@@ -646,6 +654,9 @@ fn ensure_template_symlink(root: &str, service: &str) -> Result<()> {
 pub struct SimulatedRunner {
     pub calls: Vec<String>,
     pub fail_on: Option<String>,
+    /// What `target_mounted()` answers. Simulates a leftover `/mnt` from a
+    /// previous interrupted run.
+    pub mounted: bool,
 }
 
 impl SimulatedRunner {
@@ -653,6 +664,7 @@ impl SimulatedRunner {
         SimulatedRunner {
             calls: Vec::new(),
             fail_on: None,
+            mounted: false,
         }
     }
 }
@@ -723,7 +735,7 @@ impl SystemRunner for SimulatedRunner {
     }
 
     fn target_mounted(&self) -> bool {
-        false
+        self.mounted
     }
 }
 
@@ -801,7 +813,7 @@ pub fn run_install_on_host(
     cfg: &InstallationConfig,
     disk: &StorageDevice,
     plan: &PartitionPlan,
-    _gate: &SafetyGate,
+    gate: &SafetyGate,
     log: &Logger,
     runner: &mut dyn SystemRunner,
     sink: &mut dyn ProgressSink,
@@ -901,16 +913,30 @@ pub fn run_install_on_host(
             phase,
             {
                 match phase {
-                    "preflight" => Ok(format!(
-                        "firmware={} bootloader={} fs={} partitions={} host={}",
-                        firmware.as_str(),
-                        cfg.bootloader()
-                            .map(|b| b.as_str().to_string())
-                            .unwrap_or_default(),
-                        cfg.filesystem,
-                        plan.partitions.len(),
-                        pf.host.summary()
-                    )),
+                    "preflight" => {
+                        // A previous interrupted run leaves `/mnt` mounted;
+                        // formatting then fails half-way through with an
+                        // unreadable error. Refuse here, with the fix.
+                        if !gate.preview && runner.target_mounted() {
+                            return Err(CamarelolError::new(
+                                ErrorCode::CommandFailed,
+                                "/mnt is already mounted (a previous run or mount is still active)",
+                            )
+                            .with_remediation(
+                                "run `umount -R /mnt` (and `swapoff -a` if a swap was enabled), then start camareLOL again",
+                            ));
+                        }
+                        Ok(format!(
+                            "firmware={} bootloader={} fs={} partitions={} host={}",
+                            firmware.as_str(),
+                            cfg.bootloader()
+                                .map(|b| b.as_str().to_string())
+                                .unwrap_or_default(),
+                            cfg.filesystem,
+                            plan.partitions.len(),
+                            pf.host.summary()
+                        ))
+                    }
                     "partition" => {
                         runner.apply_partition_table(disk, plan)?;
                         Ok(format!("wrote {} layout to {}", plan.table_type, disk.path))
@@ -923,16 +949,28 @@ pub fn run_install_on_host(
                         Ok("filesystems created".into())
                     }
                     "mount" => {
-                        for (i, spec) in plan.partitions.iter().enumerate() {
-                            let target = part(i + 1);
-                            match spec.purpose {
-                                PartitionPurpose::BiosBoot => continue,
-                                _ => {
-                                    if let Some(mp) = spec.mount_point.as_deref() {
-                                        let mnt = format!("{TARGET_ROOT}{mp}");
-                                        runner.mount(&target, &mnt)?;
-                                    }
-                                }
+                        // The root filesystem has to be mounted first. The
+                        // planner puts the ESP before root, so mounting in plan
+                        // order hid the ESP under the freshly mounted root and
+                        // `grub-install --efi-directory=/boot` then failed with
+                        // "/boot doesn't look like an EFI partition".
+                        let mut ordered: Vec<(usize, &PartitionSpec)> =
+                            plan.partitions.iter().enumerate().collect();
+                        ordered.sort_by_key(|(_, spec)| {
+                            match spec.mount_point.as_deref() {
+                                Some("/") => 0,
+                                Some(_) => 1,
+                                None => 2,
+                            }
+                        });
+                        for (i, spec) in ordered {
+                            if spec.purpose == PartitionPurpose::BiosBoot {
+                                continue;
+                            }
+                            if let Some(mp) = spec.mount_point.as_deref() {
+                                let target = part(i + 1);
+                                let mnt = format!("{TARGET_ROOT}{mp}");
+                                runner.mount(&target, &mnt)?;
                             }
                         }
                         Ok("target mounted".into())
@@ -1518,6 +1556,78 @@ mod tests {
                 .iter()
                 .all(|r| !r.applied && r.status.is_none()),
             "a recorded command must carry no result: nothing ran"
+        );
+    }
+
+    #[test]
+    fn refuses_to_start_when_the_target_is_already_mounted() {
+        // A previous failed run leaves /mnt mounted; the old code then failed
+        // at mkfs with "contains a mounted filesystem". Preflight has to catch
+        // it with a fix the user can run.
+        let cfg = preview_cfg();
+        cfg.validate().unwrap();
+        let plan = plan();
+        let mut runner = SimulatedRunner::new();
+        runner.mounted = true;
+        let gate = SafetyGate::default();
+        let log = Logger::default();
+        let report = run_install(
+            &cfg,
+            &disk(),
+            &plan,
+            &gate,
+            &log,
+            &mut runner,
+            &mut NullSink,
+        );
+        assert!(
+            report.phases[0].state == PhaseState::Failed.as_str(),
+            "{}",
+            report.render()
+        );
+        assert!(
+            report.render().contains("already mounted"),
+            "the refusal must say why:\n{}",
+            report.render()
+        );
+    }
+
+    #[test]
+    fn root_is_mounted_before_the_esp() {
+        // Mounting the ESP first and root second hides the ESP: root is mounted
+        // over `/mnt`, and `/mnt/boot` becomes an ordinary directory on root.
+        // grub-install then refuses with "/boot doesn't look like an EFI
+        // partition". The planner deliberately lists the ESP first, so the
+        // mount phase must not follow plan order.
+        let cfg = preview_cfg();
+        cfg.validate().unwrap();
+        let plan = plan();
+        let mut runner = SimulatedRunner::new();
+        let report = run_install(
+            &cfg,
+            &disk(),
+            &plan,
+            &SafetyGate::preview(),
+            &Logger::default(),
+            &mut runner,
+            &mut NullSink,
+        );
+        assert!(report.all_completed(), "{}", report.render());
+
+        let root = runner
+            .calls
+            .iter()
+            .position(|c| c.ends_with("-> /mnt") || c.ends_with("-> /mnt/"))
+            .expect("root mount missing");
+        let esp = runner
+            .calls
+            .iter()
+            .position(|c| c.ends_with("-> /mnt/boot"))
+            .expect("ESP mount missing");
+        assert!(
+            root < esp,
+            "root must be mounted before the ESP:\n{}",
+            runner.calls.join("\n")
         );
     }
 
