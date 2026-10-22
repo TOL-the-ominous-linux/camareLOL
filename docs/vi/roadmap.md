@@ -126,17 +126,25 @@ filesystem, và thứ tự mount root-trước-ESP.
       C: 6 GiB, khôi phục 1 GiB — mỗi cái một tệp đánh dấu), cài cạnh đó và
       kiểm tra mọi tệp đánh dấu còn nguyên, root rơi vào partition 5 mới,
       GRUB nằm trên ESP gốc, `os-prober` được cài, và sau cài đúng 5 phân
-      vùng (hai run xanh trọn vẹn, 22 Oct 2026). Run thứ ba một mình chứng
+      vùng (ba run xanh trọn vẹn, 22 Oct 2026). Run thứ ba một mình chứng
       minh cổng từ chối: đặt firmware BIOS, planner từ chối với câu
       "dual-boot chỉ lập kế hoạch cho đĩa UEFI + GPT". Một lần boot từ đĩa
       chứng minh chuỗi khởi động: NVRAM → `EFI/camareLOL/` trên ESP dùng
       lại → nhân Arch → initramfs → màn hình đăng nhập.
-- [ ] Entry Windows trong menu boot — os-prober tìm Windows qua boot manager
-      thật của nó; Windows giả không có boot manager, nên entry chưa từng
-      xuất hiện, và quy trình thu nhỏ từ bên trong Windows cũng chưa được
-      một lần thử VM. Nhắc lại lần nữa: **chưa được chỉ camareLOL vào đĩa
-      đang giữ bản Windows duy nhất của bạn.** Các bước khởi đầu cho máy
-      thật nằm trong `docs/DUAL-BOOT-TEST.md`.
+- [x] Entry Windows trong menu boot — Windows giả nay mang đúng cặp mà
+      probe `efi/20microsoft` của os-prober đòi hỏi (`bootmgfw.efi` cùng
+      một `BCD`), và `grub.cfg` sinh ra đã có
+      `menuentry "Windows Boot Manager (on /dev/sda1)"` chainload vào đó —
+      harness kiểm bằng `windows_entry ≥ 1` (run 7, 17 kiểm xanh,
+      22 Oct 2026). Hai bản sửa làm điều này thành thật chứ không may mắn:
+      cờ `GRUB_DISABLE_OS_PROBER=false` nay do chính pha bootloader viết
+      (trước đây nằm ở system-config — pha chạy SAU `grub-mkconfig` — cờ
+      tới muộn, kể cả Windows thật cũng sẽ bị bỏ lỡ), và yêu cầu BCD được
+      tìm ra nhờ traced `os-prober` ngay trong VM. Điều CHƯA nhìn thấy:
+      entry menu thực sự boot vào một Windows thật — vẫn hoãn bên dưới.
+      Nhắc lại lần nữa: **chưa được chỉ camareLOL vào đĩa đang giữ bản
+      Windows duy nhất của bạn.** Các bước khởi đầu cho máy thật nằm
+      trong `docs/DUAL-BOOT-TEST.md`.
 
 ## Cố ý hoãn lại
 
@@ -148,12 +156,13 @@ không phải vậy.
 sao Windows duy nhất của ai đó là thao tác một chiều, không hoàn tác được, và nó
 cần nhiều kiểm thử hơn mức dự án này hiện có thể đưa ra.
 
-**Dual-boot cạnh một Windows thật.** Phần giữ-nguyên-mọi-thứ đã done và tick
-trong Stage 6 ở trên — được VM chứng minh với Windows giả và một lần boot từ
-đĩa. Còn hoãn là chặng cuối: nhìn thấy entry Windows trên menu boot (cần một
-Windows boot được thật sự trong VM), và toàn bộ quy trình thu nhỏ từ bên
-trong Windows. Không một bản phát hành nào của camareLOL nên lại gần đĩa
-đang giữ bản Windows duy nhất của người dùng cho tới khi chặng này khép lại.
+**Dual-boot cạnh một Windows thật.** Phần giữ-nguyên-mọi-thứ và entry menu
+Windows đã done và tick trong Stage 6 ở trên — được VM chứng minh với Windows
+giả. Còn hoãn là thứ chỉ một Windows thật mới trả lời được: nhìn thấy entry
+menu thực sự boot vào Windows (bootmgr giả được chainload nhưng không làm gì
+cả), và toàn bộ quy trình thu nhỏ từ bên trong Windows. Không một bản phát
+hành nào của camareLOL nên lại gần đĩa đang giữ bản Windows duy nhất của
+người dùng cho tới khi chặng này khép lại.
 
 **Phần còn lại của lưu trữ nâng cao** — trình soạn thảo phân vùng thủ công,
 mã hoá LUKS, bố trí subvolume btrfs — chưa có một dòng code nào. Nó từng nằm

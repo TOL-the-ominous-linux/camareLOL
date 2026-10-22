@@ -116,14 +116,22 @@
       `scripts/vm-dualboot.sh` 造一块 Windows 形状的盘（ESP、MSR、6 GiB
       C:、1 GiB 恢复区——每个都有标记文件），在其旁边安装，并检查每个
       标记文件完好、root 落在新的分区 5、GRUB 在原 ESP 上、`os-prober`
-      已安装、装完恰好 5 个分区（两次完整绿灯 run，2026-10-22）。第三次
+      已安装、装完恰好 5 个分区（三次完整绿灯 run，2026-10-22）。第三次
       run 反而单独证明了拒绝闸门：固件设为 BIOS 时，规划器以
       "dual-boot only plans a UEFI + GPT disk" 拒绝。随后的从盘启动证明了
       启动链：NVRAM → 被复用 ESP 上的 `EFI/camareLOL/` → Arch 内核 →
       initramfs → 登录提示。
-- [ ] 启动菜单里的 Windows 条目 — os-prober 需要真正的 Windows 引导管理器
-      才能找到 Windows；假 Windows 没有，所以条目从未出现过，从 Windows
-      内部缩容的流程也没在 VM 里演练过。提醒照旧：**不要把 camareLOL 指向
+- [x] 启动菜单里的 Windows 条目 — 假 Windows 现在带有 os-prober 的
+      `efi/20microsoft` 探测所需的成对文件（`bootmgfw.efi` 连同一个
+      `BCD`），生成的 `grub.cfg` 里出现了
+      `menuentry "Windows Boot Manager (on /dev/sda1)"` 并 chainload 到它
+      —— harness 以 `windows_entry ≥ 1` 检查（run 7，17 项全绿，
+      2026-10-22）。两个修复让这件事是真实的而非侥幸：
+      `GRUB_DISABLE_OS_PROBER=false` 现在由 bootloader 阶段自己写
+      （原先落在 system-config——那是 `grub-mkconfig` 之后的阶段——标志
+      到得太晚，连真 Windows 都会被漏掉），而 BCD 的要求是在 VM 里
+      跟踪 `os-prober` 时发现的。尚未观察到的：菜单条目真正启动一台
+      真 Windows——这仍然推迟在下面。提醒照旧：**不要把 camareLOL 指向
       装着你唯一一份 Windows 的磁盘。** 真机的起步步骤在
       `docs/DUAL-BOOT-TEST.md`。
 
@@ -135,11 +143,11 @@
 装着某人唯一一份 Windows 的分区是不可撤销的单向操作，它需要的测试量超出
 本项目目前敢于声称的水平。
 
-**真实 Windows 旁边的双系统。** 保留全部的这一侧已完成并在上面 Stage 6 勾选
-—— VM 用假 Windows 和一次从盘启动证明了它。仍被推迟的是最后一程：在
-启动菜单里看到 Windows 条目（需要一台在 VM 里真能启动的 Windows），以及
-从 Windows 内部缩容的全部流程。在那最后一程关闭之前，任何 camareLOL
-发行版都不该靠近装着用户唯一一份 Windows 的磁盘。
+**真实 Windows 旁边的双系统。** 保留全部的一侧和 Windows 菜单条目都已完成并
+在上面 Stage 6 勾选 —— VM 用假 Windows 证明了它们。仍被推迟的是只有真 Windows
+才能回答的：看到菜单条目真正启动 Windows（假 bootmgr 会被 chainload 但什么也
+不做），以及从 Windows 内部缩容的全部流程。在那最后一程关闭之前，任何
+camareLOL 发行版都不该靠近装着用户唯一一份 Windows 的磁盘。
 
 **高级存储清单的其余部分** —— 手动分区编辑器、LUKS 加密、Btrfs 子卷
 布局 —— 一行代码都还没有。它们曾以五个空勾的形式留在阶段清单里；那

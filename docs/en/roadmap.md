@@ -125,18 +125,27 @@ filesystem kind, and root-before-ESP mount order.
       C:, 1 GiB recovery — each carrying marker files), installs beside it
       and checks that every marker survived untouched, the root landed on a
       new partition 5, GRUB lives on the original ESP, `os-prober` is
-      installed, and exactly 5 partitions exist afterwards (two full green
-      runs, 2026-10-22). The third run first proved the refusal gate instead:
-      with firmware set to BIOS the planner refused with
-      "dual-boot only plans a UEFI + GPT disk". A from-disk boot then proved
-      the boot chain: NVRAM → `EFI/camareLOL/` on the reused ESP → Arch
-      kernel → initramfs → login prompt.
-- [ ] Windows entry in the boot menu — os-prober finds a Windows through its
-      real boot manager; the fake Windows carries none, so the menu entry has
-      not been observed yet, and the from-inside-Windows shrink procedure is
-      not exercised by a VM. The reminder stands: **do not point camareLOL at
-      the disk that holds your only Windows install.** First real-machine
-      steps live in `docs/DUAL-BOOT-TEST.md`.
+      installed, and exactly 5 partitions exist afterwards (three green
+      runs, 2026-10-22). Run 3 first proved the refusal gate instead: with
+      firmware set to BIOS the planner refused with "dual-boot only plans a
+      UEFI + GPT disk". A from-disk boot then proved the boot chain:
+      NVRAM → `EFI/camareLOL/` on the reused ESP → Arch kernel → initramfs
+      → login prompt.
+- [x] Windows entry in the boot menu — the fake Windows now carries the pair
+      os-prober's `efi/20microsoft` probe requires (`bootmgfw.efi` together
+      with a `BCD`), and the generated `grub.cfg` gained
+      `menuentry "Windows Boot Manager (on /dev/sda1)"` chainloading it —
+      checked by the harness as `windows_entry ≥ 1` (run 7, 17 green
+      checks, 2026-10-22). Two fixes made this honest rather than lucky:
+      the `GRUB_DISABLE_OS_PROBER=false` flag is written by the bootloader
+      phase itself (it used to land in system-config, which runs after
+      `grub-mkconfig` — the flag came too late and even a real Windows
+      would have been missed), and the BCD requirement was found by
+      tracing `os-prober` inside the VM. What is NOT yet observed: the
+      menu entry actually booting a real Windows — that stays deferred
+      below. The reminder stands: **do not point camareLOL at the disk
+      that holds your only Windows install.** First real-machine steps
+      live in `docs/DUAL-BOOT-TEST.md`.
 
 ## Deliberately deferred
 
@@ -148,12 +157,13 @@ written down, but the feature is not built. Shrinking a partition that holds
 somebody's only copy of Windows is a one-way operation with no undo, and it
 belongs behind more testing than this project can currently claim.
 
-**Dual-boot beside a real Windows.** The keep-everything side is done and
-ticked in Stage 6 above — VM-proven with a fake Windows and a from-disk boot.
-What stays deferred is the last leg: observing the Windows entry on the boot
-menu (needs a Windows that actually boots in a VM), and the whole
-shrink-from-inside-Windows procedure. No release of camareLOL should go near
-a disk that holds the user's only Windows until that leg closes.
+**Dual-boot beside a real Windows.** The keep-everything side and the
+Windows menu entry are done and ticked in Stage 6 above — VM-proven with a
+fake Windows. What stays deferred is what only a real Windows can answer:
+observing the menu entry actually boot Windows (the fake bootmgr is
+chained but does nothing), and the whole shrink-from-inside-Windows
+procedure. No release of camareLOL should go near a disk that holds the
+user's only Windows until that leg closes.
 
 **Everything else from advanced storage** — a manual partition editor, LUKS
 encryption, Btrfs subvolume layouts — has no code at all. The stage list once

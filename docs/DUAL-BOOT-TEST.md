@@ -4,16 +4,30 @@
 > `scripts/vm-dualboot.sh` cài camareLOL cạnh một "Windows" giả bên trong VM
 > `camarelol-dualboot`: bảng phân vùng ESP/MSR/C:/recovery dựng bằng sfdisk,
 > ba tệp đánh dấu (bootmgr trên ESP, file data trên C:, marker trên recovery)
-> **còn nguyên sau khi cài** (run 4, log `/tmp/opencode/vm-dualboot-run4.log`).
+> **còn nguyên sau khi cài** (run 4 & run 7, log
+> `/tmp/opencode/vm-dualboot-run{4,7}.log`; nguyên liệu lưu tại
+> `/mnt/Storage/home-data/caramelol-evidence/dualboot-vm/`).
 > root mới ở `sda5`, GRUB đặt lên ESP cũ (không format lại), fstab mount
 > `/boot/efi`, `os-prober` có mặt, `GRUB_DISABLE_OS_PROBER=false`.
+> Run 7 thêm: Windows giả mang cặp `bootmgfw.efi` + `BCD` (đúng điều kiện
+> của probe `efi/20microsoft` của os-prober) và `grub.cfg` sinh ra có
+> `menuentry "Windows Boot Manager (on /dev/sda1)"`. Nguyên nhân entry từng
+> vắng mặt chốt bằng traced os-prober trong VM: **chỉ thiếu tệp BCD**, cùng
+> một True bug ở mã nguồn — cờ os-prober từng được viết ở pha
+> system-config, SAU pha bootloader sinh grub.cfg; nay pha bootloader tự
+> viết (run 7 dùng binary `c314241` chứa bản sửa).
 >
-> **Vẫn còn hai điều kiện trước khi chạm máy thật:**
-> 1. Chờ bản **0.1.19 phát hành** (0.1.18 chưa có feature này).
-> 2. Đang **thiếu đúng một phép thử**: boot từ đĩa đã cài trong VM xem menu
->    GRUB hiện và Arch vào được. Nên chạy trước ở VM thật hơn là test ngay
->    trên `nvme` — Windows thật có thêm bootmgr/BitLocker/secure-boot mà VM
->    chưa mô phỏng hết.
+> Boot từ đĩa đã cài cũng đã chứng minh trong VM: NVRAM →
+> `EFI/camareLOL/` trên ESP dùng lại → nhân Arch → initramfs → màn hình
+> đăng nhập; ảnh: `grub-booting-arch.png`, `booted-to-login.png`,
+> `getty-password-prompt.png` (cùng thư mục lưu trữ ở trên).
+>
+> **Điều kiện trước khi chạm máy thật còn lại một:** phát hành
+> **0.1.19** (0.1.18 chưa có feature này). Còn những thứ chỉ Windows
+> thật mới trả lời được — entry menu boot vào Windows thật thật sự, và
+> thu nhỏ phân vùng từ bên trong Windows — nằm trong phần hoãn của
+> roadmap; khi test máy thật vẫn **chỉ dùng sda1**, tuyệt đối không đụng
+> `nvme` cho tới khi ánh xạ Windows thật được đọc thấy trong VM.
 
 > Mục tiêu: có một hệ Arch thật để boot thử, mà **không** mất EndeavourOS,
 > không mất Storage và không phải chia lại ổ NVMe.
