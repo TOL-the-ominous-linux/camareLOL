@@ -117,7 +117,12 @@ pub fn run_scripted(
         println!("Plan:\n{}", plan.render());
         let mut ops = camarelol_core::storage::ops::OpRunner::new();
         let log = Logger::default();
-        ops.apply_partition_table(&device, &plan, &SafetyGate::armed(), &log)?;
+        if plan.keep_existing {
+            println!("dual-boot plan: appending beside the existing partitions (nothing executes here either)");
+            ops.apply_keep_partition_table(&device, &plan, &SafetyGate::armed(), &log)?;
+        } else {
+            ops.apply_partition_table(&device, &plan, &SafetyGate::armed(), &log)?;
+        }
         println!("Commands that would run:\n{}", ops.report());
         return Ok(InstallReport {
             phases: vec![],
