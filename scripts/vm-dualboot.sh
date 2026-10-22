@@ -111,6 +111,7 @@ if vm list vms | grep -q "\"$VM_NAME\""; then
 fi
 vm createvm --name "$VM_NAME" --ostype ArchLinux_64 --register
 vm modifyvm "$VM_NAME" --memory 4096 --cpus 4 --vram 16 \
+    --firmware efi \
     --boot1 dvd --boot2 disk --audio-driver none --usb off \
     --clipboard-mode disabled
 sleep 3
