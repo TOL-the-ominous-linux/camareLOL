@@ -29,15 +29,42 @@ def main() -> int:
     survey_path, profile_path = Path(sys.argv[1]), Path(sys.argv[2])
     devices = json.loads(survey_path.read_text(encoding="utf-8"))
 
-    # Pick the first disk that is empty (no partition table, no partitions).
+    # A dual-boot run (CAMARELOL_TEST_DUAL_BOOT=1) targets a disk that already
+    # carries "Windows-shaped" partitions made by scripts/vm-dualboot.sh,
+    # instead of the first empty disk, and the profile switches the planner
+    # to keep-everything mode (reuse_esp = true).
+    dual_boot = os.environ.get("CAMARELOL_TEST_DUAL_BOOT", "") == "1"
     target = None
-    for device in devices:
-        if device.get("partition_table") == "None" and not device.get("partitions"):
-            target = device
-            break
-    if target is None:
-        print("error: no empty disk found in the survey", file=sys.stderr)
-        return 1
+    if dual_boot:
+        for device in devices:
+            if (
+                device.get("partition_table") == "Gpt"
+                and device.get("partitions")
+                and device.get("mount_state", "NotMounted") == "NotMounted"
+                # Exclude the disk the live system runs from (mounted) and any
+                # disk that a real flagged-Windows survey marked. Note: a
+                # "WindowsRecovery" hint alone is fine — the fake disk carries
+                # a recovery-shaped partition by design.
+                and "Windows" not in [str(h) for h in device.get("os_hints", [])]
+            ):
+                target = device
+                break
+        if target is None:
+            print(
+                "error: no GPT disk with kept partitions found in the survey",
+                file=sys.stderr,
+            )
+            return 1
+        keep_line = 'reuse_esp = true\n'
+    else:
+        for device in devices:
+            if device.get("partition_table") == "None" and not device.get("partitions"):
+                target = device
+                break
+        if target is None:
+            print("error: no empty disk found in the survey", file=sys.stderr)
+            return 1
+        keep_line = ""
 
     # `identity` is a method on the Rust side; the survey only carries the raw
     # fields, so we reconstruct it here (WWN > serial > kernel name).
@@ -61,7 +88,7 @@ target_disk = {{ path = "{target['path']}", identity = "{identity}", size_bytes 
 filesystem = "ext4"
 separate_boot = false
 separate_home = false
-bootloader = "grub"
+{keep_line}bootloader = "grub"
 desktop = "{desktop}"
 display_server = "{display_server}"
 {display_manager_line}hostname = "camarelol-vm"
