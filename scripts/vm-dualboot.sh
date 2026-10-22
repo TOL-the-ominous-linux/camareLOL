@@ -147,7 +147,7 @@ say "bước 2/7 — dựng 'Windows' giả trên đĩa (sfdisk + mkfs.fat + mar
 #   p3 'C:'      6 GiB giữa đĩa
 #   p4 recovery  1 GiB cuối đĩa (type Windows recovery)
 #   khe trống   ~17 GiB giữa p3..p4 — nơi camareLOL phải đặt /
-guest "printf 'label: gpt\\nstart=2048, size=204800, type=U\\nstart=206848, size=32768, type=e3c9e316-0b5c-4db8-817d-f92df00215ae\\nstart=307200, size=12582912, type=L\\nstart=48234496, size=2097152, type=de94bba4-06d1-4d40-a16a-bfd50179d6ac\\n' | sfdisk --force /dev/sda > /tmp/r-fakewin.txt 2>&1; SFC=\$?; partprobe /dev/sda >> /tmp/r-fakewin.txt 2>&1; udevadm settle; mkfs.fat -F32 -n SYSTEM /dev/sda1 >> /tmp/r-fakewin.txt 2>&1; mkfs.fat -F32 -n WINDOWS-C /dev/sda3 >> /tmp/r-fakewin.txt 2>&1; mkfs.fat -F32 -n RECOVERY /dev/sda4 >> /tmp/r-fakewin.txt 2>&1; mkdir -p /tmp/esp /tmp/cw /tmp/rec; mount /dev/sda1 /tmp/esp && mkdir -p /tmp/esp/EFI/Boot && echo original-bootmgr > /tmp/esp/EFI/Boot/.windows-keeper-mark; mount /dev/sda3 /tmp/cw && echo windows-c-marker > /tmp/cw/windows-marker.txt; mount /dev/sda4 /tmp/rec && echo recovery-marker > /tmp/rec/recovery-marker.txt; sync; umount /tmp/esp /tmp/cw /tmp/rec 2>/dev/null; { echo fakewin_rc=\$SFC; lsblk -no NAME,SIZE,PARTTYPENAME /dev/sda; } >> /tmp/r-fakewin.txt" 60
+guest "printf 'label: gpt\\nstart=2048, size=204800, type=U\\nstart=206848, size=32768, type=e3c9e316-0b5c-4db8-817d-f92df00215ae\\nstart=307200, size=12582912, type=L\\nstart=48232448, size=2097152, type=de94bba4-06d1-4d40-a16a-bfd50179d6ac\\n' | sfdisk --force /dev/sda > /tmp/r-fakewin.txt 2>&1; SFC=\$?; partprobe /dev/sda >> /tmp/r-fakewin.txt 2>&1; udevadm settle; mkfs.fat -F32 -n SYSTEM /dev/sda1 >> /tmp/r-fakewin.txt 2>&1; mkfs.fat -F32 -n WINDOWS-C /dev/sda3 >> /tmp/r-fakewin.txt 2>&1; mkfs.fat -F32 -n RECOVERY /dev/sda4 >> /tmp/r-fakewin.txt 2>&1; mkdir -p /tmp/esp /tmp/cw /tmp/rec; mount /dev/sda1 /tmp/esp && mkdir -p /tmp/esp/EFI/Boot && echo original-bootmgr > /tmp/esp/EFI/Boot/.windows-keeper-mark; mount /dev/sda3 /tmp/cw && echo windows-c-marker > /tmp/cw/windows-marker.txt; mount /dev/sda4 /tmp/rec && echo recovery-marker > /tmp/rec/recovery-marker.txt; sync; umount /tmp/esp /tmp/cw /tmp/rec 2>/dev/null; { echo fakewin_rc=\$SFC; lsblk -no NAME,SIZE,PARTTYPENAME /dev/sda; } >> /tmp/r-fakewin.txt" 60
 post fakewin
 check "$RESULTS/step_fakewin.txt" "fakewin_rc=0" "bảng phân vùng 'Windows' giả viết xong"
 check "$RESULTS/step_fakewin.txt" "sda4" "recovery partition hiện trong lsblk"
@@ -167,7 +167,8 @@ say "bước 4b/7 — preview: 12 pha diễn đủ, không ghi byte nào vào đ
 guest "/root/camarelol --scripted /tmp/profile.toml --preview > /tmp/prev.txt 2>&1; echo PREV_RC=\$? > /tmp/r-preview.txt; cat /tmp/prev.txt >> /tmp/r-preview.txt" 45
 post preview
 check "$RESULTS/step_preview.txt" "PREV_RC=0" "preview dual-boot chạy trọn"
-check "$RESULTS/step_preview.txt" "mode=dual-boot(keep)" "preflight khai rõ mode dual-boot(keep)"
+check "$RESULTS/step_preview.txt" "keep existing" "kế hoạch giữ nguyên phân vùng 'Windows' (render plan)"
+check "$RESULTS/step_preview.txt" "--new=5:" "danh sách lệnh preview append sgdisk có số tường minh"
 if grep -qF -- "--zap-all" "$RESULTS/step_preview.txt"; then
     fail "preview lộ --zap-all — đường ghi erase đang bị dùng cho dual-boot!"
 else
