@@ -22,14 +22,14 @@ Hoàn tất.
 - [x] Ghi log và các màn hình xác nhận
 - [x] Cổng an toàn: khoá, chạy thử không ghi, thực thi với cụm từ phải gõ tay
 - [x] Lưu và nạp cấu hình, có phiên bản schema, không có mật khẩu
-- [x] ~~Trình tự cập nhật có ký, có dự phòng mirror~~ — đã bỏ, và đây là trạng
+- [x] ~~Trình tự cập nhật có ký, có dự phòg mirror~~ — đã bỏ, và đây là trạng
       thái đúng. Cập nhật đến từ `pacman` hoặc tải tay. Một thành phần việc của
       nó là thay thế một binary xoá ổ đĩa là con đường ngắn nhất từ máy chủ bị
       chiếm tới dữ liệu bị xoá, và chuỗi mirror đứng sau nó hỏng liên tục trong
       khi vẫn báo thành công.
 - [x] Lớp tự động hoá Python, danh mục Java, IPC có phiên bản
 
-## Một mục chỉ được tick khi có bằng chứng
+## Một mục chỉ được tick khi có bằng chứngn
 
 Mọi `[x]` ở trên đều đã đối chiếu với một lần cài thật trong VirtualBox, không
 phải với việc "code có nhắc tới". Bốn tên gói đã qua sạch mọi unit test rồi
@@ -68,16 +68,6 @@ filesystem, và thứ tự mount root-trước-ESP.
 - [x] Lựa chọn Bluetooth, zram, swap
 - [~] Cấu hình NetworkManager — **một phần**: gói đã cài, unit đã bật. Chưa
       viết tệp `/etc/NetworkManager`.
-
-## Stage 3 — Lưu trữ nâng cao
-
-- [ ] Dual-boot: dùng lại một ESP sẵn có, giữ nguyên các phân vùng Windows,
-      recovery và MSR
-- [ ] Trình soạn thảo phân vùng thủ công: kích thước, thứ tự, hệ thống tệp, điểm
-      gắn
-- [ ] Mã hoá LUKS
-- [ ] Thu nhỏ NTFS, với các phép kiểm tra an toàn đã viết sẵn trong đặc tả
-- [ ] Bố trí subvolume btrfs
 
 ## Stage 4 — Trải nghiệm
 
@@ -119,8 +109,8 @@ filesystem, và thứ tự mount root-trước-ESP.
 
 ## Cố ý hoãn lại
 
-Hai mục được nêu ra vì việc thiếu chúng trông như một sự sơ suất, nhưng không
-phải vậy.
+Những mục sau được nêu ra vì việc thiếu chúng trông như một sự sơ suất, nhưng
+không phải vậy.
 
 **Thu nhỏ NTFS.** Tiêu chí nghiệm thu đã có và các phép kiểm tra an toàn đã
 được viết ra, nhưng tính năng thì chưa làm. Thu nhỏ một phân vùng đang giữ bản
@@ -130,10 +120,18 @@ cần nhiều kiểm thử hơn mức dự án này hiện có thể đưa ra.
 **Dùng lại một ESP sẵn có cho dual-boot.** Quy tắc phát hiện và giữ nguyên đã
 được hiện thực, và mã lập kế hoạch biết cách để yên các phân vùng Windows.
 Phần còn thiếu là giao diện bố trí phân vùng, và phát hành một nửa sẽ có nghĩa
-là đưa cho ai đó một kế hoạch mà họ không thể xác nhận một cách an toàn.
+là đưa cho ai đó một kế hoạch mà họ không thể xác nhận một cách an toàn. Đây
+là tính năng kế tiếp cần dựng, và cho tới khi nó tồn tại, camareLOL chỉ cài
+vào cả ổ đĩa hoặc không cài gì cả — chạy nó trên ổ đĩa đang giữ Windows chính
+là cái sai sót mà toàn bộ cổng an toàn tồn tại để ngăn.
 
-Trong cả hai trường hợp, việc thành thật là nói ra thay vì đưa ra một ô tick mà
-làm ít hơn vẻ ngoài.
+**Phần còn lại của lưu trữ nâng cao** — trình soạn thảo phân vùng thủ công,
+mã hoá LUKS, bố trí subvolume btrfs — chưa có một dòng code nào. Nó từng nằm
+trong danh sách stage dưới dạng năm ô trống; điều đó nói ra ít hơn vẻ ngoài,
+nên chúng chuyển sang ở đây.
+
+Trong mọi trường hợp ở đây, việc thành thật là nói ra thay vì đưa ra một ô
+tick mà làm ít hơn vẻ ngoài.
 
 ## Tiếp theo
 

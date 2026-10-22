@@ -67,15 +67,6 @@ filesystem kind, and root-before-ESP mount order.
 - [~] NetworkManager configuration — **partial**: the package is installed and
       the unit is enabled. No `/etc/NetworkManager` file is written.
 
-## Stage 3 — Advanced storage
-
-- [ ] Dual-boot: reuse an existing ESP, preserve Windows, recovery and MSR
-      partitions
-- [ ] Manual partition editor: size, order, filesystem, mount point
-- [ ] LUKS encryption
-- [ ] NTFS shrink, with the safety checks already written in the specification
-- [ ] Btrfs subvolume layouts
-
 ## Stage 4 — Experience
 
 - [x] Save and resume a configuration across runs — a saved profile can be
@@ -117,7 +108,7 @@ filesystem kind, and root-before-ESP mount order.
 
 ## Deliberately deferred
 
-Two items are called out because their absence looks like an oversight and is
+These are called out because their absence looks like an oversight and is
 not.
 
 **NTFS resize.** The acceptance criteria exist and the safety checks are
@@ -128,10 +119,18 @@ belongs behind more testing than this project can currently claim.
 **Reusing an existing ESP for dual-boot.** The detection and preservation rules
 are implemented and the planning code knows how to leave Windows partitions
 alone. What is missing is the layout interface, and shipping half of it would
-mean showing someone a plan they cannot safely confirm.
+mean showing someone a plan they cannot safely confirm. This is the next
+feature to build, and until it exists, camareLOL installs to a whole disk or
+does not install at all — running it against a disk that holds Windows is
+exactly the mistake the whole safety gate exists to prevent.
 
-In both cases the honest thing is to say so rather than to offer a checkbox
-that does less than it appears to.
+**Everything else from advanced storage** — a manual partition editor, LUKS
+encryption, Btrfs subvolume layouts — has no code at all. The stage list once
+carried them as five unticked checkboxes; that said less than it appeared to,
+so they live here instead.
+
+In every case here the honest thing is to say so rather than to offer a
+checkbox that does less than it appears to.
 
 ## Next
 
