@@ -117,13 +117,15 @@ không phải vậy.
 sao Windows duy nhất của ai đó là thao tác một chiều, không hoàn tác được, và nó
 cần nhiều kiểm thử hơn mức dự án này hiện có thể đưa ra.
 
-**Dùng lại một ESP sẵn có cho dual-boot.** Quy tắc phát hiện và giữ nguyên đã
-được hiện thực, và mã lập kế hoạch biết cách để yên các phân vùng Windows.
-Phần còn thiếu là giao diện bố trí phân vùng, và phát hành một nửa sẽ có nghĩa
-là đưa cho ai đó một kế hoạch mà họ không thể xác nhận một cách an toàn. Đây
-là tính năng kế tiếp cần dựng, và cho tới khi nó tồn tại, camareLOL chỉ cài
-vào cả ổ đĩa hoặc không cài gì cả — chạy nó trên ổ đĩa đang giữ Windows chính
-là cái sai sót mà toàn bộ cổng an toàn tồn tại để ngăn.
+**Dùng lại một ESP sẵn có cho dual-boot — nay là `[~]`, có code thật.** Quy tắc
+phát hiện và giữ nguyên đã được hiện thực; trong bản đang làm, planner làm
+thật: đọc khe trống từ survey, từ chối đĩa không GPT, đĩa đang mount, thiếu
+ESP hoặc khe quá nhỏ, và đường ghi chỉ append bằng sgdisk với số thứ tự
+tường minh thay vì zap. Đã có unit test, clippy sạch. Còn thiếu là bằng
+chứng VM — một đĩa đựng "Windows giả" bằng các phân trang + tệp đánh dấu,
+cài cạnh đó, tệp đánh dấu còn nguyên, cả hai hệ có trên boot menu. Cho tới
+khi có bằng chứng đó, ô này vẫn `[~]`, và nhắc lại nguyên tắc: **chưa được
+chỉ camareLOL vào đĩa đang giữ bản Windows duy nhất của bạn.**
 
 **Phần còn lại của lưu trữ nâng cao** — trình soạn thảo phân vùng thủ công,
 mã hoá LUKS, bố trí subvolume btrfs — chưa có một dòng code nào. Nó từng nằm

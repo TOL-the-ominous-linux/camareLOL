@@ -116,13 +116,17 @@ written down, but the feature is not built. Shrinking a partition that holds
 somebody's only copy of Windows is a one-way operation with no undo, and it
 belongs behind more testing than this project can currently claim.
 
-**Reusing an existing ESP for dual-boot.** The detection and preservation rules
-are implemented and the planning code knows how to leave Windows partitions
-alone. What is missing is the layout interface, and shipping half of it would
-mean showing someone a plan they cannot safely confirm. This is the next
-feature to build, and until it exists, camareLOL installs to a whole disk or
-does not install at all — running it against a disk that holds Windows is
-exactly the mistake the whole safety gate exists to prevent.
+**Reusing an existing ESP for dual-boot — now `[~]`, in real code.** The
+detection and preservation rules are implemented and the planning code knows
+how to leave Windows partitions alone; in 0.1.19-in-progress the planner does
+so for real: it reads free space from the survey, refuses a non-GPT disk, a
+mounted disk, a missing ESP or too small a gap, and the write path appends
+with sgdisk using explicit numbers instead of zapping. Unit-tested, clippy
+clean. What is missing is the VM evidence — a disk wearing fake Windows
+partitions and marker files, installed beside, markers intact, both systems
+on the boot menu. Until that evidence exists this stays a `[~]`, and the
+reminder stands: **do not point camareLOL at a disk that holds your only
+Windows install yet.**
 
 **Everything else from advanced storage** — a manual partition editor, LUKS
 encryption, Btrfs subvolume layouts — has no code at all. The stage list once
