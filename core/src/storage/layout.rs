@@ -237,7 +237,17 @@ pub fn plan_auto_layout(device: &StorageDevice, req: &LayoutRequest) -> Result<P
             purpose: PartitionPurpose::EfiSystem,
             size: SizeSpec::Bytes(esp_size),
             filesystem: Some(Filesystem::Vfat),
-            mount_point: Some("/boot".into()),
+            // With a separate /boot partition the ESP must move to /boot/efi;
+            // both claiming /boot was a real collision — the second mount
+            // hid the first and grub-install rejected the ESP.
+            mount_point: Some(
+                if req.separate_boot {
+                    "/boot/efi"
+                } else {
+                    "/boot"
+                }
+                .into(),
+            ),
             // FAT labels are limited to 11 characters. `mkfs.fat` refuses
             // anything longer, and the old "CAMARELOL-EFI" (13) stopped every
             // UEFI install at the format phase.
@@ -330,6 +340,45 @@ pub fn validate_plan(plan: &PartitionPlan, req: &LayoutRequest) -> Result<()> {
         return Err(CamarelolError::new(
             ErrorCode::InvalidPlan,
             "plan must contain exactly one root partition",
+        ));
+    }
+
+    // Two partitions claiming the same mountpoint cannot both be mounted;
+    // the second hides (or fails over) the first. The plan above moved the
+    // ESP to /boot/efi for exactly this reason, and a plan that arrives from
+    // a saved configuration gets caught here instead.
+    let mut seen: std::collections::BTreeSet<&str> = std::collections::BTreeSet::new();
+    for p in &plan.partitions {
+        if let Some(mp) = p.mount_point.as_deref() {
+            // "swap" is an fstab marker, not a directory under the target.
+            if p.purpose == PartitionPurpose::Swap {
+                continue;
+            }
+            if !seen.insert(mp) {
+                return Err(CamarelolError::new(
+                    ErrorCode::InvalidPlan,
+                    format!("two partitions claim the same mount point {mp}"),
+                )
+                .with_remediation("give them distinct mountpoints, or drop one of them"));
+            }
+        }
+    }
+
+    // systemd-boot looks for kernels on the ESP (or an XBOOTLDR partition,
+    // which the planner does not create). A separate ext4 /boot would get the
+    // kernels and stay invisible to the bootloader.
+    if req.bootloader == Bootloader::SystemdBoot
+        && plan
+            .partitions
+            .iter()
+            .any(|p| p.purpose == PartitionPurpose::Boot)
+    {
+        return Err(CamarelolError::new(
+            ErrorCode::InvalidBootConfig,
+            "systemd-boot cannot use a separate ext4 /boot",
+        )
+        .with_remediation(
+            "drop the separate /boot (kernels then live on the ESP) or install GRUB",
         ));
     }
 
@@ -532,6 +581,73 @@ mod tests {
         };
         let plan2 = plan_auto_layout(&empty_disk(), &req2).unwrap();
         validate_plan(&plan2, &req2).unwrap();
+    }
+
+    #[test]
+    fn separate_boot_moves_the_esp_to_boot_efi() {
+        // Old planner mounted the ESP at /boot even with a separate /boot
+        // partition — the second mount hid the first and grub-install
+        // rejected the ESP. The two mountpoints must stay distinct.
+        let req = LayoutRequest {
+            separate_boot: true,
+            ..Default::default()
+        };
+        let plan = plan_auto_layout(&empty_disk(), &req).unwrap();
+        let esp = plan
+            .partitions
+            .iter()
+            .find(|p| p.purpose == PartitionPurpose::EfiSystem)
+            .expect("ESP present");
+        assert_eq!(esp.mount_point.as_deref(), Some("/boot/efi"));
+        let boot = plan
+            .partitions
+            .iter()
+            .find(|p| p.purpose == PartitionPurpose::Boot)
+            .expect("boot present");
+        assert_eq!(boot.mount_point.as_deref(), Some("/boot"));
+        validate_plan(&plan, &req).unwrap();
+        assert_ne!(esp.mount_point, boot.mount_point);
+    }
+
+    #[test]
+    fn validate_rejects_two_partitions_on_one_mountpoint() {
+        // A plan shape that 0.1.17 could produce from a saved configuration:
+        // ESP and separate /boot both said /boot.
+        let mut plan = plan_auto_layout(&empty_disk(), &req_uefi()).unwrap();
+        plan.partitions.insert(
+            1,
+            PartitionSpec {
+                purpose: PartitionPurpose::Boot,
+                size: SizeSpec::Bytes(MIN_BOOT_BYTES),
+                filesystem: Some(Filesystem::Ext4),
+                mount_point: Some("/boot".into()),
+                label: Some("camarelol-boot".into()),
+                format: true,
+            },
+        );
+        let err = validate_plan(&plan, &req_uefi()).unwrap_err();
+        assert!(
+            err.message.contains("same mount point"),
+            "the refusal must name the collision: {}",
+            err.message
+        );
+    }
+
+    #[test]
+    fn validate_rejects_systemd_boot_with_separate_boot() {
+        let req = LayoutRequest {
+            bootloader: Bootloader::SystemdBoot,
+            separate_boot: true,
+            ..Default::default()
+        };
+        let plan = plan_auto_layout(&empty_disk(), &req).unwrap();
+        let err = validate_plan(&plan, &req).unwrap_err();
+        assert_eq!(err.code, ErrorCode::InvalidBootConfig);
+        assert!(
+            err.message.to_lowercase().contains("systemd-boot"),
+            "the refusal must name the bootloader: {}",
+            err.message
+        );
     }
 
     #[test]

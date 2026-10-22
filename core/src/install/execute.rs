@@ -21,7 +21,25 @@ pub trait SystemRunner {
     fn mount(&mut self, source: &str, target: &str) -> Result<()>;
     fn pacstrap(&mut self, packages: &[String]) -> Result<()>;
     fn genfstab(&mut self) -> Result<()>;
-    fn install_bootloader(&mut self, bl: Bootloader, disk: &StorageDevice) -> Result<()>;
+    /// Append the fstab line for one swap partition: `UUID=… none swap …`.
+    ///
+    /// Defaulted to `Ok(())` so test doubles and the simulated runner (whose
+    /// plans carry no swap) change nothing. Only [`RealSystemRunner`]
+    /// overrides it — and only the preview branch of that override must
+    /// record instead of spawn.
+    fn append_fstab_swap(&mut self, _device_node: &str) -> Result<()> {
+        Ok(())
+    }
+    /// Install the bootloader, GRUB `--efi-directory` on UEFI included. With a
+    /// separate /boot the planner mounts the ESP at `/boot/efi`, and the old
+    /// hardcoded "/boot" is what made `grub-install` see an ext4 in search of
+    /// a FAT. BIOS callers ignore the directory.
+    fn install_bootloader(
+        &mut self,
+        bl: Bootloader,
+        disk: &StorageDevice,
+        efi_dir: &str,
+    ) -> Result<()>;
     fn chroot_script(&mut self, script: &str) -> Result<()>;
     fn enable_services(&mut self, services: &[String]) -> Result<()>;
     fn mkinitcpio(&mut self) -> Result<()>;
@@ -345,7 +363,70 @@ impl SystemRunner for RealSystemRunner {
         Ok(())
     }
 
-    fn install_bootloader(&mut self, bl: Bootloader, disk: &StorageDevice) -> Result<()> {
+    fn append_fstab_swap(&mut self, device_node: &str) -> Result<()> {
+        if self.preview {
+            // No process may touch the disk in preview: record what the real
+            // path would look up and write.
+            self.record(
+                "blkid",
+                vec![
+                    "-s".into(),
+                    "UUID".into(),
+                    "-o".into(),
+                    "value".into(),
+                    device_node.into(),
+                ],
+                None,
+            );
+            self.record(
+                "fstab-append",
+                vec![
+                    format!("{TARGET_ROOT}/etc/fstab"),
+                    "UUID=… none swap defaults 0 0".into(),
+                ],
+                None,
+            );
+            return Ok(());
+        }
+        let out = crate::sys::run("blkid", &["-s", "UUID", "-o", "value", device_node])?;
+        if !out.success() || out.stdout.trim().is_empty() {
+            return Err(CamarelolError::new(
+                ErrorCode::CommandFailed,
+                format!("cannot read the UUID of {device_node}"),
+            )
+            .with_context(out.stderr.trim().to_string())
+            .with_remediation(
+                "this is a freshly formatted swap partition; if blkid cannot see it the format phase failed",
+            ));
+        }
+        let uuid = out.stdout.trim().to_string();
+        let fstab = format!("{TARGET_ROOT}/etc/fstab");
+        use std::io::Write;
+        let mut f = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&fstab)
+            .map_err(|e| {
+                CamarelolError::new(
+                    ErrorCode::CommandFailed,
+                    format!("cannot append to {fstab}"),
+                )
+                .with_context(e.to_string())
+            })?;
+        f.write_all(format!("UUID={uuid} none swap defaults 0 0\n").as_bytes())
+            .map_err(|e| {
+                CamarelolError::new(ErrorCode::CommandFailed, "cannot write fstab")
+                    .with_context(e.to_string())
+            })?;
+        Ok(())
+    }
+
+    fn install_bootloader(
+        &mut self,
+        bl: Bootloader,
+        disk: &StorageDevice,
+        efi_dir: &str,
+    ) -> Result<()> {
         if self.preview {
             let firmware = crate::hardware::detect_firmware();
             match bl {
@@ -354,8 +435,9 @@ impl SystemRunner for RealSystemRunner {
                         crate::hardware::Firmware::Bios => {
                             format!("--target=i386-pc {}", disk.path)
                         }
-                        _ => "--target=x86_64-efi --efi-directory=/boot --bootloader-id=camareLOL"
-                            .to_string(),
+                        _ => format!(
+                            "--target=x86_64-efi --efi-directory={efi_dir} --bootloader-id=camareLOL"
+                        ),
                     };
                     let mut args = vec![TARGET_ROOT.to_string(), "grub-install".to_string()];
                     args.extend(target.split(' ').map(|s| s.to_string()));
@@ -378,8 +460,9 @@ impl SystemRunner for RealSystemRunner {
                     crate::hardware::Firmware::Bios => {
                         format!("--target=i386-pc {}", disk.path)
                     }
-                    _ => "--target=x86_64-efi --efi-directory=/boot --bootloader-id=camareLOL"
-                        .to_string(),
+                    _ => format!(
+                        "--target=x86_64-efi --efi-directory={efi_dir} --bootloader-id=camareLOL"
+                    ),
                 };
                 let mut args = vec![TARGET_ROOT.to_string(), "grub-install".to_string()];
                 args.extend(target.split(' ').map(|s| s.to_string()));
@@ -716,9 +799,17 @@ impl SystemRunner for SimulatedRunner {
         self.calls.push("genfstab".into());
         Ok(())
     }
-    fn install_bootloader(&mut self, bl: Bootloader, disk: &StorageDevice) -> Result<()> {
-        self.calls
-            .push(format!("bootloader {} on {}", bl.as_str(), disk.path));
+    fn install_bootloader(
+        &mut self,
+        bl: Bootloader,
+        disk: &StorageDevice,
+        efi_dir: &str,
+    ) -> Result<()> {
+        self.calls.push(format!(
+            "bootloader {} on {} (efi-dir {efi_dir})",
+            bl.as_str(),
+            disk.path
+        ));
         Ok(())
     }
     fn chroot_script(&mut self, script: &str) -> Result<()> {
@@ -956,15 +1047,19 @@ pub fn run_install_on_host(
                         // "/boot doesn't look like an EFI partition".
                         let mut ordered: Vec<(usize, &PartitionSpec)> =
                             plan.partitions.iter().enumerate().collect();
-                        ordered.sort_by_key(|(_, spec)| {
-                            match spec.mount_point.as_deref() {
-                                Some("/") => 0,
-                                Some(_) => 1,
-                                None => 2,
-                            }
+                        ordered.sort_by_key(|(_, spec)| match spec.mount_point.as_deref() {
+                            Some("/") => 0,
+                            Some(_) => 1,
+                            None => 2,
                         });
                         for (i, spec) in ordered {
-                            if spec.purpose == PartitionPurpose::BiosBoot {
+                            // Skip BiosBoot (raw, no filesystem) and Swap (a
+                            // `mount` on it would fail with "unknown filesystem
+                            // type 'swap'" — mount_point "swap" is an fstab
+                            // marker that the fstab phase writes by hand).
+                            if spec.purpose == PartitionPurpose::BiosBoot
+                                || spec.purpose == PartitionPurpose::Swap
+                            {
                                 continue;
                             }
                             if let Some(mp) = spec.mount_point.as_deref() {
@@ -1017,10 +1112,37 @@ pub fn run_install_on_host(
                     }
                     "fstab" => {
                         runner.genfstab()?;
-                        Ok("fstab generated".into())
+                        let mut swap_entries = 0usize;
+                        for (i, spec) in plan.partitions.iter().enumerate() {
+                            if spec.purpose != PartitionPurpose::Swap {
+                                continue;
+                            }
+                            // genfstab cannot see a swap partition that was
+                            // never mounted — and mounting swap is the whole
+                            // point. Its fstab line has to be written by hand
+                            // or the partition never comes back after reboot.
+                            runner.append_fstab_swap(&part(i + 1))?;
+                            swap_entries += 1;
+                        }
+                        if swap_entries > 0 {
+                            Ok(format!(
+                                "fstab generated (+{swap_entries} swap entry/entries)"
+                            ))
+                        } else {
+                            Ok("fstab generated".into())
+                        }
                     }
                     "bootloader" => {
-                        runner.install_bootloader(cfg.bootloader()?, disk)?;
+                        // GRUB on UEFI must point at the mount the ESP really
+                        // has: "/boot", or "/boot/efi" when a separate /boot
+                        // partition exists.
+                        let efi_dir = plan
+                            .partitions
+                            .iter()
+                            .find(|p| p.purpose == PartitionPurpose::EfiSystem)
+                            .and_then(|p| p.mount_point.clone())
+                            .unwrap_or_else(|| "/boot".into());
+                        runner.install_bootloader(cfg.bootloader()?, disk, &efi_dir)?;
                         Ok(format!("{} installed", cfg.bootloader()?.as_str()))
                     }
                     "system-config" => {
@@ -1632,6 +1754,68 @@ mod tests {
     }
 
     #[test]
+    fn swap_is_never_mounted_as_a_filesystem() {
+        // `mount /dev/sdXN /mnt/swap` fails with "unknown filesystem type
+        // 'swap'". The mount phase must skip it; the fstab phase writes the
+        // swap line instead (SimulatedRunner's default append_fstab_swap is a
+        // no-op, so only the mount behaviour is under test here).
+        let cfg = preview_cfg();
+        cfg.validate().unwrap();
+        let mut plan = plan();
+        plan.partitions.push(PartitionSpec {
+            purpose: PartitionPurpose::Swap,
+            size: crate::storage::SizeSpec::Bytes(1024 * 1024 * 1024),
+            filesystem: Some(crate::storage::Filesystem::Swap),
+            mount_point: Some("swap".into()),
+            label: Some("camarelol-swap".into()),
+            format: true,
+        });
+        let mut runner = SimulatedRunner::new();
+        let report = run_install(
+            &cfg,
+            &disk(),
+            &plan,
+            &SafetyGate::preview(),
+            &Logger::default(),
+            &mut runner,
+            &mut NullSink,
+        );
+        assert!(report.all_completed(), "{}", report.render());
+        assert!(
+            !runner.calls.iter().any(|c| c.contains("/mnt/swap")),
+            "swap must not be mounted:\n{}",
+            runner.calls.join("\n")
+        );
+    }
+
+    #[test]
+    fn grub_efi_directory_follows_the_esp_mountpoint() {
+        // With a separate /boot the ESP lives at /boot/efi; the old hardcoded
+        // "--efi-directory=/boot" was the same class of bug as the mount-order
+        // one and would fail identically.
+        let cfg = preview_cfg();
+        cfg.validate().unwrap();
+        let mut plan = plan();
+        plan.partitions[0].mount_point = Some("/boot/efi".into());
+        let mut runner = SimulatedRunner::new();
+        let report = run_install(
+            &cfg,
+            &disk(),
+            &plan,
+            &SafetyGate::preview(),
+            &Logger::default(),
+            &mut runner,
+            &mut NullSink,
+        );
+        assert!(report.all_completed(), "{}", report.render());
+        assert!(
+            runner.calls.iter().any(|c| c.contains("efi-dir /boot/efi")),
+            "the bootloader call must carry the real ESP mountpoint:\n{}",
+            runner.calls.join("\n")
+        );
+    }
+
+    #[test]
     fn preview_spawns_no_process_at_all() {
         // The acceptance criterion, stated as a number. `spawn_count` is bumped
         // immediately before every `Command::spawn` in the crate, so zero here
@@ -1681,7 +1865,9 @@ mod tests {
             .unwrap();
         runner.pacstrap(&["base".into(), "linux".into()]).unwrap();
         runner.genfstab().unwrap();
-        runner.install_bootloader(Bootloader::Grub, &disk).unwrap();
+        runner
+            .install_bootloader(Bootloader::Grub, &disk, "/boot")
+            .unwrap();
         runner
             .chroot_script("set -e\necho hi > /etc/hostname")
             .unwrap();
