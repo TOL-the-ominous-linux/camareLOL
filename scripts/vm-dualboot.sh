@@ -75,8 +75,11 @@ cleanup() {
 }
 trap cleanup EXIT
 
-say "dọn kết quả cũ"
-rm -rf "$RESULTS" "$SERVE"
+say "dọn kết quả cũ (giữ lại run trước dưới dạng tarball)"
+if [ -d "$RESULTS" ]; then
+    tar czf "${RESULTS}-prev-$(date +%Y%m%d-%H%M%S).tgz" "$RESULTS" 2>/dev/null || true
+fi
+rm -rf "$RESULTS"
 mkdir -p "$RESULTS" "$SERVE"
 
 BINARY="${BINARY:-$ROOT/target/release/camarelol}"
@@ -181,11 +184,12 @@ note "cài thật — có thể mất vài phút"
 guest "/root/camarelol --scripted /tmp/profile.toml --allow-destructive --execute > /tmp/inst.txt 2>&1; echo INSTALL_RC=\$? > /tmp/r-install.txt; cat /tmp/inst.txt >> /tmp/r-install.txt" 10
 post install "${INSTALL_TIMEOUT:-900}"
 check "$RESULTS/step_install.txt" "INSTALL_RC=0" "installer thoát 0"
-# Output thật của report in 12 dòng `tên-pha  completed`.
-if [ "$(grep -cE '^[a-z-]+ +completed' "$RESULTS/step_install.txt")" = "12" ]; then
+# Report có thể bị in hai lần (TextSink + render cuối); đếm 12 pha DISTINCT.
+PHASES=$(grep -oE '^(preflight|partition|format|mount|pacstrap|fstab|bootloader|system-config|accounts|services|initramfs|post-check) +completed' "$RESULTS/step_install.txt" | awk '{print $1}' | sort -u | wc -l)
+if [ "$PHASES" = "12" ]; then
     pass "12 pha hoàn tất"
 else
-    fail "12 pha hoàn tất ($(grep -cE '^[a-z-]+ +completed' "$RESULTS/step_install.txt") pha 'completed')"
+    fail "12 pha hoàn tất (chỉ thấy $PHASES pha distinct 'completed')"
 fi
 check "$RESULTS/step_install.txt" "mode=dual-boot(keep)" "preflight khai rõ mode dual-boot(keep)"
 check "$RESULTS/step_install.txt" "appended 1 new partition(s)" "partition phase append, không zap"
