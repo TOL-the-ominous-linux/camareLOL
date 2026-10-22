@@ -58,7 +58,7 @@ Highlights:
 Assets are checksummed in SHA256SUMS."
 
 # ---- tạo nháp release ------------------------------------------------------
-PAYLOAD="$(tag="$TAG" name="camareLOL $VERSION" python3 -c '
+PAYLOAD="$(tag="$TAG" name="camareLOL $VERSION" CAMARELOL_BODY="$BODY" python3 -c '
 import json, os, sys
 sys.stdout.write(json.dumps({
     "tag_name": os.environ["tag"],
