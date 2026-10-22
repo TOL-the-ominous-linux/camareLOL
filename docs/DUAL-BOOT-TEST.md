@@ -1,5 +1,20 @@
 # Hướng dẫn test dual-boot Arch không đụng Storage
 
+> **Cập nhật 22 Oct 2026 — dual-boot đã chạy thật trong VM.**
+> `scripts/vm-dualboot.sh` cài camareLOL cạnh một "Windows" giả bên trong VM
+> `camarelol-dualboot`: bảng phân vùng ESP/MSR/C:/recovery dựng bằng sfdisk,
+> ba tệp đánh dấu (bootmgr trên ESP, file data trên C:, marker trên recovery)
+> **còn nguyên sau khi cài** (run 4, log `/tmp/opencode/vm-dualboot-run4.log`).
+> root mới ở `sda5`, GRUB đặt lên ESP cũ (không format lại), fstab mount
+> `/boot/efi`, `os-prober` có mặt, `GRUB_DISABLE_OS_PROBER=false`.
+>
+> **Vẫn còn hai điều kiện trước khi chạm máy thật:**
+> 1. Chờ bản **0.1.19 phát hành** (0.1.18 chưa có feature này).
+> 2. Đang **thiếu đúng một phép thử**: boot từ đĩa đã cài trong VM xem menu
+>    GRUB hiện và Arch vào được. Nên chạy trước ở VM thật hơn là test ngay
+>    trên `nvme` — Windows thật có thêm bootmgr/BitLocker/secure-boot mà VM
+>    chưa mô phỏng hết.
+
 > Mục tiêu: có một hệ Arch thật để boot thử, mà **không** mất EndeavourOS,
 > không mất Storage và không phải chia lại ổ NVMe.
 
