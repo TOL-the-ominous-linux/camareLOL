@@ -23,7 +23,7 @@ pub fn scan_devices() -> Result<Vec<StorageDevice>> {
         &[
             "-J", "-b", "-e", "7", // skip loop devices
             "-o",
-            "NAME,KNAME,PKNAME,PATH,TYPE,SIZE,FSTYPE,FSVER,LABEL,UUID,PARTUUID,PARTTYPE,PARTTYPENAME,PARTLABEL,PTTYPE,MOUNTPOINT,MOUNTPOINTS,ROTA,RM,TRAN,SERIAL,WWN,MODEL,VENDOR,LOG-SEC,PHY-SEC",
+            "NAME,KNAME,PKNAME,PATH,TYPE,SIZE,START,FSTYPE,FSVER,LABEL,UUID,PARTUUID,PARTTYPE,PARTTYPENAME,PARTLABEL,PTTYPE,MOUNTPOINT,MOUNTPOINTS,ROTA,RM,TRAN,SERIAL,WWN,MODEL,VENDOR,LOG-SEC,PHY-SEC",
         ],
     )
     .map_err(|_| {
@@ -205,6 +205,7 @@ fn parse_partition(v: &Value) -> Partition {
         uuid: str_field(v, "uuid"),
         part_uuid: str_field(v, "partuuid"),
         size_bytes: u64_field(v, "size"),
+        start_sector: u64_field(v, "start"),
         filesystem: str_field(v, "fstype").map(|s| Filesystem::from_str_loose(&s)),
         partition_type: str_field(v, "parttype"),
         partition_type_name: str_field(v, "parttypename"),

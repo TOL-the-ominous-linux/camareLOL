@@ -431,7 +431,14 @@ impl App {
                 None
             },
         };
-        match camarelol_core::storage::layout::plan_auto_layout(&device, &req) {
+        // Selected "Dual-boot next to another operating system": the plan comes
+        // from what the scan found on the disk, keeping existing partitions.
+        let plan_result = if self.disk_mode_index == 3 {
+            camarelol_core::storage::layout::plan_dual_boot(&device, &req)
+        } else {
+            camarelol_core::storage::layout::plan_auto_layout(&device, &req)
+        };
+        match plan_result {
             Ok(plan) => {
                 if let Err(e) = self.core.validate_plan(&plan) {
                     self.error = Some(e);
@@ -537,6 +544,7 @@ impl App {
         cfg.filesystem = self.filesystem_name().to_string();
         cfg.separate_boot = self.layout_choice(PartitionPurpose::Boot);
         cfg.separate_home = self.layout_choice(PartitionPurpose::Home);
+        cfg.reuse_esp = self.disk_mode_index == 3;
         cfg.swap_bytes = if self.layout_choice(PartitionPurpose::Swap) {
             Some(self.zram_bytes())
         } else {

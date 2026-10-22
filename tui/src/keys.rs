@@ -190,7 +190,7 @@ impl App {
                     if self.disk_mode_index == 1 {
                         self.message = Some(self.tr(
                             "Chế độ dùng phân vùng sẵn có chưa được triển khai ở phiên bản này — đã chặn để bảo vệ dữ liệu.",
-                            "Re-using existing partitions is not implemented in this version — the operation was blocked to protect your data.",
+                            "Re-using existing partitions one by one is not implemented in this version — the operation was blocked to protect your data.",
                             "此版本尚未实现使用现有分区的模式 — 已阻止该操作以保护你的数据。",
                         ));
                         self.error = Some(camarelol_core::error::CamarelolError::new(
@@ -198,13 +198,6 @@ impl App {
                             "existing-partition reuse requires the advanced storage workflow",
                         ));
                         return;
-                    }
-                    if self.disk_mode_index == 3 {
-                        self.message = Some(self.tr(
-                            "Cài song song sẽ được bật sau khi phát hiện Windows — hiện chỉ có bố cục tự động an toàn.",
-                            "Dual-boot is enabled after Windows is detected — only the safe automatic layout is available now.",
-                            "检测到 Windows 后才会启用双系统 — 目前仅提供安全的自动布局。",
-                        ));
                     }
                     self.rebuild_plan();
                     self.go_next();

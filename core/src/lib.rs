@@ -135,7 +135,13 @@ impl Core {
             )
         })?;
         let req = self.layout_request();
-        let plan = storage::layout::plan_auto_layout(device, &req)?;
+        let plan = if self.config.reuse_esp {
+            // Dual-boot: the plan is derived from what the scan found on the
+            // disk (kept partitions + new ones in the free space).
+            storage::layout::plan_dual_boot(device, &req)?
+        } else {
+            storage::layout::plan_auto_layout(device, &req)?
+        };
         storage::layout::validate_plan(&plan, &req)?;
         Ok(plan)
     }

@@ -71,6 +71,12 @@ pub struct InstallationConfig {
     pub filesystem: String,
     pub separate_boot: bool,
     pub separate_home: bool,
+    /// Dual-boot: keep every existing partition of the target disk and reuse
+    /// its ESP. The planner refuses unless the disk is GPT+UEFI with a
+    /// reusable ESP and enough aligned free space; the write path only
+    /// appends, and never runs the whole-disk zapping writer.
+    #[serde(default)]
+    pub reuse_esp: bool,
     pub swap_bytes: Option<u64>,
     pub bootloader: String,
     pub desktop: String,
@@ -102,6 +108,7 @@ impl Default for InstallationConfig {
             filesystem: "ext4".into(),
             separate_boot: false,
             separate_home: false,
+            reuse_esp: false,
             swap_bytes: None,
             bootloader: "grub".into(),
             desktop: "console".into(),

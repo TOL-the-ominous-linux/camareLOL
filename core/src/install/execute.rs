@@ -266,15 +266,21 @@ fn redact_secrets(script: &str) -> String {
 
 impl SystemRunner for RealSystemRunner {
     fn apply_partition_table(&mut self, disk: &StorageDevice, plan: &PartitionPlan) -> Result<()> {
+        // A dual-boot plan must never see the whole-disk writer: it zaps the
+        // table and would wipe Windows with it.
+        let method = if plan.keep_existing {
+            crate::storage::ops::OpRunner::apply_keep_partition_table
+        } else {
+            crate::storage::ops::OpRunner::apply_partition_table
+        };
         if self.preview {
             let gate = self.preview_gate();
             let log = Logger::default();
-            return self.ops.apply_partition_table(disk, plan, &gate, &log);
+            return method(&mut self.ops, disk, plan, &gate, &log);
         }
         self.ensure_exec()?;
         let log = Logger::default();
-        self.ops
-            .apply_partition_table(disk, plan, &self.gate.clone(), &log)
+        method(&mut self.ops, disk, plan, &self.gate.clone(), &log)
     }
 
     fn format_partition(&mut self, spec: &PartitionSpec, target: &str) -> Result<()> {
@@ -990,8 +996,15 @@ pub fn run_install_on_host(
         }};
     }
 
-    // Path of the n-th partition of the target disk.
-    let part = |n: usize| partition_path(&disk.path, n);
+    // Partition addressing: a dual-boot plan addresses kept partitions by
+    // their real number; every spec without one keeps the positional
+    // addressing of whole-disk plans.
+    let part_or_number = |spec: &PartitionSpec, disk: &StorageDevice, fallback: usize| -> String {
+        match spec.number {
+            Some(n) => partition_path(&disk.path, n as usize),
+            None => partition_path(&disk.path, fallback),
+        }
+    };
 
     // Each phase runs exactly once, in order. A failed phase (or a failed
     // precondition) stops the run — nothing unsafe is attempted afterwards.
@@ -1018,23 +1031,42 @@ pub fn run_install_on_host(
                             ));
                         }
                         Ok(format!(
-                            "firmware={} bootloader={} fs={} partitions={} host={}",
+                            "firmware={} bootloader={} fs={} partitions={} host={}{}",
                             firmware.as_str(),
                             cfg.bootloader()
                                 .map(|b| b.as_str().to_string())
                                 .unwrap_or_default(),
                             cfg.filesystem,
                             plan.partitions.len(),
-                            pf.host.summary()
+                            pf.host.summary(),
+                            if plan.keep_existing {
+                                " mode=dual-boot(keep)"
+                            } else {
+                                ""
+                            }
                         ))
                     }
                     "partition" => {
                         runner.apply_partition_table(disk, plan)?;
-                        Ok(format!("wrote {} layout to {}", plan.table_type, disk.path))
+                        if plan.keep_existing {
+                            Ok(format!(
+                                "appended {} new partition(s) to the existing table on {}",
+                                plan.partitions.iter().filter(|p| p.format).count(),
+                                disk.path
+                            ))
+                        } else {
+                            Ok(format!("wrote {} layout to {}", plan.table_type, disk.path))
+                        }
                     }
                     "format" => {
                         for (i, spec) in plan.partitions.iter().enumerate() {
-                            let target = part(i + 1);
+                            // Kept partitions (dual-boot) carry format=false:
+                            // running mkfs against them is the one mistake
+                            // this feature must never make.
+                            if !spec.format {
+                                continue;
+                            }
+                            let target = part_or_number(spec, disk, i + 1);
                             runner.format_partition(spec, &target)?;
                         }
                         Ok("filesystems created".into())
@@ -1063,9 +1095,9 @@ pub fn run_install_on_host(
                                 continue;
                             }
                             if let Some(mp) = spec.mount_point.as_deref() {
-                                let target = part(i + 1);
+                                let source = part_or_number(spec, disk, i + 1);
                                 let mnt = format!("{TARGET_ROOT}{mp}");
-                                runner.mount(&target, &mnt)?;
+                                runner.mount(&source, &mnt)?;
                             }
                         }
                         Ok("target mounted".into())
@@ -1076,6 +1108,11 @@ pub fn run_install_on_host(
                             .unwrap_or(crate::desktop::DesktopProfile::ConsoleOnly);
                         let mut pkgs = cfg.packages.pacstrap_list();
                         pkgs.extend(crate::desktop::packages_for(profile));
+                        // Dual-boot: os-prober is what makes grub-mkconfig put
+                        // the Windows entry on the boot menu at all.
+                        if plan.keep_existing {
+                            pkgs.push("os-prober".into());
+                        }
                         // Make the display-server choice real instead of a stored
                         // string: an explicit Wayland or X11 selection pulls the
                         // stack that choice needs. `Auto` adds nothing — the
@@ -1121,7 +1158,7 @@ pub fn run_install_on_host(
                             // never mounted — and mounting swap is the whole
                             // point. Its fstab line has to be written by hand
                             // or the partition never comes back after reboot.
-                            runner.append_fstab_swap(&part(i + 1))?;
+                            runner.append_fstab_swap(&part_or_number(spec, disk, i + 1))?;
                             swap_entries += 1;
                         }
                         if swap_entries > 0 {
@@ -1146,7 +1183,7 @@ pub fn run_install_on_host(
                         Ok(format!("{} installed", cfg.bootloader()?.as_str()))
                     }
                     "system-config" => {
-                        let script = system_config_script(cfg);
+                        let script = system_config_script(cfg, plan.keep_existing);
                         runner.chroot_script(&script)?;
                         Ok(format!(
                             "locale, keymap, timezone and hostname written{}",
@@ -1228,7 +1265,7 @@ pub fn run_install_on_host(
 /// unit and installed the package and still never had a swap at boot, because
 /// that file was missing. The config is written here, where every other
 /// /etc file lives, with `zram_size_mb` honoured when it was set.
-fn system_config_script(cfg: &InstallationConfig) -> String {
+fn system_config_script(cfg: &InstallationConfig, keep_existing: bool) -> String {
     let mut script = format!(
         r#"set -e
 echo 'LANG={locale}' > /etc/locale.conf
@@ -1266,6 +1303,15 @@ echo '{host}' > /etc/hostname
         script.push_str(&format!(
             "printf '[zram0]\\n{size}\\n' > /etc/systemd/zram-generator.conf\n"
         ));
+    }
+    if keep_existing {
+        // GRUB 2.06+ refuses to run os-prober unless this variable says so.
+        // Without it the installed system boots fine but the menu never shows
+        // Windows — which for a dual-boot install is the whole point.
+        script.push_str(
+            "grep -q '^GRUB_DISABLE_OS_PROBER=' /etc/default/grub 2>/dev/null \
+             || echo 'GRUB_DISABLE_OS_PROBER=false' >> /etc/default/grub\n",
+        );
     }
     script
 }
@@ -1401,7 +1447,7 @@ mod tests {
         // create, and without it is a documented no-op. The script must write
         // that file whenever zram was selected.
         let cfg = InstallationConfig::default(); // default services include zram
-        let script = system_config_script(&cfg);
+        let script = system_config_script(&cfg, false);
         assert!(script.contains("zram-generator.conf"), "{}", script);
         assert!(script.contains("[zram0]"), "{}", script);
         assert!(
@@ -1418,7 +1464,7 @@ mod tests {
             display_manager: Some("greetd".into()),
             ..Default::default()
         };
-        let script = system_config_script(&cfg);
+        let script = system_config_script(&cfg, false);
         assert!(script.contains("/etc/greetd/config.toml"), "{}", script);
         assert!(
             script.contains("tuigreet --time --cmd Hyprland"),
@@ -1436,7 +1482,7 @@ mod tests {
             },
             ..Default::default()
         };
-        let script = system_config_script(&cfg);
+        let script = system_config_script(&cfg, false);
         assert!(script.contains("zram-size = 2048"), "{}", script);
         // Take the default confidence away: the chosen size must not fall back
         // into the default expression.
@@ -1452,7 +1498,7 @@ mod tests {
             },
             ..Default::default()
         };
-        let script = system_config_script(&cfg);
+        let script = system_config_script(&cfg, false);
         assert!(!script.contains("zram-generator.conf"), "{}", script);
     }
 
@@ -1769,6 +1815,8 @@ mod tests {
             mount_point: Some("swap".into()),
             label: Some("camarelol-swap".into()),
             format: true,
+            number: None,
+            start_sector: None,
         });
         let mut runner = SimulatedRunner::new();
         let report = run_install(
@@ -2049,7 +2097,7 @@ mod tests {
     #[test]
     fn redaction_leaves_scripts_without_secrets_alone() {
         let cfg = InstallationConfig::default();
-        let script = system_config_script(&cfg);
+        let script = system_config_script(&cfg, false);
         assert_eq!(redact_secrets(&script), script);
     }
 

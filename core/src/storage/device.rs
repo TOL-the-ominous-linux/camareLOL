@@ -178,6 +178,11 @@ pub struct Partition {
     pub uuid: Option<String>,
     pub part_uuid: Option<String>,
     pub size_bytes: u64,
+    /// First sector on the device. The dual-boot planner needs it to find the
+    /// free space between existing partitions; 0 means "unknown" (an old
+    /// survey without START) and dual-boot refuses in that case.
+    #[serde(default)]
+    pub start_sector: u64,
     pub filesystem: Option<Filesystem>,
     pub partition_type: Option<String>,
     pub partition_type_name: Option<String>,
@@ -218,6 +223,17 @@ impl Partition {
             .as_deref()
             .map(|t| t.eq_ignore_ascii_case("e3c9e316-0b5c-4db8-817d-f92df00215ae"))
             .unwrap_or(false)
+    }
+
+    /// The partition number this kernel name encodes.
+    ///
+    /// `sda3` is 3, `nvme0n1p10` is 10. The dual-boot planner addresses the
+    /// existing partitions by number; a fresh plan created on an empty disk
+    /// has none of this and addresses by position instead.
+    pub fn number(&self) -> Option<u32> {
+        let name = self.kernel_name.as_str();
+        let cut = name.rfind(|c: char| !c.is_ascii_digit())? + 1;
+        name[cut..].parse().ok()
     }
 
     pub fn has_filesystem(&self) -> bool {
@@ -464,6 +480,7 @@ mod tests {
             uuid: None,
             part_uuid: None,
             size_bytes: 100,
+            start_sector: 0,
             filesystem: Some(Filesystem::Ntfs),
             partition_type: None,
             partition_type_name: Some("Basic data partition".into()),
@@ -503,6 +520,7 @@ mod tests {
                 uuid: None,
                 part_uuid: None,
                 size_bytes: 100,
+                start_sector: 0,
                 filesystem: Some(Filesystem::Vfat),
                 partition_type: Some("c12a7328-f81f-11d2-ba4b-00a0c93ec93b".into()),
                 partition_type_name: None,
@@ -517,6 +535,7 @@ mod tests {
                 uuid: None,
                 part_uuid: None,
                 size_bytes: 100,
+                start_sector: 0,
                 filesystem: Some(Filesystem::Vfat),
                 partition_type: None,
                 partition_type_name: None,

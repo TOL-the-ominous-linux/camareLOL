@@ -138,6 +138,7 @@ mod tests {
             disk_identity: "test".into(),
             disk_risk: RiskLevel::Low,
             table_type: PartitionTableType::Gpt,
+            keep_existing: false,
             partitions: vec![
                 PartitionSpec {
                     purpose: PartitionPurpose::EfiSystem,
@@ -146,6 +147,8 @@ mod tests {
                     mount_point: Some("/boot".into()),
                     label: Some("ESP".into()),
                     format: true,
+                    number: None,
+                    start_sector: None,
                 },
                 PartitionSpec {
                     purpose,
@@ -154,6 +157,8 @@ mod tests {
                     mount_point: Some(mount.into()),
                     label: Some("root".into()),
                     format: true,
+                    number: None,
+                    start_sector: None,
                 },
             ],
         }

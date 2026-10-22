@@ -203,6 +203,90 @@ impl OpRunner {
         Ok(())
     }
 
+    /// Apply a dual-boot plan: create only the NEW partitions, inside the free
+    /// space of a disk that keeps all of its existing partitions.
+    ///
+    /// Nothing here zaps signatures, nothing rewrites the table itself — sgdisk
+    /// only appends, each new partition with its explicit number and start
+    /// sector from the plan. sgdisk validates bounds against the live table
+    /// and refuses overlaps, so an out-of-range plan fails loudly before
+    /// anything is formatted.
+    pub fn apply_keep_partition_table(
+        &mut self,
+        device: &StorageDevice,
+        plan: &PartitionPlan,
+        gate: &SafetyGate,
+        log: &Logger,
+    ) -> Result<()> {
+        // The risk to authorize is the plan's (High for a dual-boot disk):
+        // appending onto a partition table is a table write.
+        let risk = plan.disk_risk;
+        gate.authorize(Operation::WritePartitionTable, risk)?;
+
+        let batches = sgdisk_append_args(plan)?;
+        let new_count = batches.len();
+        log.log(
+            "storage",
+            &format!(
+                "appending {new_count} new partition(s) to {} (existing partitions untouched)",
+                device.path
+            ),
+        );
+        let mut args: Vec<String> = vec![device.path.clone()];
+        for batch in batches {
+            args.extend(batch);
+        }
+        self.go(
+            gate,
+            log,
+            Cmd {
+                op: Operation::WritePartitionTable,
+                risk,
+                program: "sgdisk",
+                args,
+                stdin: None,
+            },
+        )?;
+        self.try_go(
+            gate,
+            Operation::WritePartitionTable,
+            risk,
+            "partprobe",
+            vec![device.path.clone()],
+            log,
+        );
+        self.try_go(
+            gate,
+            Operation::WritePartitionTable,
+            risk,
+            "blockdev",
+            vec!["--rereadpt".into(), device.path.clone()],
+            log,
+        );
+        self.try_go(
+            gate,
+            Operation::WritePartitionTable,
+            risk,
+            "udevadm",
+            vec!["settle".into()],
+            log,
+        );
+        if gate.writes_to_disk() {
+            // The partitions that already existed are visible without our
+            // help; only the planned new ones have to appear.
+            let wanted: Vec<String> = plan
+                .partitions
+                .iter()
+                .filter_map(|p| {
+                    p.number
+                        .map(|n| super::super::install::partition_path(&device.path, n as usize))
+                })
+                .collect();
+            self.wait_for_nodes(device, &wanted, log)?;
+        }
+        Ok(())
+    }
+
     /// Best-effort variant of [`OpRunner::go`]: failures are logged, not fatal.
     ///
     /// Used for kernel/udev nudge commands whose failure is normal (for
@@ -247,17 +331,34 @@ impl OpRunner {
         expected: usize,
         log: &Logger,
     ) -> Result<()> {
-        use std::time::{Duration, Instant};
         if expected == 0 {
+            return Ok(());
+        }
+        let wanted: Vec<String> = (1..=expected)
+            .map(|n| super::super::install::partition_path(&device.path, n))
+            .collect();
+        self.wait_for_nodes(device, &wanted, log)
+    }
+
+    /// Wait until every path of `wanted` shows up in `/dev`.
+    fn wait_for_nodes(
+        &mut self,
+        device: &StorageDevice,
+        wanted: &[String],
+        log: &Logger,
+    ) -> Result<()> {
+        use std::time::{Duration, Instant};
+        if wanted.is_empty() {
             return Ok(());
         }
         let deadline = Instant::now() + Duration::from_secs(20);
         let mut last_missing: Vec<String> = Vec::new();
         while Instant::now() < deadline {
-            let missing = (1..=expected)
-                .map(|n| super::super::install::partition_path(&device.path, n))
+            let missing: Vec<String> = wanted
+                .iter()
                 .filter(|p| !crate::sys::path_exists(p))
-                .collect::<Vec<String>>();
+                .cloned()
+                .collect();
             if missing.is_empty() {
                 log.log(
                     "storage",
@@ -499,6 +600,75 @@ pub fn sfdisk_script(plan: &PartitionPlan, disk_size_bytes: u64) -> String {
     s
 }
 
+/// The sgdisk invocations for a dual-boot plan, one per NEW partition.
+///
+/// Each new partition carries its number and start sector from the planner,
+/// so the create step is deterministic: existing partitions keep their
+/// numbers, and the node the planner named is the node that shows up. No
+/// `--zap-all`, no table rewrite — just appends. `--change-name` only exists
+/// for GPT (dual-boot v1 is GPT-only, guarded in the planner).
+pub fn sgdisk_append_args(plan: &PartitionPlan) -> Result<Vec<Vec<String>>> {
+    let mut out = Vec::new();
+    for spec in &plan.partitions {
+        if !spec.format {
+            continue;
+        }
+        let start = spec.start_sector.ok_or_else(|| {
+            CamarelolError::new(
+                ErrorCode::InvalidPlan,
+                format!(
+                    "{}: dual-boot plan is missing the explicit start sector",
+                    spec.purpose.as_str()
+                ),
+            )
+            .with_remediation("re-plan the disk; this is a planner bug, not a user error")
+        })?;
+        let number = spec.number.ok_or_else(|| {
+            CamarelolError::new(
+                ErrorCode::InvalidPlan,
+                format!(
+                    "{}: dual-boot plan is missing the partition number",
+                    spec.purpose.as_str()
+                ),
+            )
+            .with_remediation("re-plan the disk; this is a planner bug, not a user error")
+        })?;
+        let sectors = size_in_sectors(spec);
+        // sgdisk end is inclusive.
+        let end = start + sectors.saturating_sub(1);
+        let mut args = vec![
+            // No zap here: these appends may only add to what exists.
+            format!("--new={number}:{start}:{end}"),
+            format!("--typecode={number}:{}", gpt_type(spec)),
+        ];
+        if let Some(l) = &spec.label {
+            let mut name = l.clone();
+            name.retain(|c| c.is_ascii_alphanumeric() || c == '-');
+            if !name.is_empty() {
+                args.push(format!("--change-name={number}:{name}"));
+            }
+        }
+        out.push(args);
+    }
+    if out.is_empty() {
+        return Err(CamarelolError::new(
+            ErrorCode::InvalidPlan,
+            "dual-boot plan creates no partitions",
+        ));
+    }
+    Ok(out)
+}
+
+/// GPT type GUID of the filesystem role of `spec`.
+fn gpt_type(spec: &PartitionSpec) -> &'static str {
+    match spec.purpose {
+        PartitionPurpose::EfiSystem => "c12a7328-f81f-11d2-ba4b-00a0c93ec93b",
+        PartitionPurpose::BiosBoot => "21686148-6449-6e6f-744e-656564454649",
+        PartitionPurpose::Swap => "0657fd6d-a4ab-43c4-84e5-093319843389",
+        _ => "0fc63daf-8483-4772-8e79-3d69d8477de4", // Linux filesystem
+    }
+}
+
 fn size_in_sectors(spec: &PartitionSpec) -> u64 {
     let bytes = match &spec.size {
         SizeSpec::Bytes(b) => *b,
@@ -627,6 +797,85 @@ mod tests {
         assert!(start + size <= disk_bytes / 512 - 33);
     }
 
+    /// The dual-boot plan fixture: a Windows-shaped GPT disk (a survey
+    /// deserialized exactly the way `--scan` would hand it in).
+    fn dual_boot_plan() -> (PartitionPlan, StorageDevice) {
+        let survey = r#"[
+          {
+            "kernel_name": "nvme0n1", "path": "/dev/nvme0n1",
+            "size_bytes": 85899345920, "logical_sector_size": 512,
+            "physical_sector_size": 512, "rotational": false, "removable": false,
+            "kind": "NvmeSsd", "partition_table": "Gpt",
+            "mount_state": "NotMounted", "os_hints": [], "encrypted": null,
+            "risk": "High",
+            "partitions": [
+              {
+                "kernel_name": "nvme0n1p1", "path": "/dev/nvme0n1p1",
+                "size_bytes": 104857600, "start_sector": 2048,
+                "filesystem": "Vfat",
+                "partition_type": "c12a7328-f81f-11d2-ba4b-00a0c93ec93b",
+                "mount_state": "NotMounted", "os_hints": ["EfiSystemPartition"],
+                "part_label": "EFI system partition"
+              },
+              {
+                "kernel_name": "nvme0n1p2", "path": "/dev/nvme0n1p2",
+                "size_bytes": 16777216, "start_sector": 206848,
+                "filesystem": null,
+                "partition_type": "e3c9e316-0b5c-4db8-817d-f92df00215ae",
+                "mount_state": "NotMounted", "os_hints": ["MicrosoftReserved"],
+                "part_label": "Microsoft reserved partition"
+              },
+              {
+                "kernel_name": "nvme0n1p3", "path": "/dev/nvme0n1p3",
+                "size_bytes": 42949672960, "start_sector": 307200,
+                "filesystem": "Ntfs",
+                "mount_state": "NotMounted", "os_hints": ["Windows"]
+              },
+              {
+                "kernel_name": "nvme0n1p4", "path": "/dev/nvme0n1p4",
+                "size_bytes": 1073741824, "start_sector": 165675008,
+                "filesystem": "Ntfs",
+                "partition_type_name": "Windows recovery",
+                "mount_state": "NotMounted", "os_hints": ["WindowsRecovery"]
+              }
+            ]
+          }
+        ]"#;
+        let device = scan_devices_from_survey(survey)
+            .expect("the Windows-shaped survey parses")
+            .remove(0);
+        let plan = crate::storage::layout::plan_dual_boot(
+            &device,
+            &crate::storage::layout::LayoutRequest::default(),
+        )
+        .expect("a Windows-shaped disk with 40 GiB free plans into a dual-boot");
+        (plan, device)
+    }
+
+    #[test]
+    fn keep_write_never_zaps_and_appends_with_explicit_numbers() {
+        let mut runner = OpRunner::new();
+        let gate = SafetyGate::armed(); // allowed but dry-run: nothing executes
+        let log = Logger::default();
+        let (plan, device) = dual_boot_plan();
+        runner
+            .apply_keep_partition_table(&device, &plan, &gate, &log)
+            .unwrap();
+        let rendered = runner.report();
+        assert!(
+            !rendered.contains("--zap-all"),
+            "the keep path must never zap:\n{rendered}"
+        );
+        assert!(
+            rendered.contains("--new=5:"),
+            "the new partition is appended with its explicit number:\n{rendered}"
+        );
+        assert!(
+            rendered.contains("DRYRUN sgdisk"),
+            "dry-run records instead of running:\n{rendered}"
+        );
+    }
+
     #[test]
     fn format_without_fs_spec_is_rejected() {
         let mut runner = OpRunner::new();
@@ -638,6 +887,8 @@ mod tests {
             mount_point: None,
             label: None,
             format: false,
+            number: None,
+            start_sector: None,
         };
         runner
             .format_partition(&spec, "/dev/vdb1", &gate, &Logger::default())
@@ -683,6 +934,8 @@ mod tests {
             mount_point: None,
             label: None,
             format: true,
+            number: None,
+            start_sector: None,
         };
         let err = runner
             .format_partition(&spec, "/dev/vdb1", &gate, &Logger::default())
