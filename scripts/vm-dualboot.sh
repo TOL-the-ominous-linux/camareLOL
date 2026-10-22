@@ -181,7 +181,14 @@ note "cài thật — có thể mất vài phút"
 guest "/root/camarelol --scripted /tmp/profile.toml --allow-destructive --execute > /tmp/inst.txt 2>&1; echo INSTALL_RC=\$? > /tmp/r-install.txt; cat /tmp/inst.txt >> /tmp/r-install.txt" 10
 post install "${INSTALL_TIMEOUT:-900}"
 check "$RESULTS/step_install.txt" "INSTALL_RC=0" "installer thoát 0"
-check "$RESULTS/step_install.txt" "12/12" "12 pha hoàn tất"
+# Output thật của report in 12 dòng `tên-pha  completed`.
+if [ "$(grep -cE '^[a-z-]+ +completed' "$RESULTS/step_install.txt")" = "12" ]; then
+    pass "12 pha hoàn tất"
+else
+    fail "12 pha hoàn tất ($(grep -cE '^[a-z-]+ +completed' "$RESULTS/step_install.txt") pha 'completed')"
+fi
+check "$RESULTS/step_install.txt" "mode=dual-boot(keep)" "preflight khai rõ mode dual-boot(keep)"
+check "$RESULTS/step_install.txt" "appended 1 new partition(s)" "partition phase append, không zap"
 
 say "bước 6/7 — verify: marker + hệ thống vừa cài"
 guest "M=/mnt; { echo root_os=\$(head -1 \$M/etc/os-release 2>/dev/null); echo root_src=\$(findmnt -no SOURCE \$M 2>/dev/null); echo esp_efi_dir=\$(test -d \$M/boot/efi/EFI/camareLOL && echo yes || echo no); echo esp_grub=\$(test -s \$M/boot/efi/EFI/camareLOL/grubx64.efi && echo yes || echo no); echo esp_fstab=\$(grep -c '/boot/efi' \$M/etc/fstab); echo os_prober_pkg=\$(pacman -Qr \$M os-prober >/dev/null 2>&1 && echo yes || echo no); echo os_prober_flag=\$(grep -q 'GRUB_DISABLE_OS_PROBER=false' \$M/etc/default/grub && echo yes || echo no); echo grub_cfg=\$(test -s \$M/boot/grub/grub.cfg && echo yes || echo no); echo arch_kernel=\$(test -s \$M/boot/vmlinuz-linux && echo yes || echo no); mkdir -p /vm-c /vm-r /vm-e; mount /dev/sda3 /vm-c 2>/dev/null; mount /dev/sda4 /vm-r 2>/dev/null; mount /dev/sda1 /vm-e 2>/dev/null; echo marker_cwin=\$(test -f /vm-c/windows-marker.txt && echo kept || echo GONE); echo marker_rec=\$(test -f /vm-r/recovery-marker.txt && echo kept || echo GONE); echo marker_esp=\$(test -f /vm-e/EFI/Boot/.windows-keeper-mark && echo kept || echo GONE); echo esp_content=\$(head -1 /vm-e/EFI/Boot/.windows-keeper-mark 2>/dev/null); echo parts=\$(ls /sys/block/sda/ | grep -c '^sda[0-9]'); } > /tmp/r-dualboot.txt 2>&1" 90
