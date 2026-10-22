@@ -106,6 +106,38 @@ filesystem kind, and root-before-ESP mount order.
       tests, and only then packs; publish is a separate explicit step. 0.1.18
       is the published latest.
 
+## Stage 6 — Dual-boot beside an existing OS
+
+- [x] Keep-everything planner (`plan_dual_boot`) — built from the live survey:
+      a GPT+UEFI disk with partitions contributes every one of them as a
+      `format=false` row, its ESP is reused at `/boot/efi`, and the new layout
+      is placed by explicit start sector inside the largest aligned free gap,
+      which the planner refuses to plan into when the request cannot fit. The
+      survey had to carry partition START sectors for this to exist at all.
+- [x] Append-only write path — `sgdisk --new=5:<start>:<end>` adds only the
+      new partitions; there is no zap and no table rewrite, and the
+      format/mount phases address kept partitions by their real number.
+- [x] GRUB on the reused ESP with os-prober — `os-prober` joins the pacstrap
+      list and `/etc/default/grub` gets `GRUB_DISABLE_OS_PROBER=false`, both
+      only when the plan is a dual-boot one.
+- [x] VM evidence — installs beside a fake Windows and boots —
+      `scripts/vm-dualboot.sh` builds a Windows-shaped disk (ESP, MSR, 6 GiB
+      C:, 1 GiB recovery — each carrying marker files), installs beside it
+      and checks that every marker survived untouched, the root landed on a
+      new partition 5, GRUB lives on the original ESP, `os-prober` is
+      installed, and exactly 5 partitions exist afterwards (two full green
+      runs, 2026-10-22). The third run first proved the refusal gate instead:
+      with firmware set to BIOS the planner refused with
+      "dual-boot only plans a UEFI + GPT disk". A from-disk boot then proved
+      the boot chain: NVRAM → `EFI/camareLOL/` on the reused ESP → Arch
+      kernel → initramfs → login prompt.
+- [ ] Windows entry in the boot menu — os-prober finds a Windows through its
+      real boot manager; the fake Windows carries none, so the menu entry has
+      not been observed yet, and the from-inside-Windows shrink procedure is
+      not exercised by a VM. The reminder stands: **do not point camareLOL at
+      the disk that holds your only Windows install.** First real-machine
+      steps live in `docs/DUAL-BOOT-TEST.md`.
+
 ## Deliberately deferred
 
 These are called out because their absence looks like an oversight and is
@@ -116,17 +148,12 @@ written down, but the feature is not built. Shrinking a partition that holds
 somebody's only copy of Windows is a one-way operation with no undo, and it
 belongs behind more testing than this project can currently claim.
 
-**Reusing an existing ESP for dual-boot — now `[~]`, in real code.** The
-detection and preservation rules are implemented and the planning code knows
-how to leave Windows partitions alone; in 0.1.19-in-progress the planner does
-so for real: it reads free space from the survey, refuses a non-GPT disk, a
-mounted disk, a missing ESP or too small a gap, and the write path appends
-with sgdisk using explicit numbers instead of zapping. Unit-tested, clippy
-clean. What is missing is the VM evidence — a disk wearing fake Windows
-partitions and marker files, installed beside, markers intact, both systems
-on the boot menu. Until that evidence exists this stays a `[~]`, and the
-reminder stands: **do not point camareLOL at a disk that holds your only
-Windows install yet.**
+**Dual-boot beside a real Windows.** The keep-everything side is done and
+ticked in Stage 6 above — VM-proven with a fake Windows and a from-disk boot.
+What stays deferred is the last leg: observing the Windows entry on the boot
+menu (needs a Windows that actually boots in a VM), and the whole
+shrink-from-inside-Windows procedure. No release of camareLOL should go near
+a disk that holds the user's only Windows until that leg closes.
 
 **Everything else from advanced storage** — a manual partition editor, LUKS
 encryption, Btrfs subvolume layouts — has no code at all. The stage list once

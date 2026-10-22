@@ -99,6 +99,34 @@
       要求 `--version` 一致，跑包的测试，然后才打包；publish 是单独的、
       显式的一步。0.1.18 是已发布的 latest。
 
+## Stage 6 — 与已有系统共存的双系统
+
+- [x] 保留全部的规划器 (`plan_dual_boot`) — 从实时 survey 构建：一块带分区
+      的 GPT+UEFI 磁盘把每一个既有分区都贡献成 `format=false` 行，它的 ESP
+      在 `/boot/efi` 被复用，新布局以显式起始扇区放进最大对齐自由间隙；
+      当请求放不下时规划器拒绝出计划。survey 必须先携带分区的 START
+      扇区，这一项才可能存在。
+- [x] 只追加的写入路径 — `sgdisk --new=5:<start>:<end>` 只添加新分区；
+      不 zap、不重写分区表，format/mount 各阶段按真实分区号寻址保留的
+      分区。
+- [x] GRUB 装在被复用的 ESP 上并配 os-prober — 仅当计划是双系统时，
+      `os-prober` 加入 pacstrap 列表，`/etc/default/grub` 写入
+      `GRUB_DISABLE_OS_PROBER=false`。
+- [x] VM 证据 — 安装在假 Windows 旁边并成功启动 —
+      `scripts/vm-dualboot.sh` 造一块 Windows 形状的盘（ESP、MSR、6 GiB
+      C:、1 GiB 恢复区——每个都有标记文件），在其旁边安装，并检查每个
+      标记文件完好、root 落在新的分区 5、GRUB 在原 ESP 上、`os-prober`
+      已安装、装完恰好 5 个分区（两次完整绿灯 run，2026-10-22）。第三次
+      run 反而单独证明了拒绝闸门：固件设为 BIOS 时，规划器以
+      "dual-boot only plans a UEFI + GPT disk" 拒绝。随后的从盘启动证明了
+      启动链：NVRAM → 被复用 ESP 上的 `EFI/camareLOL/` → Arch 内核 →
+      initramfs → 登录提示。
+- [ ] 启动菜单里的 Windows 条目 — os-prober 需要真正的 Windows 引导管理器
+      才能找到 Windows；假 Windows 没有，所以条目从未出现过，从 Windows
+      内部缩容的流程也没在 VM 里演练过。提醒照旧：**不要把 camareLOL 指向
+      装着你唯一一份 Windows 的磁盘。** 真机的起步步骤在
+      `docs/DUAL-BOOT-TEST.md`。
+
 ## 有意推迟
 
 以下这些被单独点名，因为它们的缺失看起来像疏忽，其实不是。
@@ -107,13 +135,11 @@
 装着某人唯一一份 Windows 的分区是不可撤销的单向操作，它需要的测试量超出
 本项目目前敢于声称的水平。
 
-**为双系统复用现有 ESP — 现在是 `[~]`，有真实代码。** 检测与保留规则已经实现；
-正在进行的版本里规划器真正做到了：从调查报告里读取自由空间，拒绝非 GPT
-磁盘、已挂载的磁盘、缺少 ESP 或间隙过小的情形，写入路径用 sgdisk 以显式
-编号附加而不做 zap。有单元测试，clippy 干净。缺的是 VM 证据——一块带着
-"假 Windows"分区和标记文件的盘，在其旁边安装，标记文件完好，两个系统都
-出现在启动菜单。在那份证据存在之前，这一项保持 `[~]`，并重申原则：
-**还不要把 camareLOL 指向一块装着你唯一一份 Windows 的磁盘。**
+**真实 Windows 旁边的双系统。** 保留全部的这一侧已完成并在上面 Stage 6 勾选
+—— VM 用假 Windows 和一次从盘启动证明了它。仍被推迟的是最后一程：在
+启动菜单里看到 Windows 条目（需要一台在 VM 里真能启动的 Windows），以及
+从 Windows 内部缩容的全部流程。在那最后一程关闭之前，任何 camareLOL
+发行版都不该靠近装着用户唯一一份 Windows 的磁盘。
 
 **高级存储清单的其余部分** —— 手动分区编辑器、LUKS 加密、Btrfs 子卷
 布局 —— 一行代码都还没有。它们曾以五个空勾的形式留在阶段清单里；那

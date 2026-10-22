@@ -107,6 +107,37 @@ filesystem, và thứ tự mount root-trước-ESP.
       `--version` phải khớp, chạy test gói rồi mới pack; publish là một bước
       riêng, tường minh. 0.1.18 là bản được công bố `latest`.
 
+## Stage 6 — Dual-boot cạnh một hệ điều hành có sẵn
+
+- [x] Planner giữ nguyên mọi thứ (`plan_dual_boot`) — dựng từ survey thực:
+      đĩa GPT+UEFI có phân vùng đóng góp toàn bộ chúng thành những dòng
+      `format=false`, ESP của nó được dùng lại tại `/boot/efi`, và bố cục mới
+      được đặt bằng start sector tường minh bên trong khe trống thẳng hàng
+      lớn nhất — planner từ chối lập kế hoạch khi yêu cầu không lọt nổi. Survey
+      phải mang cột START của phân vùng thì thứ này mới tồn tại nổi.
+- [x] Đường ghi append-only — `sgdisk --new=5:<start>:<end>` chỉ thêm các
+      phân vùng mới; không zap, không viết lại bảng, và các pha format/mount
+      gọi đúng số phân vùng thật của từng phân vùng được giữ.
+- [x] GRUB trên ESP dùng lại cùng os-prober — `os-prober` vào danh sách
+      pacstrap và `/etc/default/grub` nhận `GRUB_DISABLE_OS_PROBER=false`,
+      cả hai chỉ khi kế hoạch là dual-boot.
+- [x] Bằng chứng VM — cài cạnh một Windows giả và boot được —
+      `scripts/vm-dualboot.sh` dựng một đĩa mang dáng Windows (ESP, MSR,
+      C: 6 GiB, khôi phục 1 GiB — mỗi cái một tệp đánh dấu), cài cạnh đó và
+      kiểm tra mọi tệp đánh dấu còn nguyên, root rơi vào partition 5 mới,
+      GRUB nằm trên ESP gốc, `os-prober` được cài, và sau cài đúng 5 phân
+      vùng (hai run xanh trọn vẹn, 22 Oct 2026). Run thứ ba một mình chứng
+      minh cổng từ chối: đặt firmware BIOS, planner từ chối với câu
+      "dual-boot chỉ lập kế hoạch cho đĩa UEFI + GPT". Một lần boot từ đĩa
+      chứng minh chuỗi khởi động: NVRAM → `EFI/camareLOL/` trên ESP dùng
+      lại → nhân Arch → initramfs → màn hình đăng nhập.
+- [ ] Entry Windows trong menu boot — os-prober tìm Windows qua boot manager
+      thật của nó; Windows giả không có boot manager, nên entry chưa từng
+      xuất hiện, và quy trình thu nhỏ từ bên trong Windows cũng chưa được
+      một lần thử VM. Nhắc lại lần nữa: **chưa được chỉ camareLOL vào đĩa
+      đang giữ bản Windows duy nhất của bạn.** Các bước khởi đầu cho máy
+      thật nằm trong `docs/DUAL-BOOT-TEST.md`.
+
 ## Cố ý hoãn lại
 
 Những mục sau được nêu ra vì việc thiếu chúng trông như một sự sơ suất, nhưng
@@ -117,15 +148,12 @@ không phải vậy.
 sao Windows duy nhất của ai đó là thao tác một chiều, không hoàn tác được, và nó
 cần nhiều kiểm thử hơn mức dự án này hiện có thể đưa ra.
 
-**Dùng lại một ESP sẵn có cho dual-boot — nay là `[~]`, có code thật.** Quy tắc
-phát hiện và giữ nguyên đã được hiện thực; trong bản đang làm, planner làm
-thật: đọc khe trống từ survey, từ chối đĩa không GPT, đĩa đang mount, thiếu
-ESP hoặc khe quá nhỏ, và đường ghi chỉ append bằng sgdisk với số thứ tự
-tường minh thay vì zap. Đã có unit test, clippy sạch. Còn thiếu là bằng
-chứng VM — một đĩa đựng "Windows giả" bằng các phân trang + tệp đánh dấu,
-cài cạnh đó, tệp đánh dấu còn nguyên, cả hai hệ có trên boot menu. Cho tới
-khi có bằng chứng đó, ô này vẫn `[~]`, và nhắc lại nguyên tắc: **chưa được
-chỉ camareLOL vào đĩa đang giữ bản Windows duy nhất của bạn.**
+**Dual-boot cạnh một Windows thật.** Phần giữ-nguyên-mọi-thứ đã done và tick
+trong Stage 6 ở trên — được VM chứng minh với Windows giả và một lần boot từ
+đĩa. Còn hoãn là chặng cuối: nhìn thấy entry Windows trên menu boot (cần một
+Windows boot được thật sự trong VM), và toàn bộ quy trình thu nhỏ từ bên
+trong Windows. Không một bản phát hành nào của camareLOL nên lại gần đĩa
+đang giữ bản Windows duy nhất của người dùng cho tới khi chặng này khép lại.
 
 **Phần còn lại của lưu trữ nâng cao** — trình soạn thảo phân vùng thủ công,
 mã hoá LUKS, bố trí subvolume btrfs — chưa có một dòng code nào. Nó từng nằm
