@@ -41,6 +41,13 @@ asserting that a display manager creates a symlink in `multi-user.target.wants/`
 (it uses `Alias=display-manager.service` and creates none), and `test -e` on that
 absolute alias, which resolves against the host root instead of the mount.
 
+0.1.18 found two more the same way: the ESP label `CAMARELOL-EFI` is longer than
+FAT's 11-character limit, so `mkfs.fat` refused every UEFI install at the format
+phase; and the mount phase followed plan order, so the root mount hid the ESP
+and `grub-install` rejected `/boot`. Both passed the entire suite, both died
+only in a VM, and both now have tests that guard them — the label limit per
+filesystem kind, and root-before-ESP mount order.
+
 `[~]` is partial: part of the item ships and is verified, part does not exist.
 
 
@@ -87,6 +94,26 @@ absolute alias, which resolves against the host root instead of the mount.
 - [x] Better recovery guidance — when an install stops early the TUI lists the
       finished phases, the failed one and what is safe to retry, and says
       plainly that it cannot promise the machine will boot.
+
+## Stage 5 — Shipping
+
+- [x] Release pipeline: `scripts/make-release.sh` builds from the release tag,
+      refuses a dirty working tree, checks the installed binary reports the tag
+      it was built from (it caught a 0.1.10-shaped drift once), and gates the
+      release on the VM acceptance run — only `SKIP_VM=1` skips the gate, and
+      the skip is a deliberate, logged decision.
+- [x] Automated VM acceptance harness — the guest posts each step's result over
+      NAT to the host, so no Guest Additions are needed and a hung step cannot
+      swallow the results of the steps before it. `camarelol-acceptance` ran
+      7/7 on the 0.1.18 build.
+- [x] GitHub release with checksummed artifacts — the binary, a source tarball,
+      the Java catalog jar, a generated PKGBUILD that pins the tarball's sha256,
+      and a `SHA256SUMS` covering all of them. Shipped as 0.1.18.
+- [x] npm package `@wenker-ai/camarelo` — every pack downloads the binary from
+      the GitHub release of exactly the version in `package.json`, verifies it
+      against `SHA256SUMS`, requires `--version` to agree, runs the package
+      tests, and only then packs; publish is a separate explicit step. 0.1.18
+      is the published latest.
 
 ## Deliberately deferred
 

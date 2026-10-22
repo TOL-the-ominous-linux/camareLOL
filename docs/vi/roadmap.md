@@ -43,6 +43,13 @@ sai: khẳng định display manager phải tạo symlink trong `multi-user.targ
 (nó dùng `Alias=display-manager.service` và không tạo gì cả), và `test -e` trên
 symlink tuyệt đối đó — nó đi theo root của máy chủ thay vì đi vào trong mount.
 
+0.1.18 tìm thêm được hai lỗi theo đúng cách đó: nhãn ESP `CAMARELOL-EFI` dài
+hơn giới hạn 11 ký tự của FAT nên `mkfs.fat` từ chối mọi bản cài UEFI ở pha
+format; và pha mount đi theo thứ tự khai hoạch, root mount đè lên ESP nên
+`grub-install` chê `/boot`. Cả hai qua sạch mọi unit test, cả hai chỉ chết
+trong VM, và cả hai nay có test canh riêng — giới hạn nhãn theo từng loại
+filesystem, và thứ tự mount root-trước-ESP.
+
 `[~]` là một phần: đã có và đã kiểm chứng phần đó, phần còn lại chưa tồn tại.
 
 
@@ -90,6 +97,25 @@ symlink tuyệt đối đó — nó đi theo root của máy chủ thay vì đi 
 - [x] Hướng dẫn khôi phục tốt hơn — khi cài đứt giữa chừng, TUI liệt kê pha đã
       xong, pha hỏng và phần an toàn để thử lại, và nói rõ không hứa máy sẽ
       khởi động được.
+
+## Stage 5 — Lên kệ phát hành
+
+- [x] Chuỗi phát hành: `scripts/make-release.sh` build từ thẻ đúng bản, từ chối
+      cây làm việc bẩn, bắt binary mới dựng phải tự báo đúng thẻ mà nó được
+      build từ (lỗi kiểu 0.1.10 từng rơi vào chính cái bẫy này), và chặn phát
+      hành nếu VM acceptance không đạt — chỉ `SKIP_VM=1` bỏ qua cổng, và việc
+      bỏ qua là một quyết định tường minh, có ghi lại.
+- [x] Harness VM acceptance tự động — khách gửi kết quả của từng bước về host
+      qua NAT, không cần Guest Additions, nên một bước treo không nuốt được
+      kết quả của các bước trước nó. `camarelol-acceptance` chạy 7/7 với
+      binary 0.1.18.
+- [x] GitHub Release với mọi tài sản có kiểm băm — binary, tarball mã nguồn,
+      jar catalog Java, PKGBUILD sinh ra ghim sha256 của chính tarball, và tệp
+      `SHA256SUMS` phủ hết. Đã phát hành 0.1.18.
+- [x] Gói npm `@wenker-ai/camarelo` — mỗi lần pack tải binary từ GitHub Release
+      đúng phiên bản trong `package.json`, đối chiếu `SHA256SUMS`, bắt
+      `--version` phải khớp, chạy test gói rồi mới pack; publish là một bước
+      riêng, tường minh. 0.1.18 là bản được công bố `latest`.
 
 ## Cố ý hoãn lại
 
