@@ -100,6 +100,17 @@ là việc tay làm trước, trong live ISO.
 
 ### B2-0. Chuẩn bị trên máy đang chạy (trước khi boot USB)
 
+> **Không có USB?** Có thể boot ISO thẳng từ GRUB của EndeavourOS qua
+> loopback: copy `archlinux-x86_64.iso` vào Storage (chỉ đọc, không ghi
+> vào `nvme` ngoài file ISO), append một `menuentry` vào `/etc/grub.d/`
+> trỏ `img_dev=UUID=<uuid-storage>  img_loop=/archlinux-x86_64.iso
+> copytoram`, rồi `grub-mkconfig`. Tại phiên agent ngày 23 Oct 2026 đoạn
+> này đã dựng sẵn: ISO đặt tại
+> `/mnt/Storage/archlinux-x86_64.iso`, entry mẫu tại
+> `~/grub-iso-entry.txt` (UUID Storage
+> `c0e69e54-4671-4a0d-b1f8-f26352c2f8f4`). Bỏ qua bước `dd` USB dưới đây;
+> mọi bước "boot USB" của B2-1 thay bằng chọn entry ISO trong menu GRUB.
+
 ```bash
 # 1. Xác nhận lần cuối sda1 rỗng — nếu in ra bất cứ gì, DỪNG và backup
 sudo mkdir -p /mnt/check-sda1
