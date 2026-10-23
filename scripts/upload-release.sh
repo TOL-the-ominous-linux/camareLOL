@@ -43,19 +43,23 @@ done
 BODY="camareLOL $VERSION.
 
 Highlights:
-- Dual-boot beside an existing OS (0.1.x kept the promise and tested it in a
-  VM first): keep-everything planner, append-only sgdisk write path, GRUB on
-  the reused ESP, os-prober enabled. scripts/vm-dualboot.sh proves it —
-  marker files intact on ESP/C:/recovery, root on the new partition 5, boot
-  chain verified from disk.
-- Fix: GRUB_DISABLE_OS_PROBER=false is now written by the bootloader phase
-  itself (grub.cfg is generated there), so the Windows entry exists.
-- Fix: swap partitions are enabled by fstab UUID, never mounted as a
-  filesystem; the ESP moves to /boot/efi when a separate /boot is selected;
-  preflight refuses a dirty /mnt instead of colliding with previous run.
-- VM acceptance: 7/7 whole-disk path; dual-boot path: 2 full runs green.
+- Preparation for the real-machine dual-boot that 0.1.19 opened:
+  - the bootloader phase now reads \`efibootmgr -v\` and deletes only those
+    \`Boot####\` entries whose \`/File(…)\` loader is missing from OUR ESP
+    (PARTUUID-matched) — the \`Boot0005\`-style hang where firmware points at
+    an \`EFI/…\` file a previous attempt left behind. Respectful by
+    construction: \`FvFile\`, \`CdRom\`, \`Usb\` and other partitions are
+    never touched; a broken listing skips the cleanup with a note.
+  - \`/etc/NetworkManager/conf.d/00-camarelol.conf\` pins \`dhcp=internal\`
+    so a minimal pacstrap system never gets an interface that refuses to
+    take an address.
+- \`GpuInfo.model\` — the GPU product name parsed out of \`lspci -mm -nn\`
+  (only hex-id brackets stripped, product brackets kept).
+- \`paru-bin\` joins the AUR catalog — prebuilt, no full Rust cook every
+  install.
 
-Assets are checksummed in SHA256SUMS."
+Everything 0.1.19 delivered (dual-boot beside an existing OS, VM-proven)
+carries over. Assets are checksummed in SHA256SUMS."
 
 # ---- tạo nháp release ------------------------------------------------------
 PAYLOAD="$(tag="$TAG" name="camareLOL $VERSION" CAMARELOL_BODY="$BODY" python3 -c '
