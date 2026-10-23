@@ -380,8 +380,8 @@ pub fn plan_auto_layout(device: &StorageDevice, req: &LayoutRequest) -> Result<P
 /// - Free space is located from the scanned `start` sectors. If the new
 ///   layout does not fit a single aligned gap in the existing layout, the
 ///   request is refused — silently shrinking anything is out of the question.
-/// 1 MiB expressed in 512-byte sectors — the alignment every new partition
-/// start gets.
+/// Sector alignment for every new partition start: 1 MiB, in 512-byte
+/// sectors.
 const ALIGN_SECTORS: u64 = 2048;
 
 /// What free space on a device looks like to the dual-boot planner.
