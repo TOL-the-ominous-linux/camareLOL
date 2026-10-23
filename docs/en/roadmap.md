@@ -60,12 +60,25 @@ filesystem kind, and root-before-ESP mount order.
 - [x] Display manager: SDDM, GDM, LightDM, greetd — installed, enabled, and
       greetd writes its own `/etc/greetd/config.toml`
 - [~] Driver detection and firmware suggestions — **partial**: CPU microcode
-      hints and a base set (`mesa`, `linux-firmware`) are chosen from the host.
-      GPU model detection is not implemented.
+      hints and a base set (`mesa`, `linux-firmware`) are chosen from the
+      host. GPU models are now parsed out of `lspci -mm -nn` into
+      `GpuInfo.model` (the bracketed PCI id is stripped, product names keep
+      theirs — tested on real-shaped lines); what is still missing is a
+      driver suggestion keyed off the model, e.g. NVIDIA variant choice.
 - [x] PipeWire, PulseAudio, or neither
 - [x] Bluetooth, zram, swap choices
-- [~] NetworkManager configuration — **partial**: the package is installed and
-      the unit is enabled. No `/etc/NetworkManager` file is written.
+- [~] NetworkManager configuration — **partial**: the package is installed,
+      the unit is enabled, and `/etc/NetworkManager/conf.d/00-camarelol.conf`
+      pins `dhcp=internal` (unit-tested; not yet observed in a VM).
+- [~] Stale firmware boot entries — **partial**: the bootloader phase now
+      reads `efibootmgr -v` and deletes only `Boot####` entries whose
+      `/File(…)` loader is missing from OUR ESP (GUID-matched);
+      `FvFile`/`CdRom`/`Usb` devices and any other partition are never
+      touched, and a broken listing skips the cleanup with a note instead
+      of failing the install. This targets the `Boot0005` style of hang —
+      firmware pointing at an `EFI/…` file that a previous attempt left
+      behind. Unit-tested with a VBox-shaped listing; VM observation
+      pending.
 
 ## Stage 4 — Experience
 

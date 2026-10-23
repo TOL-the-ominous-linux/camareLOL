@@ -59,11 +59,21 @@
 - [x] 显示管理器：SDDM、GDM、LightDM、greetd — 安装、启用，并且 greetd
       写入自己的 `/etc/greetd/config.toml`
 - [~] 驱动检测和固件建议 — **部分**：CPU 微码提示和基础集合（`mesa`、
-      `linux-firmware`）根据主机选择。GPU 型号检测尚未实现。
+      `linux-firmware`）根据主机选择。GPU 型号检测已实现：从 `lspci -mm -nn`
+      解析入 `GpuInfo.model`（只剥掉 hex-id 的方括号，产品名自带的方括号保留
+      —— 用真实形状的行做了测试）；尚缺的是按型号给驱动建议，例如 NVIDIA
+      变体的选择。
 - [x] PipeWire、PulseAudio，或者都不用
 - [x] 蓝牙、zram、交换空间选项
-- [~] NetworkManager 配置 — **部分**：包已安装，unit 已启用。
-      没有写入 `/etc/NetworkManager` 文件。
+- [~] NetworkManager 配置 — **部分**：包已安装，unit 已启用，并写入
+      `/etc/NetworkManager/conf.d/00-camarelol.conf` 固定 `dhcp=internal`
+      （已用单元测试验证；还没在 VM 里观察过）。
+- [~] 过时的固件启动项 — **部分**：bootloader 阶段现在读取 `efibootmgr -v`，
+      只删除那种 `Boot####` 条目：它的 `/File(…)` 指向 OUR ESP（按 PARTUUID
+      匹配）而文件已经不在；`FvFile`/`CdRom`/`Usb` 设备和任何其它分区永远
+      不碰，listing 损坏就以说明跳过清理而不是让安装失败。针对的是
+      `Boot0005` 式的挂起——固件指向之前一次尝试留在 `EFI/…` 的文件。
+      已用 VBox 形状的 listing 做单元测试；等 VM 观察。
 
 ## 第 4 阶段 —— 体验
 

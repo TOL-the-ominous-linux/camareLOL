@@ -63,11 +63,22 @@ filesystem, và thứ tự mount root-trước-ESP.
 - [x] Trình quản lý phiên hiển thị: SDDM, GDM, LightDM, greetd — được cài,
       được bật, và greetd tự viết `/etc/greetd/config.toml`
 - [~] Phát hiện driver và gợi ý firmware — **một phần**: có gợi ý microcode theo
-      CPU và một bộ gói nền (`mesa`, `linux-firmware`). Chưa dò được model GPU.
+      CPU và một bộ gói nền (`mesa`, `linux-firmware`). Model GPU nay được
+      tách khỏi `lspci -mm -nn` vào `GpuInfo.model` (chỉ strip ngoặc id hex,
+      tên sản phẩm giữ nguyên ngoặc của nó — test với dòng thật); thứ còn
+      thiếu là gợi ý driver theo model, ví dụ biến thể NVIDIA.
 - [x] PipeWire, PulseAudio, hoặc không dùng cái nào
 - [x] Lựa chọn Bluetooth, zram, swap
-- [~] Cấu hình NetworkManager — **một phần**: gói đã cài, unit đã bật. Chưa
-      viết tệp `/etc/NetworkManager`.
+- [~] Cấu hình NetworkManager — **một phần**: gói đã cài, unit đã bật, và
+      `/etc/NetworkManager/conf.d/00-camarelol.conf` ghim `dhcp=internal`
+      (đã kiểm bằng unit-test; chưa được nhìn thấy trong VM).
+- [~] Entry firmware cũ — **một phần**: pha bootloader nay đọc `efibootmgr -v`
+      và chỉ xóa entry `Boot####` mà `/File(…)` của nó không còn trên ESP CỦA
+      TA (đối sánh PARTUUID); `FvFile`/`CdRom`/`Usb` và ESP của OS khác không
+      bao giờ bị đụng tới, và listing hỏng cho phép skip kèm ghi chú thay vì
+      làm gãy install. Hiểu đúng kiểu treo `Boot0005` — firmware chỉ vào tệp
+      `EFI/…` mà lần thử trước để lại. Đã kiểm bằng unit-test với listing
+      dáng VBox; chờ quan sát trong VM.
 
 ## Stage 4 — Trải nghiệm
 
