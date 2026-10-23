@@ -43,23 +43,18 @@ done
 BODY="camareLOL $VERSION.
 
 Highlights:
-- Preparation for the real-machine dual-boot that 0.1.19 opened:
-  - the bootloader phase now reads \`efibootmgr -v\` and deletes only those
-    \`Boot####\` entries whose \`/File(…)\` loader is missing from OUR ESP
-    (PARTUUID-matched) — the \`Boot0005\`-style hang where firmware points at
-    an \`EFI/…\` file a previous attempt left behind. Respectful by
-    construction: \`FvFile\`, \`CdRom\`, \`Usb\` and other partitions are
-    never touched; a broken listing skips the cleanup with a note.
-  - \`/etc/NetworkManager/conf.d/00-camarelol.conf\` pins \`dhcp=internal\`
-    so a minimal pacstrap system never gets an interface that refuses to
-    take an address.
-- \`GpuInfo.model\` — the GPU product name parsed out of \`lspci -mm -nn\`
-  (only hex-id brackets stripped, product brackets kept).
-- \`paru-bin\` joins the AUR catalog — prebuilt, no full Rust cook every
-  install.
+- The Storage devices screen now expands the selected disk into its real
+  partition list — kernel name, size, filesystem, label, OS hints (ESP/
+  recovery/swap…) and the mountpoint. Before this fix partitions only
+  appeared on the layout screen, after a plan already existed; deciding
+  between whole-disk and dual-boot without seeing the table is how
+  mistakes happen. Rendering covered by 4 screen tests that fabricate
+  exactly the real-world shape (ESP + Linux root beside free space).
+- Everything 0.1.20 delivered (dual-boot keep-everything planner,
+  stale EFI boot entry cleanup, NetworkManager dhcp=internal, GPU model
+  parsing, paru-bin) carries over.
 
-Everything 0.1.19 delivered (dual-boot beside an existing OS, VM-proven)
-carries over. Assets are checksummed in SHA256SUMS."
+Assets are checksummed in SHA256SUMS."
 
 # ---- tạo nháp release ------------------------------------------------------
 PAYLOAD="$(tag="$TAG" name="camareLOL $VERSION" CAMARELOL_BODY="$BODY" python3 -c '
