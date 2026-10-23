@@ -437,7 +437,8 @@ fn draw_storage(f: &mut Frame, app: &mut App, area: Rect) {
     let devices = app.devices().to_vec();
     let items: Vec<ListItem> = devices
         .iter()
-        .map(|d| {
+        .enumerate()
+        .map(|(i, d)| {
             let risk_color = match d.risk {
                 camarelol_core::storage::RiskLevel::Low => GOOD,
                 camarelol_core::storage::RiskLevel::Medium => WARN,
@@ -456,6 +457,18 @@ fn draw_storage(f: &mut Frame, app: &mut App, area: Rect) {
             ];
             if let Some(model) = &d.model {
                 lines.push(Line::from(format!("    {model}")));
+            }
+            // The selected disk expands to its real partition table. Deciding
+            // between whole-disk and dual-boot without seeing what is already
+            // on the disk is how mistakes happen; the survey already carries
+            // every partition, the UI just has to show it.
+            if i == app.storage_index {
+                if d.partitions.is_empty() {
+                    lines.push(Line::from("    · (không có phân vùng nào)"));
+                }
+                for p in &d.partitions {
+                    lines.push(partition_line(p));
+                }
             }
             if d.has_windows() {
                 lines.push(Line::from(vec![Span::styled(
@@ -481,6 +494,36 @@ fn draw_storage(f: &mut Frame, app: &mut App, area: Rect) {
         .highlight_style(selected_row())
         .highlight_symbol("▸ ");
     f.render_stateful_widget(list, area, &mut state);
+}
+
+/// One indented row per existing partition under the selected disk.
+/// `p1 · 49 GiB · ext4 · archtest`
+fn partition_line(p: &camarelol_core::storage::Partition) -> Line<'static> {
+    let fs = p
+        .filesystem
+        .as_ref()
+        .map(|f| f.as_str().to_string())
+        .unwrap_or_else(|| "không có fs".to_string());
+    let mut text = format!(
+        "    · {}  {}  {}",
+        p.kernel_name,
+        camarelol_core::storage::human_size(p.size_bytes),
+        fs
+    );
+    if let Some(label) = &p.label {
+        text.push_str(&format!(" · \"{label}\""));
+    }
+    for hint in &p.os_hints {
+        text.push_str(&format!(" · {}", hint.as_str()));
+    }
+    match &p.mount_state {
+        camarelol_core::storage::MountState::Mounted { target, .. } => {
+            text.push_str(&format!(" · mounted {target}"))
+        }
+        camarelol_core::storage::MountState::Busy => text.push_str(" · busy"),
+        camarelol_core::storage::MountState::NotMounted => {}
+    }
+    Line::from(text)
 }
 
 fn draw_disk_mode(f: &mut Frame, app: &mut App, area: Rect) {
@@ -1278,5 +1321,130 @@ mod tests {
             text.contains("PREVIEW"),
             "the banner must survive zh: got:\n{text}"
         );
+    }
+
+    // -------------------------------------------------- the expanded disk
+
+    /// The machine this whole project exists for: ESP + a Linux root beside
+    /// free space the planner may claim. Fabricated, never scanned.
+    fn sample_disk() -> camarelol_core::storage::StorageDevice {
+        use camarelol_core::storage::{
+            DeviceKind, Filesystem, MountState, OsSignature, Partition, PartitionTableType,
+            RiskLevel, StorageDevice,
+        };
+        let part = |n: &str, size: u64, fs: Option<Filesystem>, hints| Partition {
+            kernel_name: n.to_string(),
+            path: format!("/dev/{n}"),
+            label: None,
+            uuid: None,
+            part_uuid: None,
+            size_bytes: size,
+            start_sector: 2048,
+            filesystem: fs,
+            partition_type: None,
+            partition_type_name: None,
+            mount_state: MountState::NotMounted,
+            os_hints: hints,
+            part_label: None,
+        };
+        StorageDevice {
+            kernel_name: "sda".to_string(),
+            path: "/dev/sda".to_string(),
+            model: Some("Test Disk".to_string()),
+            vendor: None,
+            serial: None,
+            wwn: None,
+            size_bytes: 120 * 1024 * 1024 * 1024,
+            logical_sector_size: None,
+            physical_sector_size: None,
+            rotational: false,
+            removable: false,
+            transport: None,
+            kind: DeviceKind::SataSsd,
+            partition_table: PartitionTableType::Gpt,
+            partitions: vec![
+                part(
+                    "sda2",
+                    1024 * 1024 * 1024,
+                    Some(Filesystem::Vfat),
+                    vec![OsSignature::EfiSystemPartition],
+                ),
+                part(
+                    "sda3",
+                    69 * 1024 * 1024 * 1024,
+                    Some(Filesystem::Ext4),
+                    vec![],
+                ),
+            ],
+            mount_state: MountState::NotMounted,
+            os_hints: vec![],
+            encrypted: Some(false),
+            risk: RiskLevel::Medium,
+        }
+    }
+
+    #[test]
+    fn the_storage_screen_expands_the_selected_disk_into_its_partitions() {
+        // Choosing between whole-disk and dual-boot without seeing the
+        // partition table is how mistakes happen; the survey already carries
+        // every partition, the screen just has to show it.
+        let mut app = welcome_app();
+        app.core.devices.push(sample_disk());
+        app.storage_index = 0;
+        let text = render(app, Screen::Storage, 120, 40);
+        assert!(text.contains("sda2"), "ESP row missing:\n{text}");
+        assert!(text.contains("1 GiB"), "size missing:\n{text}");
+        assert!(text.contains("vfat"), "filesystem missing:\n{text}");
+        assert!(
+            text.contains("EFI System Partition"),
+            "hint missing:\n{text}"
+        );
+        assert!(text.contains("sda3"), "root row missing:\n{text}");
+        assert!(text.contains("ext4"), "root fs missing:\n{text}");
+    }
+
+    #[test]
+    fn only_the_selected_disk_is_expanded() {
+        // Two dots on one screen: the disk holding the cursor shows its
+        // partition rows, the other keeps just its summary. If both expanded,
+        // the list would read as one table spilling across two entries.
+        let mut app = welcome_app();
+        app.core.devices.push(sample_disk());
+        app.core.devices.push(sample_disk());
+        app.storage_index = 0;
+        let text = render(app, Screen::Storage, 120, 40);
+        assert_eq!(
+            text.matches("sda2").count(),
+            1,
+            "sda2 must appear exactly once (selected disk only):\n{text}"
+        );
+    }
+
+    #[test]
+    fn an_empty_disk_says_it_has_no_partitions() {
+        let mut app = welcome_app();
+        let mut disk = sample_disk();
+        disk.partitions.clear();
+        app.core.devices.push(disk);
+        app.storage_index = 0;
+        let text = render(app, Screen::Storage, 120, 40);
+        assert!(text.contains("(không có phân vùng nào)"), "got:\n{text}");
+    }
+
+    #[test]
+    fn a_mounted_partition_shows_its_mountpoint() {
+        // "ext4" alone says nothing about what lives inside; the mountpoint is
+        // the difference between a data disk and the disk the system boots
+        // from. On the real machine that difference decides everything.
+        let mut app = welcome_app();
+        let mut disk = sample_disk();
+        disk.partitions[1].mount_state = camarelol_core::storage::MountState::Mounted {
+            target: "/".to_string(),
+            live_system: false,
+        };
+        app.core.devices.push(disk);
+        app.storage_index = 0;
+        let text = render(app, Screen::Storage, 120, 40);
+        assert!(text.contains("mounted /"), "got:\n{text}");
     }
 }
