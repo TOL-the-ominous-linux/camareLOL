@@ -6,7 +6,7 @@
 
 use super::phases::{preconditions, retryable};
 use super::*;
-use crate::boot::Bootloader;
+use crate::boot::{self, Bootloader};
 use crate::error::{CamarelolError, ErrorCode, Result};
 use crate::logging::Logger;
 use crate::safety::{GateMode, SafetyGate};
@@ -449,6 +449,12 @@ impl SystemRunner for RealSystemRunner {
                     args.extend(target.split(' ').map(|s| s.to_string()));
                     self.record("arch-chroot", args, None);
                     self.record_chroot("grub-mkconfig -o /boot/grub/grub.cfg");
+                    // The stale-entry cleanup evaluates at run time (it needs
+                    // a real efibootmgr listing), so the preview shows the
+                    // observation step only.
+                    self.record_chroot(
+                        "efibootmgr -v > /tmp/efi-listing.txt; blkid -s PARTUUID -o value /dev/… > /tmp/esp-guid.txt",
+                    );
                 }
                 Bootloader::SystemdBoot => self.record_chroot("bootctl install"),
             }
@@ -1193,7 +1199,16 @@ pub fn run_install_on_host(
                             )?;
                         }
                         runner.install_bootloader(cfg.bootloader()?, disk, &efi_dir)?;
-                        Ok(format!("{} installed", cfg.bootloader()?.as_str()))
+                        // Firmware hygiene after the install: drop entries
+                        // pointing into our ESP at files that no longer exist
+                        // (previous attempts, leftover USB loaders). Best
+                        // effort — see efi_cleanup; failure is a message,
+                        // never a phase error.
+                        let base = cfg.bootloader()?.as_str();
+                        match efi_cleanup(runner, disk, &efi_dir, plan) {
+                            Ok(m) => Ok(format!("{base} installed; {m}")),
+                            Err(e) => Ok(format!("{base} installed; entry cleanup skipped ({e})")),
+                        }
                     }
                     "system-config" => {
                         let script = system_config_script(cfg, plan.keep_existing);
@@ -1269,6 +1284,64 @@ pub fn run_install_on_host(
     }
 }
 
+/// Best-effort firmware hygiene: read `efibootmgr -v` from inside the target,
+/// parse it (boot::parse_efi_entries), and delete entries whose loader file is
+/// missing from OUR ESP — described in core/src/boot.rs.
+///
+/// Any hiccup (no ESP — a BIOS install, efibootmgr error, unreadable listing)
+/// is reported in the message and NEVER fails the phase: this is cleanup, not
+/// a boot requirement. The delete itself speaks explicit `-b <index> -B`
+/// pairs; nothing zaps, nothing uses `-O` style wholesale operations.
+fn efi_cleanup(
+    runner: &mut dyn SystemRunner,
+    disk: &StorageDevice,
+    efi_dir: &str,
+    plan: &PartitionPlan,
+) -> Result<String> {
+    let esp = plan
+        .partitions
+        .iter()
+        .find(|p| p.purpose == PartitionPurpose::EfiSystem);
+    let Some(esp) = esp else {
+        return Ok("no ESP; firmware entry cleanup not applicable".into());
+    };
+    let esp_node =
+        crate::install::partition_path(&disk.path, esp.number.map(|n| n as usize).unwrap_or(1));
+    runner.chroot_script(&format!(
+        "efibootmgr -v > /tmp/efi-listing.txt; blkid -s PARTUUID -o value {esp_node} > /tmp/esp-guid.txt 2>/dev/null\n",
+    ))?;
+    let listing =
+        std::fs::read_to_string(format!("{TARGET_ROOT}/tmp/efi-listing.txt")).unwrap_or_default();
+    let guids = std::fs::read_to_string(format!("{TARGET_ROOT}/tmp/esp-guid.txt")).ok();
+    let guid = guids
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    if listing.trim().is_empty() {
+        return Ok("efibootmgr produced no listing; entry cleanup skipped".into());
+    }
+    let entries = boot::parse_efi_entries(&listing);
+    if entries.is_empty() {
+        return Ok("no EFI boot entries parsed; entry cleanup skipped".into());
+    }
+    let esp_root = format!("{TARGET_ROOT}{efi_dir}");
+    let exists = |rel: &str| std::path::Path::new(&esp_root).join(rel).exists();
+    let stale = boot::stale_boot_entries(&entries, guid.as_deref(), &exists);
+    if stale.is_empty() {
+        return Ok(format!("{} EFI entries checked, none stale", entries.len()));
+    }
+    let mut cmd = String::from("set -e\n");
+    for e in &stale {
+        cmd.push_str(&format!("efibootmgr -b {:04x} -B\n", e.num));
+    }
+    runner.chroot_script(&cmd)?;
+    let ids: Vec<String> = stale.iter().map(|e| format!("Boot{:04x}", e.num)).collect();
+    Ok(format!(
+        "removed {} stale EFI entry/entries ({})",
+        stale.len(),
+        ids.join(", ")
+    ))
+}
+
 /// Build the in-target script that writes locale / keymap / timezone / hostname,
 /// and — when zram was selected — the one file that makes zram real.
 ///
@@ -1305,6 +1378,16 @@ echo '{host}' > /etc/hostname
                 ));
             }
         }
+    }
+    if cfg.services.network_manager {
+        // NM itself works fine on defaults, but making the DHCP backend
+        // explicit serves one real failure mode: NM's default prefers an
+        // external client when one happens to be installed; a minimal
+        // pacstrap system then has an interface that never gets an
+        // address. Pinning dhcp=internal keeps the path in-NM.
+        script.push_str(
+            "mkdir -p /etc/NetworkManager/conf.d\ncat > /etc/NetworkManager/conf.d/00-camarelol.conf <<'EOF'\n[main]\ndhcp=internal\nEOF\n",
+        );
     }
     if cfg.services.zram {
         // upstream documents plain integers as MiB; `min` is part of the
@@ -1513,6 +1596,30 @@ mod tests {
         };
         let script = system_config_script(&cfg, false);
         assert!(!script.contains("zram-generator.conf"), "{}", script);
+    }
+
+    #[test]
+    fn network_manager_on_writes_its_conf() {
+        // Default selection has network_manager: true — the roadmap's "no
+        // /etc/NetworkManager file is written" gap.
+        let cfg = InstallationConfig::default();
+        assert!(cfg.services.network_manager);
+        let script = system_config_script(&cfg, false);
+        assert!(script.contains("conf.d/00-camarelol.conf"), "{}", script);
+        assert!(script.contains("dhcp=internal"), "{}", script);
+    }
+
+    #[test]
+    fn network_manager_off_writes_no_nm_conf() {
+        let cfg = InstallationConfig {
+            services: crate::services::ServiceSelection {
+                network_manager: false,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let script = system_config_script(&cfg, false);
+        assert!(!script.contains("NetworkManager/conf.d"), "{}", script);
     }
 
     #[test]

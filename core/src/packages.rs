@@ -238,6 +238,8 @@ pub const CATALOG: &[PackageEntry] = &[
     // --- AUR: only offered when the user has enabled AUR ---
     aur("yay", "AUR helper"),
     aur("paru", "AUR helper"),
+    // Prebuild of paru: cooks in seconds instead of a full Rust build.
+    aur("paru-bin", "AUR helper (prebuilt)"),
     aur("pikaur", "AUR helper"),
     aur("trizen", "AUR helper"),
     aur("ibus-bamboo", "Vietnamese input method for IBus"),
