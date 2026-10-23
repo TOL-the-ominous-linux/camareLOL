@@ -6,6 +6,7 @@
 //! để bỏ updater đã xoá luôn bàn phím. Tên mới nói đúng nội dung.
 
 use super::app::{App, Field, Screen};
+use camarelol_core::boot::Bootloader;
 use camarelol_core::error::ErrorCode;
 use camarelol_core::install::execute::RealSystemRunner;
 use camarelol_core::install::{run_install, Outcome, PhaseState, ProgressEvent, ProgressSink};
@@ -183,6 +184,20 @@ impl App {
                     }
                 }
                 KeyCode::Enter => {
+                    // Dual-boot reuses the existing ESP, and only GRUB can
+                    // live beside another OS's loader there — the planner
+                    // refuses systemd-boot with a shared ESP. Switch it for
+                    // the user instead of letting the refusal surprise them
+                    // three screens later.
+                    if self.disk_mode_index == 3 && self.bootloader() != Bootloader::Grub {
+                        self.bootloader_index = 0; // GRUB
+                        self.core.set_bootloader(self.bootloader());
+                        self.message = Some(self.tr(
+                            "Dual-boot giữ lại ESP cũ nên cần GRUB — đã đổi bootloader (systemd-boot chỉ chạy được trên đĩa xoá sạch).",
+                            "Dual-boot keeps the existing ESP, which requires GRUB — the bootloader was switched (systemd-boot needs a fresh ESP on an erased disk).",
+                            "双启动会保留现有 ESP，这需要 GRUB — 引导加载程序已切换（systemd-boot 需要擦除后的全新 ESP）。",
+                        ));
+                    }
                     if self.disk_mode_index == 4 {
                         self.screen = Screen::Storage;
                         return;
@@ -980,6 +995,25 @@ mod tests {
         let mut app = App::new(None);
         app.armed = true;
         app
+    }
+
+    #[test]
+    fn dual_boot_mode_switches_the_bootloader_to_grub_automatically() {
+        // systemd-boot with a reused ESP is refused three screens later by the
+        // planner ("systemd-boot cannot share a Windows ESP"); switching at the
+        // moment of selection states the constraint while it still matters.
+        // This is exactly what happened on the real machine, 23 Oct 2026.
+        let mut app = app();
+        app.screen = Screen::DiskMode;
+        app.disk_mode_index = 3;
+        app.bootloader_index = 1; // systemd-boot
+        app.handle_key(KeyEvent::from(KeyCode::Enter));
+        assert!(
+            matches!(app.bootloader(), Bootloader::Grub),
+            "dual-boot must force GRUB, got {:?}",
+            app.bootloader()
+        );
+        assert!(app.message.is_some(), "the switch must say what happened");
     }
 
     #[test]

@@ -469,6 +469,32 @@ fn draw_storage(f: &mut Frame, app: &mut App, area: Rect) {
                 for p in &d.partitions {
                     lines.push(partition_line(p));
                 }
+                // The gap the dual-boot planner would claim, shown with the
+                // same eyes the planner uses. Unpartitioned space is invisible
+                // in any normal listing — `lsblk` shows only partitions — yet
+                // it is exactly what "install beside an existing OS" means
+                // in bytes.
+                if let camarelol_core::storage::GapScan::Found(s, e) =
+                    camarelol_core::storage::largest_aligned_gap(d)
+                {
+                    let sector = d
+                        .logical_sector_size
+                        .filter(|x| *x >= 512 && *x % 512 == 0)
+                        .unwrap_or(512) as u64;
+                    let gap_bytes = (e - s) * sector;
+                    lines.push(Line::from(vec![Span::styled(
+                        format!(
+                            "    · {} {}",
+                            camarelol_core::storage::human_size(gap_bytes),
+                            if d.has_windows() {
+                                "free — unpartitioned space (dual-boot claims this gap)"
+                            } else {
+                                "free — unpartitioned space (dual-boot can claim this gap)"
+                            },
+                        ),
+                        Style::default().fg(WARN),
+                    )]));
+                }
             }
             if d.has_windows() {
                 lines.push(Line::from(vec![Span::styled(
@@ -539,6 +565,14 @@ fn draw_disk_mode(f: &mut Frame, app: &mut App, area: Rect) {
             dev.path,
             dev.kind.as_str(),
             dev.capacity_display()
+        ))));
+    }
+    if app.disk_mode_index == 3 {
+        items.push(ListItem::new(Line::from("")));
+        items.push(ListItem::new(Line::from(app.tr(
+            "  Dual-boot: giữ lại mọi phân vùng + dùng lại ESP cũ — bootloader bắt buộc GRUB.",
+            "  Dual-boot: keeps every partition + reuses the existing ESP — the bootloader is GRUB.",
+            "  双启动：保留所有分区并复用现有 ESP — 引导加载程序为 GRUB。",
         ))));
     }
     let mut state = ListState::default();
@@ -1332,14 +1366,14 @@ mod tests {
             DeviceKind, Filesystem, MountState, OsSignature, Partition, PartitionTableType,
             RiskLevel, StorageDevice,
         };
-        let part = |n: &str, size: u64, fs: Option<Filesystem>, hints| Partition {
+        let part = |n: &str, start: u64, size: u64, fs: Option<Filesystem>, hints| Partition {
             kernel_name: n.to_string(),
             path: format!("/dev/{n}"),
             label: None,
             uuid: None,
             part_uuid: None,
             size_bytes: size,
-            start_sector: 2048,
+            start_sector: start,
             filesystem: fs,
             partition_type: None,
             partition_type_name: None,
@@ -1365,12 +1399,14 @@ mod tests {
             partitions: vec![
                 part(
                     "sda2",
+                    2048,
                     1024 * 1024 * 1024,
                     Some(Filesystem::Vfat),
                     vec![OsSignature::EfiSystemPartition],
                 ),
                 part(
                     "sda3",
+                    2_099_200, // right after the 1 GiB ESP, sector-aligned
                     69 * 1024 * 1024 * 1024,
                     Some(Filesystem::Ext4),
                     vec![],
@@ -1401,6 +1437,39 @@ mod tests {
         );
         assert!(text.contains("sda3"), "root row missing:\n{text}");
         assert!(text.contains("ext4"), "root fs missing:\n{text}");
+    }
+
+    #[test]
+    fn the_storage_screen_shows_the_unpartitioned_gap() {
+        // Unpartitioned space is invisible to lsblk and to the naive eye, yet
+        // it is what "install beside an existing OS" actually means in bytes:
+        // 120 GiB disk − (1 GiB ESP + 69 GiB root, tail beyond both) ≈ 50 GiB.
+        let mut app = welcome_app();
+        app.core.devices.push(sample_disk());
+        app.storage_index = 0;
+        let text = render(app, Screen::Storage, 120, 40);
+        assert!(
+            text.contains("free — unpartitioned space"),
+            "gap row missing:\n{text}"
+        );
+        assert!(text.contains("50 GiB"), "gap size wrong:\n{text}");
+    }
+
+    #[test]
+    fn a_fully_claimed_disk_shows_no_gap_row() {
+        // A disk with every sector used must not print a phantom gap; the
+        // dual-boot mode would refuse this disk and the screen should agree.
+        let mut app = welcome_app();
+        let mut disk = sample_disk();
+        // pad the root partition to swallow the tail gap
+        disk.partitions[1].size_bytes = (251_658_240 - 2_099_200) * 512;
+        app.core.devices.push(disk);
+        app.storage_index = 0;
+        let text = render(app, Screen::Storage, 120, 40);
+        assert!(
+            !text.contains("free — unpartitioned space"),
+            "phantom gap:\n{text}"
+        );
     }
 
     #[test]

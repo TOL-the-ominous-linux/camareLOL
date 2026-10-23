@@ -380,6 +380,77 @@ pub fn plan_auto_layout(device: &StorageDevice, req: &LayoutRequest) -> Result<P
 /// - Free space is located from the scanned `start` sectors. If the new
 ///   layout does not fit a single aligned gap in the existing layout, the
 ///   request is refused — silently shrinking anything is out of the question.
+/// 1 MiB expressed in 512-byte sectors — the alignment every new partition
+/// start gets.
+const ALIGN_SECTORS: u64 = 2048;
+
+/// What free space on a device looks like to the dual-boot planner.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GapScan {
+    /// Largest usable window: (start_sector, end_sector_exclusive).
+    Found(u64, u64),
+    /// The survey lacks partition start sectors — the free space cannot be
+    /// placed anywhere with confidence (an old lsblk produced it).
+    NoStarts,
+    /// Every sector is claimed; nothing to place new partitions into.
+    NoGap,
+}
+
+/// Largest aligned free window on the device.
+///
+/// This is the same computation the dual-boot planner performs before it
+/// lays out new partitions — exposed because a gap the user cannot see is a
+/// gap they cannot reason about. The storage screen shows it next to the
+/// partition list.
+pub fn largest_aligned_gap(device: &StorageDevice) -> GapScan {
+    let sector_size = device
+        .logical_sector_size
+        .filter(|s| *s >= 512 && *s % 512 == 0)
+        .unwrap_or(512) as u64;
+    let total_sectors = device.size_bytes / sector_size;
+
+    let mut extents: Vec<(u64, u64)> = device // (start, end_exclusive) sectors
+        .partitions
+        .iter()
+        .filter(|p| p.start_sector > 0 && p.size_bytes > 0)
+        .map(|p| (p.start_sector, p.start_sector + p.size_bytes / sector_size))
+        .collect();
+    extents.sort_unstable();
+    extents.dedup();
+
+    if extents.is_empty() {
+        return GapScan::NoStarts;
+    }
+
+    let mut best: Option<(u64, u64)> = None; // (start_sector, end_sector_exclusive)
+    let mut cursor = ALIGN_SECTORS;
+    for (s, e) in extents
+        .iter()
+        .copied()
+        .chain([(total_sectors, total_sectors)])
+    {
+        // candidate window: from the first 1 MiB boundary at/after `cursor`
+        // up to the start of the next existing partition.
+        let aligned = cursor.div_ceil(ALIGN_SECTORS) * ALIGN_SECTORS;
+        let limit = s.min(total_sectors);
+        if limit > aligned {
+            let span = limit - aligned;
+            let better = match best {
+                Some((_, bs)) => span > bs,
+                None => true,
+            };
+            if better {
+                best = Some((aligned, limit));
+            }
+        }
+        cursor = e.max(cursor);
+    }
+    match best {
+        Some((start, end)) => GapScan::Found(start, end),
+        None => GapScan::NoGap,
+    }
+}
+
 pub fn plan_dual_boot(device: &StorageDevice, req: &LayoutRequest) -> Result<PartitionPlan> {
     let refuse = |msg: String, remediation: &str| -> CamarelolError {
         CamarelolError::new(ErrorCode::InvalidPlan, msg).with_remediation(remediation)
@@ -470,31 +541,30 @@ pub fn plan_dual_boot(device: &StorageDevice, req: &LayoutRequest) -> Result<Par
     };
 
     // --- free space accounting -------------------------------------------------
-    const ALIGN_SECTORS: u64 = 2048; // 1 MiB
     let sector_size = device
         .logical_sector_size
         .filter(|s| *s >= 512 && *s % 512 == 0)
         .unwrap_or(512) as u64;
-    let total_sectors = device.size_bytes / sector_size;
 
-    let mut extents: Vec<(u64, u64)> = device // (start, end_exclusive) sectors
-        .partitions
-        .iter()
-        .filter(|p| p.start_sector > 0 && p.size_bytes > 0)
-        .map(|p| (p.start_sector, p.start_sector + p.size_bytes / sector_size))
-        .collect();
-    extents.sort_unstable();
-    extents.dedup();
-
-    if extents.is_empty() {
-        return Err(refuse(
-            format!(
-                "the survey for {} did not report partition starts (old lsblk output)",
-                device.path
-            ),
-            "re-run with a current util-linux, or erase the whole disk",
-        ));
-    }
+    let (gap_start, gap_end) = match largest_aligned_gap(device) {
+        GapScan::Found(start, end) => (start, end),
+        GapScan::NoStarts => {
+            return Err(refuse(
+                format!(
+                    "the survey for {} did not report partition starts (old lsblk output)",
+                    device.path
+                ),
+                "re-run with a current util-linux, or erase the whole disk",
+            ))
+        }
+        GapScan::NoGap => {
+            return Err(refuse(
+                format!("no free space found on {}", device.path),
+                "free space of at least the planned sizes is required; shrink or delete something first",
+            ))
+        }
+    };
+    let gap_sectors = gap_end - gap_start;
 
     // Needed size: everything except / goes before it in the same gap.
     let boot_size = if req.separate_boot { MIN_BOOT_BYTES } else { 0 };
@@ -504,37 +574,6 @@ pub fn plan_dual_boot(device: &StorageDevice, req: &LayoutRequest) -> Result<Par
         0
     };
     let swap_size = req.swap_bytes.unwrap_or(0);
-    // Largest aligned window in any gap.
-    let mut best: Option<(u64, u64)> = None; // (start_sector, end_sector_exclusive)
-    let mut cursor = ALIGN_SECTORS;
-    for (s, e) in extents
-        .iter()
-        .copied()
-        .chain([(total_sectors, total_sectors)])
-    {
-        // candidate window: from the first 1 MiB boundary at/after `cursor`
-        // up to the start of the next existing partition.
-        let aligned = cursor.div_ceil(ALIGN_SECTORS) * ALIGN_SECTORS;
-        let limit = s.min(total_sectors);
-        if limit > aligned {
-            let span = limit - aligned;
-            let better = match best {
-                Some((_, bs)) => span > bs,
-                None => true,
-            };
-            if better {
-                best = Some((aligned, limit));
-            }
-        }
-        cursor = e.max(cursor);
-    }
-    let Some((gap_start, gap_end)) = best else {
-        return Err(refuse(
-            format!("no free space found on {}", device.path),
-            "free space of at least the planned sizes is required; shrink or delete something first",
-        ));
-    };
-    let gap_sectors = gap_end - gap_start;
 
     // ---- geometry: every new partition gets an explicit start sector ------
     //  Layout inside the gap (sectors):  [boot?][root][home?][swap?]
@@ -1050,6 +1089,48 @@ mod tests {
                 assert!(e < 165_675_008, "ends before the recovery partition");
             }
         }
+    }
+
+    #[test]
+    fn gap_scan_sees_the_gap_a_deleted_first_partition_leaves() {
+        // The real machine, 23 Oct 2026: sda1 (49 GiB ext4) is deleted, the
+        // ESP and the Linux root stay put. The only free space is at the
+        // very start of the disk — the planner and the storage screen must
+        // both find it there.
+        let mut d = windows_disk();
+        for p in d.partitions.iter_mut() {
+            p.start_sector += 2_097_152; // shift every partition by 1 GiB
+        }
+        // close the (now-shifted) middle gap by extending the data partition,
+        // so the head gap is the only one — exactly the real-deleted-sda1 shape.
+        let p3 = &d.partitions[2];
+        let new_start = p3.start_sector;
+        let p4_start = d.partitions[3].start_sector;
+        let covered = (p4_start.min(167_772_160) - new_start) * 512;
+        d.partitions[2].size_bytes = covered;
+        assert_eq!(largest_aligned_gap(&d), GapScan::Found(2048, 2_099_200));
+    }
+
+    #[test]
+    fn gap_scan_honests_an_old_survey_without_start_sectors() {
+        // An old lsblk (no START column) reported zero for every start; the
+        // scan must say so instead of inventing a gap out of nothing.
+        let mut d = windows_disk();
+        for p in d.partitions.iter_mut() {
+            p.start_sector = 0;
+        }
+        assert_eq!(largest_aligned_gap(&d), GapScan::NoStarts);
+    }
+
+    #[test]
+    fn gap_scan_reports_no_gap_when_every_sector_is_claimed() {
+        // close the middle gap and the alignment slots: pad the data
+        // partition to reach the recovery partition, and move it back to
+        // where the MSR ends. Nothing remains for new partitions.
+        let mut d = windows_disk();
+        d.partitions[2].start_sector = 239_616;
+        d.partitions[2].size_bytes = (165_675_008 - 239_616) * 512;
+        assert_eq!(largest_aligned_gap(&d), GapScan::NoGap);
     }
 
     #[test]
