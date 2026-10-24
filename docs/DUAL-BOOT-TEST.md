@@ -32,6 +32,23 @@
 > **Cập nhật 23 Oct 2026 — 0.1.20 phát hành, điều kiện tròn đủ.**
 > Bắt đầu bằng **Cách B2 (camareLOL dual-boot)** dưới đây; Cách B (thủ công)
 > giữ lại làm phương án dự phòng.
+>
+> **Cập nhật 24 Oct 2026 — `scripts/dual-boot-auto.sh`, chạy 1 phát.**
+> Không có USB thì dùng GRUB-loopback (B2-0). Trong live ISO, thay toàn bộ
+> chuỗi lệnh tay của B2-1/B2-2 bằng:
+>
+> ```bash
+> curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/refs/heads/main/scripts/dual-boot-auto.sh -o dual-boot-auto.sh
+> bash dual-boot-auto.sh
+> ```
+>
+> Script tự: kiểm root/mạng → tải bản phát hành mới nhất → soi `/dev/sda`
+> (GPT, ESP ≤2GiB, root ext4 ≥40GiB, không phân vùng nào mounted — lệch là
+> dừng) → hỏi `ERASE-P1` nếu partition 1 còn sống (chỉ xoá được khi đúng
+> ext4 40–52 GiB đã được owner xác nhận rỗng) → sinh profile
+> `reuse_esp=true, bootloader=grub` từ survey thật → **preview** → bắt gõ
+> `EXECUTE` → cài 12 pha. Nó **không bao giờ** đụng `/dev/nvme*`, không
+> format ESP, không có `--zap-all`.
 
 > Mục tiêu: có một hệ Arch thật để boot thử, mà **không** mất EndeavourOS,
 > không mất Storage và không phải chia lại ổ NVMe.
