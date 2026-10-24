@@ -53,7 +53,7 @@ Highlights:
     exactly there (test reproduces that shape).
   - selecting the Dual-boot disk mode now switches the bootloader to GRUB
     automatically, with a message explaining why — the planner's refusal
-    ("systemd-boot cannot share a Windows ESP") arrives as prevention
+    (\"systemd-boot cannot share a Windows ESP\") arrives as prevention
     instead of an error three screens later. The DiskMode screen also
     labels what mode 3 keeps.
   - scripts/dual-boot-auto.sh — one-command real-machine install from a
