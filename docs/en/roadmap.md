@@ -159,6 +159,33 @@ filesystem kind, and root-before-ESP mount order.
       below. The reminder stands: **do not point camareLOL at the disk
       that holds your only Windows install.** First real-machine steps
       live in `docs/DUAL-BOOT-TEST.md`.
+- [x] Real machine — installed beside EndeavourOS and booted — a live run
+      of `scripts/dual-boot-auto.sh` (0.1.22) added a `camarelol-root`
+      partition into the free gap of the author's real 119 GiB GPT disk:
+      the existing 1 GiB ESP and the 69 GiB EndeavourOS root stayed
+      `format=false` untouched, and the new ~49 GiB ext4 root landed in
+      the gap left by a deleted first partition. First boot confirmed on
+      that machine (24 Oct 2026): F11 selects `camareLOL` in the firmware
+      boot menu, GRUB comes from `EFI/CAMARELOL/` on the reused ESP, and
+      the new system reached a desktop login. Not yet observed on this
+      leg: the return path — booting EndeavourOS again through the
+      generated `endeavouros (EFI BootNext)` GRUB entry — and the
+      `efibootmgr -o 0002,0000` default-order swap, both wait for the
+      next reboot; the stale-entry cleanups (`EFI/archtest` plus its
+      `Boot0001`, the boot-ISO `menuentry` on the old system's
+      `grub.cfg`, the 1.6 GiB ISO under `/mnt/Storage`) are also pending.
+
+## Future ideas (only an idea, no code)
+
+**siroLOL — a no-USB Ventoy/Rufus replacement.** Sketched by the author on
+2026-10-24, day 13 of development: instead of a USB stick, reserve a FAT32
+partition on the disk, extract the source ISO into a directory there (FAT32's
+4 GiB file-size cap rules out simply dropping the file in), and boot it the
+way Ventoy and Rufus do, with a partition-level boot menu. Planned language
+mix: Rust, C, C++, shell, HTML/CSS, Makefile. A bonus parallel: a FAT32
+partition boots on far more firmware than an ext4 loopback does, precisely
+because every UEFI can read FAT32. Nothing exists yet — not a design, not a
+repo, not a line of code — and it changes nothing about camareLOL itself.
 
 ## Deliberately deferred
 

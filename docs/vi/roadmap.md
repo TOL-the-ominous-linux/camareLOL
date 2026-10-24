@@ -156,6 +156,33 @@ filesystem, và thứ tự mount root-trước-ESP.
       Nhắc lại lần nữa: **chưa được chỉ camareLOL vào đĩa đang giữ bản
       Windows duy nhất của bạn.** Các bước khởi đầu cho máy thật nằm
       trong `docs/DUAL-BOOT-TEST.md`.
+- [x] Máy thật — cài cạnh EndeavourOS và boot được — một lần chạy thật của
+      `scripts/dual-boot-auto.sh` (0.1.22) thêm partition `camarelol-root`
+      vào khe trống của đĩa thật 119 GiB: ESP 1 GiB có sẵn và root
+      EndeavourOS 69 GiB giữ nguyên `format=false`, root ext4 ~49 GiB mới
+      nằm trong khe để lại sau khi xoá partition đầu tiên. Lần boot đầu
+      đã xác nhận trên chính máy đó (24 Oct 2026): F11 chọn `camareLOL`
+      trong menu firmware, GRUB nạp từ `EFI/CAMARELOL/` trên ESP dùng lại,
+      hệ mới tới màn hình đăng nhập desktop. Chưa nhìn thấy trong nhánh
+      này: đường quay về — boot EndeavourOS tiếp qua entry
+      `endeavouros (EFI BootNext)` đã sinh, và bước đổi thứ tự mặc định
+      `efibootmgr -o 0002,0000` — cả hai chờ lần reboot tới; đợt dọn rác
+      entry cũ (`EFI/archtest` + `Boot0001`, `menuentry` ISO boot trong
+      `grub.cfg` của hệ cũ, file ISO 1.6 GiB trong `/mnt/Storage`) cũng
+      chưa xong.
+
+## Ý tưởng tương lai (chỉ là ý tưởng, chưa code)
+
+**siroLOL — thứ thay Ventoy/Rufus mà không cần USB.** Phác thảo bởi tác
+giả ngày 24-10-2026, ngày thứ 13 của quá trình phát triển: thay vì USB,
+trải một partition FAT32 trên đĩa, giải nén ISO vào một thư mục ở đó
+(giới hạn file 4 GiB của FAT32 khiến việc bỏ nguyên file vào là không
+được), và boot như Ventoy/Rufus đã làm, với menu boot mức partition.
+Bộ ngôn ngữ định hướng: Rust, C, C++, shell, HTML/CSS, Makefile. Một
+điểm cộng song hành: partition FAT32 boot được trên nhiều firmware hơn
+nhiều so với loopback ext4, chính vì mọi UEFI đều đọc được FAT32. Chưa
+có gì tồn tại — không thiết kế, không repo, không một dòng code — và nó
+không đổi gì trong chính camareLOL.
 
 ## Cố ý hoãn lại
 

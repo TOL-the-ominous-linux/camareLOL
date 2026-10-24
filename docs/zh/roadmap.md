@@ -145,6 +145,30 @@
       装着你唯一一份 Windows 的磁盘。** 真机的起步步骤在
       `docs/DUAL-BOOT-TEST.md`。
 
+- [x] 真实机器 —— 安装在 EndeavourOS 旁并成功启动 —— 一次实机运行
+      `scripts/dual-boot-auto.sh`（0.1.22）在作者真实的 119 GiB GPT 磁盘的
+      空闲间隙里加进了 `camarelol-root` 分区：已有的 1 GiB ESP 和 69 GiB 的
+      EndeavourOS root 保持 `format=false` 原封不动，新的 ~49 GiB ext4 root
+      落在删除第一个分区后留下的间隙里。首次启动已在那台机器上确认
+      （2026-10-24）：F11 在固件启动菜单里选择 `camareLOL`，GRUB 从复用 ESP
+      上的 `EFI/CAMARELOL/` 加载，新系统到达了桌面登录。这一程尚未观察到的：
+      返回路径 —— 通过生成的 `endeavouros (EFI BootNext)` GRUB 条目再次启动
+      EndeavourOS，以及 `efibootmgr -o 0002,0000` 默认顺序切换 —— 两者都等
+      下次重启；过期条目的清理（`EFI/archtest` 加上它的 `Boot0001`、旧系统
+      `grub.cfg` 里的启动 ISO `menuentry`、`/mnt/Storage` 里的 1.6 GiB ISO）
+      也尚未完成。
+
+## 未来想法（只是想法，没有代码）
+
+**siroLOL —— 无需 USB 的 Ventoy/Rufus 替代品。** 作者在 2026-10-24，开发
+第 13 天，勾勒出的点子：不用 U 盘，而是在磁盘上保留一个 FAT32 分区，把源
+ISO 解压到那里的一个目录（FAT32 的 4 GiB 单文件上限决定了不能直接放文件），
+然后按 Ventoy 和 Rufus 的方式启动，带一个分区级的启动菜单。规划的语言组合：
+Rust、C、C++、shell、HTML/CSS、Makefile。一个顺带的加分：FAT32 分区能被
+更多固件直接启动，比 ext4 loopback 广泛得多，因为每个 UEFI 都能读 FAT32。
+目前什么都没有 —— 没有设计，没有仓库，没有一行代码 —— 它也不改变
+camareLOL 本身的任何东西。
+
 ## 有意推迟
 
 以下这些被单独点名，因为它们的缺失看起来像疏忽，其实不是。

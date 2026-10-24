@@ -49,6 +49,26 @@
 > `reuse_esp=true, bootloader=grub` từ survey thật → **preview** → bắt gõ
 > `EXECUTE` → cài 12 pha. Nó **không bao giờ** đụng `/dev/nvme*`, không
 > format ESP, không có `--zap-all`.
+>
+> **KẾT QUẢ 24 Oct 2026 — MÁY THẬT CÀI THÀNH CÔNG.** Script chạy trong
+> live ISO trên đĩa 119 GiB thật: ESP 1 GiB (sda2) + root EndeavourOS
+> 69 GiB (sda3) giữ nguyên `format=false`, `camarelol-root` ~49 GiB vào
+> khe trống của sda1 đã xóa (planner nhận diện khe đầu đĩa qua
+> `largest_aligned_gap`). Reboot → F11 → `camareLOL` → GRUB từ
+> `EFI/CAMARELOL/` trên ESP dùng lại → hệ mới tới màn hình đăng nhập
+> desktop ✓. Việc dọn rác còn lại (entry `archtest` + `Boot0001`, ISO 1.6G
+> trong Storage, `menuentry` ISO trong `/etc/grub.d/40_custom` của hệ cũ)
+> chờ mục dọn dẹp ở dưới.
+>
+> **Kinh nghiệm thực chiến từ lần cài này:** script sinh profile dùng biến
+> `$HOSTNAME` — bash luôn tự gán biến này bằng hostname hiện hành nên trên
+> live ISO nó dính "archiso"; đường scripted không đặt mật khẩu và không
+> tạo user (root khóa `*`, `users=[]`). Cả ba sửa được hậu kỳ từ hệ đang
+> chạy: mount sda4 + bind dev/proc/sys/run + chroot — hostname ghi thẳng,
+> useradd + sudoers.d/10-wheel, mật khẩu để người dùng tự gõ
+> (`sudo chroot <mnt> passwd root|user`). Nếu chạy lại script lần sau:
+> tải file về rồi `bash file.sh` (đừng `curl | bash` — stdin của script
+> và `read` cùng nhắm một chỗ), và đặt mật khẩu/user ngay sau khi cài.
 
 > Mục tiêu: có một hệ Arch thật để boot thử, mà **không** mất EndeavourOS,
 > không mất Storage và không phải chia lại ổ NVMe.
@@ -95,7 +115,7 @@ Kết quả cần thấy: 12/12 phase completed, reboot vào được greetd/Hyp
 
 ---
 
-## Cách B2 — dual-boot máy thật bằng chính camareLOL 0.1.20 (khuyến nghị)
+## Cách B2 — dual-boot máy thật bằng chính camareLOL 0.1.22 (khuyến nghị)
 
 Chính là đường mà VM `camarelol-dualboot` đã chứng minh (run 4 & 7), giờ chạy
 trên đĩa của máy này: camareLOL giữ nguyên EndeavourOS (sda3) và dùng lại
@@ -147,9 +167,9 @@ sudo dd if="$HOME/Tài liệu/carameLOL/.test/archlinux-x86_64.iso" \
 iwctl                       # Wi-Fi nếu không có dây
 ping -c1 archlinux.org      # mạng phải sống, pacstrap cần internet
 
-# Tải bản phát hành mới nhất (0.1.20)
+# Tải bản phát hành mới nhất (0.1.22)
 curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh | bash
-./camarelol -V              # phải in "camareLOL 0.1.20 (tag v0.1.20…)"
+./camarelol -V              # phải in "camareLOL 0.1.22 (tag v0.1.22…)"
 
 # Xóa sda1, mở khe cho planner
 sgdisk --delete=1 /dev/sda
@@ -185,7 +205,7 @@ cho thấy đúng ba điều VM từng chứng minh:
 
 Khớp kế hoạch thì mở TUI thật (`./camarelol`), chọn cùng mode 3, rồi
 **Execute** — installer sẽ hỏi xác nhận destructive theo thường lệ. 12 pha
-phải hoàn tất, như run 7 trong VM. 0.1.20 thêm cho bạn hai thứ VM đã dựng:
+phải hoàn tất, như run 7 trong VM. 0.1.22 thêm cho bạn hai thứ VM đã dựng:
 tệp `/etc/NetworkManager/conf.d/00-camarelol.conf` (`dhcp=internal`), và việc
 dọn entry firmware `Boot####` chết (trỏ vào loader không còn trên ESP của
 chính ta — như entry `archtest` cũ nếu còn).
@@ -198,7 +218,7 @@ reboot
 
 Lần này không cần F11 nữa: firmware menu sẽ có entry GRUB của camareLOL
 (xem ở `Boot0004`/`Boot####` nào mới xuất hiện bằng `efibootmgr` từ live
-ISO — 0.1.20 chỉ xoá entry trỏ vào tệp loader không còn, entry còn sống
+ISO — 0.1.22 chỉ xoá entry trỏ vào tệp loader không còn, entry còn sống
 đều được giữ).
 
 Boot được là tới GRUB. Menu GRUB phải có ít nhất hai entry: hệ camareLOL
@@ -213,7 +233,7 @@ Sau khi vào hệ mới, kiểm tra nhanh:
   `/etc/NetworkManager/conf.d/00-camarelol.conf`;
 - `zramctl` — zram0 thật (theo cấu hình chọn khi cài);
 - `efibootmgr -v` — đúng những entry còn sống; entry cũ trỏ file không có
-  đã bị 0.1.20 dọn;
+  đã bị 0.1.22 dọn;
 - menu GRUB chứa EndeavorOS → chọn thử, máy quay lại EndeavourOS nguyên vẹn.
 
 ---
