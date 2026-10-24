@@ -43,16 +43,26 @@ done
 BODY="camareLOL $VERSION.
 
 Highlights:
-- The Storage devices screen now expands the selected disk into its real
-  partition list — kernel name, size, filesystem, label, OS hints (ESP/
-  recovery/swap…) and the mountpoint. Before this fix partitions only
-  appeared on the layout screen, after a plan already existed; deciding
-  between whole-disk and dual-boot without seeing the table is how
-  mistakes happen. Rendering covered by 4 screen tests that fabricate
-  exactly the real-world shape (ESP + Linux root beside free space).
-- Everything 0.1.20 delivered (dual-boot keep-everything planner,
-  stale EFI boot entry cleanup, NetworkManager dhcp=internal, GPU model
-  parsing, paru-bin) carries over.
+- Real-machine dual-boot feedback, 23-24 Oct 2026:
+
+  - the Storage devices screen now shows the UNPARTITIONED GAP next to the
+    partition list — the gap-finding logic inside the dual-boot planner is
+    now a shared API (largest_aligned_gap / GapScan), so the planner and
+    the screen read the disk with the same eyes. A deleted first partition
+    leaves a gap at the very START of the disk and the scan finds it
+    exactly there (test reproduces that shape).
+  - selecting the Dual-boot disk mode now switches the bootloader to GRUB
+    automatically, with a message explaining why — the planner's refusal
+    ("systemd-boot cannot share a Windows ESP") arrives as prevention
+    instead of an error three screens later. The DiskMode screen also
+    labels what mode 3 keeps.
+  - scripts/dual-boot-auto.sh — one-command real-machine install from a
+    live ISO: layout gates (GPT + small ESP + big ext4 root, nothing
+    mounted), typed ERASE-/EXECUTE confirmations, nothing ever touches
+    /dev/nvme*, the ESP, or sgdisk --zap-all.
+- Everything 0.1.21 delivered (expanded partition list on the Storage
+  screen) and 0.1.20 (keep-everything dual-boot planner, stale EFI entry
+  cleanup, NetworkManager dhcp=internal) carries over.
 
 Assets are checksummed in SHA256SUMS."
 
