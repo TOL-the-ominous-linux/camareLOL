@@ -57,8 +57,9 @@ echo "internet reachable."
 # ---------------------------------------------------------------- 3. fetch the installer
 bold "== step 3/6: downloading camareLOL (latest release) =="
 curl -fsSL "$BOOTSTRAP_URL" -o /root/camarelol.sh
-bash /root/camarelol.sh          # installs the binary at /root/camarelol and prints it
-VERSION="$(/root/camarelol -V | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)"
+bash /root/camarelol.sh          # installs to /usr/local/bin (PATH) and runs --self-test
+command -v camarelol >/dev/null 2>&1 || die "camarelol.sh finished but the binary is not on PATH"
+VERSION="$(camarelol --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)"
 [ -n "$VERSION" ] || die "could not read the binary version"
 if [ "$(printf '%s\n%s\n' "$MIN_VERSION" "$VERSION" | sort -V | head -1)" != "$MIN_VERSION" ]; then
     die "downloaded build $VERSION is too old — the partition/gap display and GRUB auto-switch landed in $MIN_VERSION"
@@ -67,7 +68,7 @@ echo "binary ok: $VERSION"
 
 # ---------------------------------------------------------------- 4. survey + safety gates
 bold "== step 4/6: surveying $TARGET_DISK =="
-/root/camarelol --scan > /tmp/camarelol-survey.json
+camarelol --scan > /tmp/camarelol-survey.json
 
 sgdisk -p "$TARGET_DISK" || die "$TARGET_DISK is not GPT — dual-boot keeps existing partitions, so an MBR disk is out of scope"
 
@@ -178,7 +179,7 @@ PY
 PROFILE=/tmp/camarelol-dualboot.toml
 
 bold "== preview: NOTHING is written — read the plan below =="
-/root/camarelol --scripted "$PROFILE" --preview || die "the dual-boot planner REFUSED this plan — nothing was written; read the message above"
+camarelol --scripted "$PROFILE" --preview || die "the dual-boot planner REFUSED this plan — nothing was written; read the message above"
 
 printf 'You have read the plan above. Type EXECUTE to install for real: '
 read -r ans
@@ -186,7 +187,7 @@ read -r ans
 
 # ---------------------------------------------------------------- 6. install
 bold "== step 6/6: installing (12 phases; a few minutes; be patient) =="
-if /root/camarelol --scripted "$PROFILE" --allow-destructive --execute; then
+if camarelol --scripted "$PROFILE" --allow-destructive --execute; then
     bold "DONE — 12 phases completed."
     cat <<'EOT'
 Your ESP and your existing Linux root were never formatted (the plan said
