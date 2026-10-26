@@ -60,7 +60,7 @@ camareLOL 不会自我更新。没有更新器，没有索引地址，代码里�
 这是一个决定，不是一个没做完的功能。本程序会擦除磁盘；一个职责就是
 替换自身的组件，是从被攻破的服务器到数据被擦除之间最短的一条路。
 没有 `pacman` 软件包，也没有 AUR 软件包。重新运行上面那一行命令即可，
-它会解析最新发布并校验：
+它会解析最新的**稳定版**并校验：
 
 ```console
 $ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh | bash

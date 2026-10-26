@@ -60,7 +60,8 @@ và trong binary không có đường nào thay chính nó.
 Đó là quyết định, không phải phần chưa làm. Chương trình này xoá ổ đĩa; một
 thành phần việc của nó là thay thế chính nó là con đường ngắn nhất từ máy
 chủ bị chiếm tới dữ liệu bị xoá. Không có gói `pacman` và cũng không có gói
-AUR. Chạy lại dòng một dòng ở trên; nó tự lấy bản mới nhất rồi kiểm tra:
+AUR. Chạy lại dòng một dòng ở trên; nó tự lấy bản **ổn định** mới nhất rồi
+kiểm tra:
 
 ```console
 $ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh | bash

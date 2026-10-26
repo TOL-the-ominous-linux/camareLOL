@@ -60,7 +60,8 @@ code path in the binary that replaces it.
 That is a decision, not an unfinished feature. This program erases disks; a
 component whose job is to replace itself is the shortest path from a
 compromised server to erased data. There is no `pacman` package and no AUR
-package. Re-run the one-liner; it picks the newest release and verifies it:
+package. Re-run the one-liner; it picks the newest **stable** release and
+verifies it:
 
 ```console
 $ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh | bash
