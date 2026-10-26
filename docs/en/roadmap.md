@@ -4,6 +4,10 @@
 
 What is built, what is not, and — where it is not — why.
 
+**Current release:** `1.0.0`, the first beta (26 October 2026). It packages the
+0.1.22 installer code with the roadmap audit and documentation overhaul; the
+npm `latest` tag remains on 0.1.22 until the beta is promoted.
+
 ## Stage 1 — MVP
 
 Complete.
@@ -116,8 +120,9 @@ filesystem kind, and root-before-ESP mount order.
 - [x] npm package `@wenker-ai/camarelo` — every pack downloads the binary from
       the GitHub release of exactly the version in `package.json`, verifies it
       against `SHA256SUMS`, requires `--version` to agree, runs the package
-      tests, and only then packs; publish is a separate explicit step. 0.1.18
-      is the published latest.
+      tests, and only then packs; publish is a separate explicit step. 1.0.0
+      is the first beta under the `beta` dist-tag; `latest` remains 0.1.22
+      until promotion.
 
 ## Stage 6 — Dual-boot beside an existing OS
 

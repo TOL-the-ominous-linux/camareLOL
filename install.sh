@@ -37,27 +37,49 @@ ensure_cargo() {
 
 install_binary() {
     need_root
-    local arch tmp
+    local arch tmp base version tag expected actual name
     case "$(uname -m)" in
         x86_64|amd64) arch="x86_64" ;;
         *) die "no prebuilt binary for $(uname -m); build from source instead" ;;
     esac
-    # Newer releases publish a platform-specific asset, older ones a plain
-    # `camarelol`. Try both so this keeps working across versions.
-    tmp=$(mktemp)
-    local url
-    for url in "$REPO/releases/latest/download/camarelol-linux-$arch" \
-               "$REPO/releases/latest/download/camarelol"; do
-        info "downloading $(basename "$url")"
-        if curl -sSfL --retry 2 "$url" -o "$tmp"; then
+    version="${CAMARELOL_VERSION:-}"
+    if [ -n "$version" ]; then
+        tag="v${version#v}"
+        base="$REPO/releases/download/$tag"
+        info "downloading release $tag"
+    else
+        base="$REPO/releases/latest/download"
+        info "downloading the newest stable release"
+    fi
+    tmp=$(mktemp -d)
+    trap 'rm -rf "$tmp"' RETURN
+
+    # The checksum is not optional. Without it, this helper would install
+    # whatever a proxy or a broken CDN returned under the right file name.
+    curl -fsSL --retry 2 "$base/SHA256SUMS" -o "$tmp/SHA256SUMS" \
+        || die "could not download $base/SHA256SUMS"
+    expected="$(awk '$2 == "camarelol" || $2 == "*camarelol" { print $1 }' "$tmp/SHA256SUMS")"
+    [ -n "$expected" ] || die "SHA256SUMS has no line for camarelol"
+
+    for name in "camarelol-linux-$arch" "camarelol"; do
+        info "downloading $name"
+        if curl -fsSL --retry 2 "$base/$name" -o "$tmp/camarelol"; then
             break
         fi
-        tmp=$(mktemp)
     done
-    [ -s "$tmp" ] || { rm -f "$tmp"; die "no release binary found at $REPO/releases"; }
+    [ -s "$tmp/camarelol" ] || die "no release binary found at $REPO/releases"
+
+    actual="$(sha256sum "$tmp/camarelol" | awk '{print $1}')"
+    [ "$actual" = "$expected" ] \
+        || die "SHA-256 mismatch for camarelol:
+  downloaded: $actual
+  published:  $expected
+Refusing to install an unverified binary."
+
     info "installing to $BIN"
-    install -Dm755 "$tmp" "$BIN"
-    rm -f "$tmp"
+    install -Dm755 "$tmp/camarelol" "$BIN"
+    rm -rf "$tmp"
+    trap - RETURN
 }
 
 build_from_source() {

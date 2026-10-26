@@ -4,6 +4,10 @@
 
 > 一个安全优先的 Arch Linux TUI 安装器，提供三种语言。
 
+**当前版本：** `1.0.0` —— 首个 beta（GitHub pre-release）。npm 的
+`latest` 标签仍指向 `0.1.22`；beta 位于 `@wenker-ai/camarelo@beta`。
+请阅读 [1.0.0 发布说明](../releases/1.0.0.md)。
+
 camareLOL 从终端安装 Arch Linux。它会检测你的硬件、提出一个布局方案、
 准确展示它即将做什么，并且只有在你输入确认短语之后才会写入磁盘。
 
@@ -23,20 +27,27 @@ camareLOL 从终端安装 Arch Linux。它会检测你的硬件、提出一个�
 
 ## 安装
 
-在 Arch 实时 ISO 中运行它——安装器就该在那里运行：
+在 Arch 实时 ISO 中运行它——安装器就该在那里运行。默认的一行命令解析最新的
+**稳定版**（0.1.22）；1.0.0 beta 需要显式选择：
 
 ```console
-$ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh | bash
+$ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh \
+    | CAMARELOL_VERSION=v1.0.0 bash
 $ camarelol --self-test      # 非破坏性检查；在真实机器上运行也安全
 $ sudo camarelol             # 打开 TUI
 ```
+
+用 `CAMARELOL_CHANNEL=beta` 代替 `CAMARELOL_VERSION` 可跟随最新的预发布版。
+两者都省略则使用稳定通道。
 
 `--self-test` 绝不会写入磁盘。请先运行它。
 
 如果你想自己下载二进制文件，请保留 `-f` 和 `-L`：
 
 ```console
-$ curl -fLO https://github.com/tamkogay9876-code/camareLOL/releases/latest/download/camarelol
+$ curl -fLO https://github.com/tamkogay9876-code/camareLOL/releases/download/v1.0.0/camarelol
+$ curl -fLO https://github.com/tamkogay9876-code/camareLOL/releases/download/v1.0.0/SHA256SUMS
+$ sha256sum -c SHA256SUMS
 ```
 
 少了 `-f`，代理返回的 404 页面会被保存成名为 `camarelol` 的文件，而 curl
@@ -96,8 +107,11 @@ $ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/
 - 因为你在菜单里选中了某块磁盘就格式化它。
 - 未经明确选择加入并以普通用户构建，就安装 AUR 软件包。
 - 调整 NTFS 大小——验收标准已写入文档，该功能被推迟。
-- 为双系统复用现有 ESP。检测与保留规则已经实现；布局界面将在第 3 阶段
-  到来。
+- 从生成的菜单项启动真实 Windows，或在 Windows 内部缩小 Windows。保留全部分区
+  的规划器、只追加的写入路径和 Windows 菜单项已在虚拟机中验证；真实 Windows
+  这一部分仍被推迟。
+- 根据解析出的型号推荐 GPU 驱动。`GpuInfo.model` 已读取并显示；按型号选择驱动
+  仍是部分实现。
 
 ## 安装器流程
 
@@ -108,8 +122,7 @@ Packages → Review (type the confirmation phrase) → Progress → Result
 ```
 
 仅用键盘操作。`↑↓` 移动，`Enter` 选择，`Space` 切换，`Tab` 跳到下一个
-字段，`Esc` 返回，`F1` 帮助，`F5` 重新扫描，`F10` 复核，`Ctrl-C` 退出，
-`u` 检查更新。
+字段，`Esc` 返回，`F1` 帮助，`F5` 重新扫描，`F10` 复核，`Ctrl-C` 退出。
 
 ## 警告
 

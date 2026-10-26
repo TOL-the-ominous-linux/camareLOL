@@ -5,10 +5,18 @@
 #   ./npm/build.sh publish [tệp-npmrc]               # pack rồi publish
 #     ví dụ: ./npm/build.sh publish "$HOME/Tài liệu/cắt cy/npmrc.txt"
 #
+# Dist-tag: đặt NPM_TAG để publish lên kênh khác `latest`, ví dụ:
+#
+#   NPM_TAG=beta ./npm/build.sh publish /path/to/npmrc.txt
+#
+# Với bản beta 1.0.0, `latest` phải giữ nguyên 0.1.22 — nếu quên NPM_TAG,
+# npm publish sẽ đẩy beta lên `latest` và mọi `npm i -g` nhận beta ngoài ý muốn.
+# Script in dist-tag trước khi publish để thấy rõ.
+#
 # Việc đầu tiên là xác định phiên bản: package.json là nguồn sự thật. Binary
 # được tải từ GitHub Releases **đúng bản đó** và kiểm SHA-256 so với tệp
 # SHA256SUMS phát hành kèm. Nếu package.json lạc sau phát hành, hai lỗi này
-# phải hiện rõ instead of lặng lẽ pack một binary sai bản.
+# phải hiện rõ thay vì lặng lẽ pack một binary sai bản.
 #
 # Thoát số khác 0 ở bất kỳ bước nào hỏng — một tarball sai binary tuyệt đối
 # không được xem là thành công.
@@ -97,11 +105,21 @@ echo "Xong: npm/$TARBALL"
 # 4. publish nếu được yêu cầu
 if [ "${1:-}" = "publish" ]; then
   NPMRC="${2:-}"
+  NPM_TAG="${NPM_TAG:-latest}"
+  echo "  dist-tag: $NPM_TAG"
+  if [ "$NPM_TAG" = "latest" ] && [ "${ALLOW_LATEST:-0}" != "1" ]; then
+    case "$VERSION" in
+      *-*) : ;; # phiên bản pre-release: npm tự nhiên thuộc kênh khác latest
+      *) fail "từ chối publish $VERSION lên 'latest'.
+    Đặt NPM_TAG=beta (hoặc kênh khác), hoặc ALLOW_LATEST=1 nếu thật sự
+    muốn thay thế bản latest đang có." ;;
+    esac
+  fi
   if [ -n "$NPMRC" ]; then
     [ -f "$NPMRC" ] || fail "không thấy tệp npmrc: $NPMRC"
-    npm publish --access public --userconfig "$NPMRC" || fail "npm publish thất bại"
+    npm publish --access public --tag "$NPM_TAG" --userconfig "$NPMRC" || fail "npm publish thất bại"
   else
     echo "  không có tệp npmrc được chỉ định — dùng ~/.npmrc nếu nó có token"
-    npm publish --access public || fail "npm publish thất bại"
+    npm publish --access public --tag "$NPM_TAG" || fail "npm publish thất bại"
   fi
 fi

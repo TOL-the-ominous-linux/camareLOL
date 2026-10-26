@@ -3,8 +3,8 @@
 #
 # WHAT THIS DOES, in plain English:
 #   1. verifies it is running as root on an Arch live ISO with internet;
-#   2. downloads the latest RELEASED camareLOL binary via the official
-#      bootstrap script;
+#   2. downloads the 1.0.0 beta binary via the official bootstrap script
+#      (beta channel; set CAMARELOL_VERSION to pin another tag);
 #   3. inspects /dev/sda and REFUSES unless the layout matches: GPT,
 #      every sda partition unmounted, one small vfat EFI System Partition
 #      (<= 2 GiB) and one ext4 Linux root (>= 40 GiB);
@@ -33,7 +33,7 @@ DISK_BASENAME="$(basename "$TARGET_DISK")"
 HOSTNAME_DEF="${HOSTNAME:-camarelol}"
 TIMEZONE_DEF="${TIMEZONE:-Asia/Ho_Chi_Minh}"
 BOOTSTRAP_URL="https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/refs/heads/main/scripts/camarelol.sh"
-MIN_VERSION="0.1.22"
+MIN_VERSION="1.0.0"
 
 bold() { printf '\033[1m%s\033[0m\n' "$*"; }
 warn() { printf '\033[1;33m%s\033[0m\n' "$*"; }
@@ -55,9 +55,12 @@ fi
 echo "internet reachable."
 
 # ---------------------------------------------------------------- 3. fetch the installer
-bold "== step 3/6: downloading camareLOL (latest release) =="
+bold "== step 3/6: downloading camareLOL $MIN_VERSION (beta channel) =="
 curl -fsSL "$BOOTSTRAP_URL" -o /root/camarelol.sh
-bash /root/camarelol.sh          # installs to /usr/local/bin (PATH) and runs --self-test
+# 1.0.0 is the first beta and is published as a GitHub pre-release, so the
+# default stable resolver would keep installing 0.1.22. Pin the beta channel;
+# CAMARELOL_VERSION can still override it for a later run.
+CAMARELOL_CHANNEL="${CAMARELOL_CHANNEL:-beta}" bash /root/camarelol.sh
 command -v camarelol >/dev/null 2>&1 || die "camarelol.sh finished but the binary is not on PATH"
 VERSION="$(camarelol --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)"
 [ -n "$VERSION" ] || die "could not read the binary version"

@@ -10,19 +10,19 @@
 
 [Tiếng Anh](README.md) · **Tiếng Việt** · [中文](docs/zh/index.md)
 
-> ## ⚠ ALPHA — đã qua nhiều bản cập nhật, vẫn còn lỗi
+> ## ⚠ BETA — bản beta đầu tiên 1.0.0
 >
-> camareLOL ở giai đoạn **demo/alpha**. Đã có 17 bản phát hành, nhưng số bản
-> **không** phản ánh độ ổn định. Những lỗi như tên gói Arch viết sai chỉ lộ
-> ra khi chạy thật trong máy ảo — và chúng đã làm hỏng cả bản cài:
+> camareLOL **1.0.0** là bản beta đầu tiên. Đợt rà soát roadmap đã xong: mỗi
+> mục hoặc đã có bằng chứng chạy thật, hoặc được ghi rõ là **một phần**, hoặc
+> bị hoãn kèm lý do. Điều đó không có nghĩa là "đã hoàn hảo" — ba mục desktop
+> vẫn còn một phần, dual-boot với Windows thật vẫn bị hoãn, và chương trình
+> này xoá ổ đĩa.
 >
-> - `greetd-tuigreeter` thay vì `greetd-tuigreet` → **Hyprland và Sway không
->   cài được**
-> - `p7zip` thay vì `7zip` → đã bị gỡ khỏi kho Arch
-> - yêu cầu cài gói `systemd-boot` không tồn tại → **mọi** bản cài chọn
->   systemd-boot đều chết ở `pacstrap`
->
-> Cả ba đều qua được mọi unit test. Chúng chỉ chết trong VirtualBox.
+> Các bản trước đã chứng minh vì sao phải cần bằng chứng: ba tên gói Arch viết
+> sai đã qua **toàn bộ** unit test và chỉ chết trong VirtualBox —
+> `greetd-tuigreeter`, `p7zip`, và một gói tên `systemd-boot` không tồn tại.
+> Giờ đã có test canh đúng những lỗi đó, và harness VM kiểm tra đĩa đã cài
+> chứ không kiểm tra menu.
 >
 > **Vì vậy:**
 >
@@ -30,10 +30,12 @@
 > 2. Chạy từ **Arch live ISO**, không phải trên máy bạn đang dùng.
 > 3. Sao lưu mọi thứ trước khi cài bất cứ thứ gì.
 >
-> Số phiên bản giữ dạng `0.1.x` là có chủ ý. `0.x` theo SemVer nghĩa là
-> "chưa ổn định". Đặt thành `5.6` sẽ khiến người khác tin rằng đây là phần
-> mềm đã bảo trì lâu và chạy ổn định — một thông đoạp sai, và nguy hiểm với
-> một công cụ xoá ổ đĩa.
+> `1.0.0` là beta, không phải lời hứa ổn định. Thẻ npm `latest` vẫn là
+> **0.1.22**; bản beta nằm ở dist-tag `beta` và là GitHub pre-release. Hãy
+> cài có chủ ý — xem [Cài 1.0.0 beta](#cài-100-beta).
+>
+> Ghi chú phát hành đầy đủ, gồm bằng chứng và giới hạn đã biết:
+> [docs/releases/1.0.0.md](docs/releases/1.0.0.md).
 
 camareLOL cài Arch Linux từ terminal mà không bắt bạn gõ hàng chục lệnh
 shell. Nó dò phần cứng, đề xuất cách phân vùng an toàn, cho bạn xem chính
@@ -56,6 +58,7 @@ Viết bằng ba ngôn ngữ. Mỗi trang có bảng trỏ sang hai ngôn ngữ 
 | Chủ đề | Tiếng Việt | English | 中文 |
 |---|---|---|---|
 | Tổng quan | [index](docs/vi/index.md) | [EN](docs/en/index.md) | [ZH](docs/zh/index.md) |
+| Ghi chú 1.0.0 | [releases/1.0.0](docs/releases/1.0.0.md) | — | — |
 | Ba thành phần | [architecture](docs/vi/architecture.md) | [EN](docs/en/architecture.md) | [ZH](docs/zh/architecture.md) |
 | Giao thức IPC | [ipc-protocol](docs/vi/ipc-protocol.md) | [EN](docs/en/ipc-protocol.md) | [ZH](docs/zh/ipc-protocol.md) |
 | Được kiểm tra gì | [testing](docs/vi/testing.md) | [EN](docs/en/testing.md) | [ZH](docs/zh/testing.md) |
@@ -64,6 +67,27 @@ Viết bằng ba ngôn ngữ. Mỗi trang có bảng trỏ sang hai ngôn ngữ 
 | Chưa làm gì | [roadmap](docs/vi/roadmap.md) | [EN](docs/en/roadmap.md) | [ZH](docs/zh/roadmap.md) |
 
 Bắt đầu với [tổng quan](docs/vi/index.md).
+
+## Cài 1.0.0 beta
+
+Bản beta là tuỳ chọn. Lệnh một dòng mặc định vẫn lấy bản **ổn định** mới nhất
+(0.1.22). Muốn cài beta, ghim tag hoặc chọn kênh beta:
+
+```console
+$ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh \
+    | CAMARELOL_VERSION=v1.0.0 bash
+```
+
+```console
+$ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh \
+    | CAMARELOL_CHANNEL=beta bash
+```
+
+Qua npm:
+
+```console
+$ npm install -g @wenker-ai/camarelo@beta
+```
 
 ## Cài đặt
 
@@ -106,7 +130,8 @@ $ sudo ./camarelol             # mở TUI
 
 ```console
 $ sudo pacman -S --needed nodejs npm curl
-$ npm install -g @wenker-ai/camarelo
+$ npm install -g @wenker-ai/camarelo          # latest ổn định: 0.1.22
+$ npm install -g @wenker-ai/camarelo@beta     # beta 1.0.0
 ```
 
 Trên **archiso** (live ISO) cơ sở dữ liệu pacman rỗng — dùng
@@ -160,7 +185,10 @@ $ sudo camarelol --scripted <profile.toml> --allow-destructive --execute
   Microsoft-reserved, các mount của hệ đang chạy.
 - Lên kế hoạch GPT/MBR: ESP, BIOS boot, `/`, `/home`, swap — chọn ext4, btrfs
   hoặc xfs, và kiểm tra theo firmware.
-- Phát hiện Windows và **không chạm vào nó**.
+- Phát hiện Windows và **không chạm vào nó**. Dual-boot kiểu giữ mọi phân vùng
+  đã chạy thật: phân vùng cũ vẫn `format=false`, ESP được dùng lại, phân vùng
+  mới được thêm vào khe trống; đã xác nhận cài và boot lần đầu trên máy thật
+  ngày 24/10/2026.
 - Cài Arch tối thiểu: pacstrap, fstab, bootloader (GRUB/systemd-boot), locale,
   keymap, timezone, hostname, user, sudo, service, initramfs.
 - Cổng an toàn: khóa sẵn. Cần `--allow-destructive` + cụm xác nhận.
@@ -172,7 +200,12 @@ $ sudo camarelol --scripted <profile.toml> --allow-destructive --execute
 - Xoá đĩa chỉ vì bạn chọn nó trong menu.
 - Cài gói AUR khi chưa có đồng ý rõ ràng và một bản build bởi người dùng thường.
 - Thu nhỏ NTFS — tiêu chí chấp nhận đã viết, tính năng để dành.
-- Dùng lại ESP có sẵn cho dual-boot.
+- Boot Windows thật từ entry menu do camareLOL sinh ra, hoặc thu nhỏ Windows từ
+  bên trong Windows. Phần giữ nguyên phân vùng và entry menu đã được chứng
+  minh trong VM; phần Windows thật vẫn bị hoãn.
+- Gợi ý driver GPU theo model. Model đã được đọc và hiển thị; phần chọn driver
+  theo model vẫn còn một phần.
+- Chia phân vùng thủ công, LUKS, và bố cục Btrfs subvolume — chưa có mã.
 
 ## Kiến trúc
 

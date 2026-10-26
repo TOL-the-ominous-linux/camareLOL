@@ -18,6 +18,10 @@ SHOTS="${SHOTS:-/tmp/opencode/vm-shots}"
 # Mặc định là bản phát hành mới nhất, không phải một số bản ghim cứng. Ghim v0.1.0
 # ở đây khiến bài kiểm tra âm thầm dùng bản cũ nhất mà vẫn báo là đang kiểm tra
 # bản mới — và nó cứ thế vẫn xanh.
+#
+# Kiểm bản beta 1.0.0 (pre-release, không nằm trong /releases/latest):
+#   SERIES=https://github.com/tamkogay9876-code/camareLOL/releases/download/v1.0.0 \
+#       ./scripts/vm-release-test.sh all
 SERIES="${SERIES:-https://github.com/tamkogay9876-code/camareLOL/releases/latest/download}"
 mkdir -p "$SHOTS"
 
@@ -81,7 +85,7 @@ cmd_boot() {
     shot "04-smoke"
 
     say "acceptance scenarios from the Python tool"
-    type_line "camarelol --self-test > /tmp/selftest.log 2>&1; echo rc=\$?; tail -2 /tmp/selftest.log" 12
+    type_line "/root/camarelol --self-test > /tmp/selftest.log 2>&1; echo rc=\$?; tail -2 /tmp/selftest.log" 12
     shot "05-selftest"
 }
 

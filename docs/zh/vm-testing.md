@@ -76,7 +76,9 @@ $ VBoxManage startvm lol            # 不要使用无头模式——你需要看
 ```console
 # mount -o remount,rw /          # a live ISO usually mounts read-only
 # pacman -Sy --needed curl
-# curl -fLO https://github.com/tamkogay9876-code/camareLOL/releases/latest/download/camarelol
+# curl -fLO https://github.com/tamkogay9876-code/camareLOL/releases/download/v1.0.0/camarelol
+# curl -fLO https://github.com/tamkogay9876-code/camareLOL/releases/download/v1.0.0/SHA256SUMS
+# sha256sum -c SHA256SUMS
 # chmod +x camarelol
 # ./camarelol --self-test
 # sudo ./camarelol --allow-destructive    # add --execute to actually write

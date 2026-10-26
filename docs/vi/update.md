@@ -13,10 +13,9 @@ thay chính nó.
 
 Đây là quyết định, không phải phần chưa làm. camareLOL xoá ổ đĩa. Một thành
 phần việc của nó là thay thế chính nó là con đường ngắn nhất từ máy chủ bị
-chiếm tới dữ liệu bị xoá — kiểm tra chữ ký bảo vệ bạn khỏi một tệp *tải về*
-bị sửa, chứ không bảo vệ khỏi thứ khác. Điểm tin cậy lại là một máy chủ mà
-đúng theo định nghĩa, kẻ tấn công cũng tới được.
-
+chiếm tới dữ liệu bị xoá — đối chiếu SHA-256 bảo vệ bạn khỏi một tệp *tải về*
+bị hỏng hoặc bị thay, chứ không bảo vệ khỏi thứ khác. Điểm tin cậy lại là một
+máy chủ mà đúng theo định nghĩa, kẻ tấn công cũng tới được.
 Cơ chế đứng bên dưới cũng là một gánh nặng. Trước khi bị bỏ, mỗi bản phát
 hành đi kèm một khoá ký, một chỉ mục cập nhật, một danh sách mirror và hai máy
 chủ mirror. Chuỗi đó hỏng bốn lần trong một ngày. Kiểu hỏng luôn giống nhau: một
@@ -30,10 +29,23 @@ bản camareLOL ngoài đời đều báo "bạn đang dùng bản mới nhất"
 ## Thay vào đó, cập nhật thế này
 
 camareLOL không có gói cho `pacman`, và cũng không có gói AUR. Chạy lại
-dòng lệnh một dòng ở trên; nó tự lấy bản mới nhất rồi kiểm tra:
+dòng lệnh một dòng ở trên; nó tự lấy bản **ổn định** mới nhất rồi kiểm tra:
 
 ```console
 $ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh | bash
+```
+
+Bản 1.0.0 là beta, phát hành dưới dạng GitHub pre-release. Ghim tag hoặc chọn
+kênh beta:
+
+```console
+$ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh \
+    | CAMARELOL_VERSION=v1.0.0 bash
+```
+
+```console
+$ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh \
+    | CAMARELOL_CHANNEL=beta bash
 ```
 
 ### Tải tay
@@ -45,14 +57,17 @@ binary:
 ```console
 $ sudo pacman -S wget                 # nếu máy chưa có
 $ sudo wget -O /usr/local/bin/camarelol \
-    https://github.com/tamkogay9876-code/camareLOL/releases/latest/download/camarelol
+    https://github.com/tamkogay9876-code/camareLOL/releases/download/v1.0.0/camarelol
+$ sudo wget -O /tmp/SHA256SUMS \
+    https://github.com/tamkogay9876-code/camareLOL/releases/download/v1.0.0/SHA256SUMS
+$ cd /usr/local/bin && grep ' camarelol$' /tmp/SHA256SUMS | sha256sum -c -
 $ sudo chmod +x /usr/local/bin/camarelol
 $ camarelol --version                  # xem mình đang có bản nào
 ```
 
-Không có chữ ký để xác minh, vì cũng không có gì để xác minh. `--version` nói
-cho bạn biết đang chạy bản phát hành nào, và đó là toàn bộ câu chuyện về niềm
-tin.
+Bản băm phát hiện tệp bị hỏng hoặc bị thay khi tải. Nó không phải chữ ký:
+tệp `SHA256SUMS` nằm cạnh binary, nên một máy chủ bị chiếm có thể thay cả hai.
+`--version` cho bạn biết đang chạy bản phát hành nào.
 
 ### Nếu máy chỉ có Wi-Fi
 
@@ -216,15 +231,15 @@ này không thể bỏ sót nó.
 
 ```console
 $ camarelol --version
-camareLOL 0.1.12 (tag v0.1.12, commit abc1234)
+camareLOL 1.0.0 (tag v1.0.0, commit abc1234)
 ```
 
 Ba phần, và chúng nên khớp nhau:
 
 | Phần | Ý nghĩa |
 |---|---|
-| `0.1.12` | bản phát hành binary được build từ |
-| `tag v0.1.12` | thẻ git, cũng là tên bản phát hành |
+| `1.0.0` | bản phát hành binary được build từ |
+| `tag v1.0.0` | thẻ git, cũng là tên bản phát hành |
 | `commit abc1234` | đúng commit đó |
 
 Nếu nó ghi `[built from a dirty working tree]`, binary đó được biên dịch từ thay

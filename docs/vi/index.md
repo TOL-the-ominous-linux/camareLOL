@@ -3,6 +3,10 @@
 
 > Trình cài đặt TUI cho Arch Linux, ưu tiên an toàn, hỗ trợ ba ngôn ngữ.
 
+**Bản hiện tại:** `1.0.0` — beta đầu tiên (GitHub pre-release). Thẻ npm
+`latest` vẫn là `0.1.22`; bản beta là `@wenker-ai/camarelo@beta`.
+Đọc [ghi chú phát hành 1.0.0](../releases/1.0.0.md).
+
 camareLOL cài Arch Linux từ terminal. Nó phát hiện phần cứng của bạn, đề xuất
 một cách phân vùng, cho bạn xem chính xác nó sắp làm gì, và chỉ ghi vào ổ đĩa
 sau khi bạn gõ xong cụm từ xác nhận.
@@ -23,20 +27,27 @@ Bản thân trình cài đặt nói tiếng Việt, tiếng Anh và tiếng Trun
 
 ## Cài đặt
 
-Chạy nó từ ISO sống của Arch — đó là nơi một trình cài đặt thuộc về:
+Chạy nó từ ISO sống của Arch — đó là nơi một trình cài đặt thuộc về. Lệnh một
+dòng mặc định lấy bản **ổn định** mới nhất (0.1.22); beta 1.0.0 là tuỳ chọn:
 
 ```console
-$ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh | bash
+$ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh \
+    | CAMARELOL_VERSION=v1.0.0 bash
 $ camarelol --self-test      # kiểm không phá huỷ; an toàn trên máy thật
 $ sudo camarelol             # mở TUI
 ```
+
+Dùng `CAMARELOL_CHANNEL=beta` thay cho `CAMARELOL_VERSION` để theo bản
+pre-release mới nhất. Bỏ cả hai để dùng kênh ổn định.
 
 `--self-test` không bao giờ ghi vào ổ đĩa. Hãy chạy nó trước.
 
 Nếu bạn muốn tự tải binary, nhớ giữ `-f` và `-L`:
 
 ```console
-$ curl -fLO https://github.com/tamkogay9876-code/camareLOL/releases/latest/download/camarelol
+$ curl -fLO https://github.com/tamkogay9876-code/camareLOL/releases/download/v1.0.0/camarelol
+$ curl -fLO https://github.com/tamkogay9876-code/camareLOL/releases/download/v1.0.0/SHA256SUMS
+$ sha256sum -c SHA256SUMS
 ```
 
 Bỏ `-f` thì một proxy trả trang 404 vẫn được lưu thành tệp tên `camarelol` và
@@ -103,8 +114,11 @@ bằng tay.
 - Cài gói AUR khi chưa có đồng ý rõ ràng và một bản build bởi người dùng thường.
 - Thu nhỏ phân vùng NTFS — tiêu chí nghiệm thu đã được ghi, nhưng tính năng bị
   hoãn lại.
-- Dùng lại một ESP sẵn có cho dual-boot. Quy tắc phát hiện và giữ nguyên đã
-  được hiện thực; giao diện bố trí phân vùng sẽ đến ở Stage 3.
+- Boot Windows thật từ entry menu do camareLOL sinh ra, hoặc thu nhỏ Windows từ
+  bên trong Windows. Planner giữ mọi phân vùng, đường ghi chỉ thêm phân vùng,
+  và entry menu Windows đã được chứng minh trong VM; phần Windows thật bị hoãn.
+- Gợi ý driver GPU theo model. `GpuInfo.model` đã được đọc và hiển thị; phần
+  chọn driver theo model vẫn còn một phần.
 
 ## Luồng trình cài đặt
 
@@ -116,7 +130,7 @@ Packages → Review (type the confirmation phrase) → Progress → Result
 
 Chỉ dùng bàn phím. `↑↓` di chuyển, `Enter` chọn, `Space` bật/tắt, `Tab` sang
 ô tiếp theo, `Esc` quay lại, `F1` trợ giúp, `F5` quét lại, `F10` xem lại,
-`Ctrl-C` thoát, `u` kiểm tra cập nhật.
+`Ctrl-C` thoát.
 
 ## Cảnh báo
 

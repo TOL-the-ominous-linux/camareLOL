@@ -11,9 +11,9 @@ camareLOL 不会自我更新。
 没有 `--update` 选项。没有索引地址。代码里也没有任何替换自身的路径。
 
 这是一个决定，不是一个没做完的功能。camareLOL 会擦除磁盘。一个职责就是替换
-自身的组件，是从被攻破的服务器到数据被擦除之间最短的一条路——签名校验能挡住
-被篡改的*下载文件*，但挡不住别的。而信任锚点本身就是一个按定义可被攻击者
-访问的服务器。
+自身的组件，是从被攻破的服务器到数据被擦除之间最短的一条路——SHA-256
+校验能挡住损坏或被替换的*下载文件*，但挡不住别的。而信任锚点本身就是一个
+按定义可被攻击者访问的服务器。
 
 它底下的机制同样是负担。在移除之前，每次发布都要附带一个签名密钥、一个更新
 索引、一份镜像列表和两台镜像主机。这条链条一天之内断了四次。故障形态每次都
@@ -27,10 +27,22 @@ camareLOL 都报告"你已经是最新版本"。
 ## 改用这些方式更新
 
 camareLOL 没有 `pacman` 软件包，也没有 AUR 软件包。重新运行上面那一行命令即可，
-它会解析最新发布并校验：
+它会解析最新的**稳定版**并校验：
 
 ```console
 $ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh | bash
+```
+
+1.0.0 是 beta，以 GitHub pre-release 发布。固定 tag 或选择 beta 通道：
+
+```console
+$ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh \
+    | CAMARELOL_VERSION=v1.0.0 bash
+```
+
+```console
+$ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh \
+    | CAMARELOL_CHANNEL=beta bash
 ```
 
 ### 手动下载
@@ -41,13 +53,17 @@ $ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/
 ```console
 $ sudo pacman -S wget                 # 如果还没有的话
 $ sudo wget -O /usr/local/bin/camarelol \
-    https://github.com/tamkogay9876-code/camareLOL/releases/latest/download/camarelol
+    https://github.com/tamkogay9876-code/camareLOL/releases/download/v1.0.0/camarelol
+$ sudo wget -O /tmp/SHA256SUMS \
+    https://github.com/tamkogay9876-code/camareLOL/releases/download/v1.0.0/SHA256SUMS
+$ cd /usr/local/bin && grep ' camarelol$' /tmp/SHA256SUMS | sha256sum -c -
 $ sudo chmod +x /usr/local/bin/camarelol
 $ camarelol --version                  # 看看现在装的是哪一版
 ```
 
-没有签名需要校验，因为也没有东西可校验。`--version` 告诉你正在运行哪个发布
-版本，这就是信任问题的全部。
+校验和可以发现下载过程中损坏或被替换的文件。它不是签名：`SHA256SUMS`
+与二进制文件放在同一位置，被攻破的服务器可以同时替换两者。
+`--version` 告诉你正在运行哪个发布版本。
 
 ### 如果机器只有 Wi-Fi
 
@@ -197,15 +213,15 @@ $ zramctl
 
 ```console
 $ camarelol --version
-camareLOL 0.1.12 (tag v0.1.12, commit abc1234)
+camareLOL 1.0.0 (tag v1.0.0, commit abc1234)
 ```
 
 三部分，彼此应该一致：
 
 | 部分 | 含义 |
 |---|---|
-| `0.1.12` | 这个二进制文件是从哪个发布版本构建的 |
-| `tag v0.1.12` | git 标签，也就是发布版本的名称 |
+| `1.0.0` | 这个二进制文件是从哪个发布版本构建的 |
+| `tag v1.0.0` | git 标签，也就是发布版本的名称 |
 | `commit abc1234` | 具体是哪个提交 |
 
 如果它显示 `[built from a dirty working tree]`，说明这个二进制文件是从未提交

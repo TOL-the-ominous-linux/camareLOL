@@ -2,6 +2,10 @@
 
 > A safety-first TUI installer for Arch Linux, in three languages.
 
+**Current release:** `1.0.0` — first beta (GitHub pre-release). The npm
+`latest` tag deliberately stays on `0.1.22`; the beta is `@wenker-ai/camarelo@beta`.
+Read the [1.0.0 release notes](../releases/1.0.0.md).
+
 camareLOL installs Arch Linux from the terminal. It detects your hardware,
 proposes a layout, shows you exactly what it is about to do, and only writes to
 a disk after you type a confirmation phrase.
@@ -22,20 +26,28 @@ The installer itself speaks Vietnamese, English and Simplified Chinese (`--lang 
 
 ## Install
 
-Run it from the Arch live ISO, which is where an installer belongs:
+Run it from the Arch live ISO, which is where an installer belongs. The default
+one-liner resolves the newest **stable** release (0.1.22); the 1.0.0 beta is
+opt-in:
 
 ```console
-$ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh | bash
+$ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh \
+    | CAMARELOL_VERSION=v1.0.0 bash
 $ camarelol --self-test      # non-destructive checks; safe on a real machine
 $ sudo camarelol             # the TUI
 ```
+
+Use `CAMARELOL_CHANNEL=beta` instead of `CAMARELOL_VERSION` to follow the newest
+pre-release. Omit both for the stable channel.
 
 `--self-test` never writes to a disk. Run it first.
 
 If you would rather download the binary yourself, keep `-f` and `-L`:
 
 ```console
-$ curl -fLO https://github.com/tamkogay9876-code/camareLOL/releases/latest/download/camarelol
+$ curl -fLO https://github.com/tamkogay9876-code/camareLOL/releases/download/v1.0.0/camarelol
+$ curl -fLO https://github.com/tamkogay9876-code/camareLOL/releases/download/v1.0.0/SHA256SUMS
+$ sha256sum -c SHA256SUMS
 ```
 
 Dropping `-f` lets a proxy's 404 page be saved under the name `camarelol` and
@@ -99,8 +111,11 @@ binary by hand.
 - Format a disk because you selected it in a menu.
 - Install AUR packages without an explicit opt-in and a normal-user build.
 - Resize NTFS — the acceptance criteria are documented, the feature is deferred.
-- Reuse an existing ESP for dual-boot. The detection and preservation rules are
-  implemented; the layout interface comes in Stage 3.
+- Boot a real Windows install from the generated menu entry, or shrink Windows
+  from inside Windows. The keep-everything planner, the append-only write path
+  and the Windows menu entry are VM-proven; the real-Windows leg is deferred.
+- Suggest a GPU driver from the parsed model. `GpuInfo.model` is read and shown;
+  a model-keyed driver choice is still partial.
 
 ## Installer flow
 
@@ -111,8 +126,7 @@ Packages → Review (type the confirmation phrase) → Progress → Result
 ```
 
 Keyboard only. `↑↓` move, `Enter` select, `Space` toggle, `Tab` next field,
-`Esc` back, `F1` help, `F5` re-scan, `F10` review, `Ctrl-C` quit, `u` check for
-updates.
+`Esc` back, `F1` help, `F5` re-scan, `F10` review, `Ctrl-C` quit.
 
 ## Warning
 

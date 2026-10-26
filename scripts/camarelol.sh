@@ -26,19 +26,26 @@
 #
 # Biến môi trường:
 #   CAMARELOL_PREFIX   nơi cài (mặc định /usr/local/bin)
-#   CAMARELOL_VERSION  ghim một bản cụ thể, ví dụ v0.1.15 (mặc định: mới nhất)
+#   CAMARELOL_VERSION  ghim một bản cụ thể, ví dụ v1.0.0 (mặc định: mới nhất)
+#   CAMARELOL_CHANNEL  stable (mặc định) hoặc beta — beta lấy cả pre-release
 #   CAMARELOL_NOINSTALL=1  không cài vào hệ thống, chỉ tải về thư mục hiện tại
 # ---------------------------------------------------------------------------
 set -euo pipefail
 
 REPO="tamkogay9876-code/camareLOL"
-API="https://api.github.com/repos/$REPO/releases/latest"
+CHANNEL="${CAMARELOL_CHANNEL:-stable}"
 PREFIX="${CAMARELOL_PREFIX:-/usr/local/bin}"
 NOINSTALL="${CAMARELOL_NOINSTALL:-0}"
 
 info() { printf '\033[1;36m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m!!\033[0m %s\n' "$*" >&2; }
 die()  { printf '\033[1;31mxx\033[0m %s\n' "$*" >&2; exit 1; }
+
+case "$CHANNEL" in
+    stable) API="https://api.github.com/repos/$REPO/releases/latest" ;;
+    beta)   API="https://api.github.com/repos/$REPO/releases?per_page=20" ;;
+    *) die "CAMARELOL_CHANNEL phải là 'stable' hoặc 'beta', không phải '$CHANNEL'" ;;
+esac
 
 need() { command -v "$1" >/dev/null 2>&1 || die "cần $1 nhưng không thấy trên PATH"; }
 need curl

@@ -27,10 +27,14 @@ if ! command -v cargo >/dev/null 2>&1; then
 fi
 
 # JDK: use JAVA_HOME, then the usual PATH lookup.
+if [ -n "${JAVA_HOME:-}" ] && [ -x "$JAVA_HOME/bin/javac" ]; then
+    export PATH="$JAVA_HOME/bin:$PATH"
+fi
 if [ -z "${JAVA_HOME:-}" ] && ! command -v javac >/dev/null 2>&1; then
     for candidate in "$HOME"/tools/jdk*/bin/javac /usr/lib/jvm/*/bin/javac; do
         [ -x "$candidate" ] && export JAVA_HOME="$(dirname "$(dirname "$candidate")")" && break
     done
+    [ -n "${JAVA_HOME:-}" ] && export PATH="$JAVA_HOME/bin:$PATH"
 fi
 
 # Keep parallel codegen modest: the workspace is small and big -j values

@@ -7,7 +7,7 @@ pkgname=camarelol
 # Bản phát hành sinh PKGBUILD này từ khuôn ở trong kho: pkgver, URL nguồn và
 # sha256 đều lấy từ chính bản phát hành đang dựng. Sửa tay ở đây sẽ bị ghi đè,
 # và nếu sửa sai thì `makepkg` tải một tarball khác — hoặc không tải được gì.
-pkgver=0.1.17
+pkgver=1.0.0
 pkgrel=1
 pkgdesc="A modern, safety-first TUI installer for Arch Linux"
 arch=('x86_64')

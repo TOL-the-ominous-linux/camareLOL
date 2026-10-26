@@ -115,7 +115,7 @@ Kết quả cần thấy: 12/12 phase completed, reboot vào được greetd/Hyp
 
 ---
 
-## Cách B2 — dual-boot máy thật bằng chính camareLOL 0.1.22 (khuyến nghị)
+## Cách B2 — dual-boot máy thật bằng chính camareLOL 1.0.0 beta (khuyến nghị)
 
 Chính là đường mà VM `camarelol-dualboot` đã chứng minh (run 4 & 7), giờ chạy
 trên đĩa của máy này: camareLOL giữ nguyên EndeavourOS (sda3) và dùng lại
@@ -167,9 +167,10 @@ sudo dd if="$HOME/Tài liệu/carameLOL/.test/archlinux-x86_64.iso" \
 iwctl                       # Wi-Fi nếu không có dây
 ping -c1 archlinux.org      # mạng phải sống, pacstrap cần internet
 
-# Tải bản phát hành mới nhất (0.1.22)
-curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh | bash
-./camarelol -V              # phải in "camareLOL 0.1.22 (tag v0.1.22…)"
+# Tải bản phát hành 1.0.0 beta (CAMARELOL_CHANNEL=beta chọn pre-release mới nhất)
+curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh \
+    | CAMARELOL_CHANNEL=beta bash
+camarelol --version         # phải in "camareLOL 1.0.0 (tag v1.0.0…)"
 
 # Xóa sda1, mở khe cho planner
 sgdisk --delete=1 /dev/sda
@@ -205,10 +206,10 @@ cho thấy đúng ba điều VM từng chứng minh:
 
 Khớp kế hoạch thì mở TUI thật (`./camarelol`), chọn cùng mode 3, rồi
 **Execute** — installer sẽ hỏi xác nhận destructive theo thường lệ. 12 pha
-phải hoàn tất, như run 7 trong VM. 0.1.22 thêm cho bạn hai thứ VM đã dựng:
-tệp `/etc/NetworkManager/conf.d/00-camarelol.conf` (`dhcp=internal`), và việc
-dọn entry firmware `Boot####` chết (trỏ vào loader không còn trên ESP của
-chính ta — như entry `archtest` cũ nếu còn).
+phải hoàn tất, như run 7 trong VM. 1.0.0 (từ 0.1.22) thêm cho bạn hai thứ VM
+đã dựng: tệp `/etc/NetworkManager/conf.d/00-camarelol.conf` (`dhcp=internal`),
+và việc dọn entry firmware `Boot####` chết (trỏ vào loader không còn trên ESP
+của chính ta — như entry `archtest` cũ nếu còn).
 
 ### B2-3. Reboot
 
@@ -218,7 +219,7 @@ reboot
 
 Lần này không cần F11 nữa: firmware menu sẽ có entry GRUB của camareLOL
 (xem ở `Boot0004`/`Boot####` nào mới xuất hiện bằng `efibootmgr` từ live
-ISO — 0.1.22 chỉ xoá entry trỏ vào tệp loader không còn, entry còn sống
+ISO — 1.0.0 chỉ xoá entry trỏ vào tệp loader không còn, entry còn sống
 đều được giữ).
 
 Boot được là tới GRUB. Menu GRUB phải có ít nhất hai entry: hệ camareLOL
@@ -233,7 +234,7 @@ Sau khi vào hệ mới, kiểm tra nhanh:
   `/etc/NetworkManager/conf.d/00-camarelol.conf`;
 - `zramctl` — zram0 thật (theo cấu hình chọn khi cài);
 - `efibootmgr -v` — đúng những entry còn sống; entry cũ trỏ file không có
-  đã bị 0.1.22 dọn;
+  đã bị 1.0.0 dọn;
 - menu GRUB chứa EndeavorOS → chọn thử, máy quay lại EndeavourOS nguyên vẹn.
 
 ---

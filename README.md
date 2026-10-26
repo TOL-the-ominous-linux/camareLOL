@@ -10,12 +10,16 @@
 
 **English** · [Tiếng Việt](README.vi.md) · [中文](docs/zh/index.md)
 
-## ⚠ ALPHA — many releases, still bugs
+## ⚠ BETA — first 1.0.0 beta
 
-camareLOL is at the **demo/alpha** stage. Seventeen releases have shipped, but
-the version number does **not** mean it is stable. Mistakes such as a mistyped
-Arch package name only surfaced on a real VirtualBox run — and they broke
-entire installations:
+camareLOL **1.0.0** is the first beta. The roadmap audit is complete: every
+item is either shipped with evidence, explicitly marked partial, or deferred
+with a written reason. That is not the same as "finished" — three desktop
+items are still partial, real-Windows dual-boot is deferred, and this program
+erases disks.
+
+Earlier releases proved why the evidence rule exists. Three package names
+passed the entire unit suite and died only in a VirtualBox run:
 
 - `greetd-tuigreeter` instead of `greetd-tuigreet` → **Hyprland and Sway could
   not be installed at all**
@@ -23,19 +27,21 @@ entire installations:
 - asking to install a package named `systemd-boot`, which does not exist →
   **every** systemd-boot install died at `pacstrap`
 
-All three passed the entire unit test suite. They only died in a VM.
-
-**So:**
+The installer now has guards for those failures, and the VM harness checks the
+installed disk rather than the menu. Still:
 
 1. Only run it on an **empty disk** — not one holding Windows or any data.
 2. Run it from the **Arch live ISO**, never on the machine you are trying to
    fix.
 3. Back up everything first.
 
-Keeping the version at `0.1.x` is deliberate. Under SemVer, `0.x` means "not
-stable". Shipping it as `5.6` would tell other people this is software that has
-been maintained for years and runs reliably — a false signal, and a dangerous
-one for a tool that erases disks.
+`1.0.0` is a beta, not a promise of stability. The npm `latest` tag stays on
+**0.1.22**; the beta is published under the `beta` dist-tag and as a GitHub
+pre-release. Install it deliberately — see [Install 1.0.0 beta](#install-100-beta).
+
+The full release notes, including evidence and known limitations, are in
+[docs/releases/1.0.0.md](docs/releases/1.0.0.md).
+
 
 camareLOL installs Arch Linux from the terminal without making you type dozens
 of shell commands. It detects your hardware, proposes a safe layout, shows you
@@ -62,6 +68,7 @@ table points sideways into the other two.
 | Topic | English | Tiếng Việt | 中文 |
 |---|---|---|---|
 | Overview | [index](docs/en/index.md) | [VI](docs/vi/index.md) | [ZH](docs/zh/index.md) |
+| 1.0.0 release notes | [releases/1.0.0](docs/releases/1.0.0.md) | — | — |
 | The three components | [architecture](docs/en/architecture.md) | [VI](docs/vi/architecture.md) | [ZH](docs/zh/architecture.md) |
 | The IPC protocol | [ipc-protocol](docs/en/ipc-protocol.md) | [VI](docs/vi/ipc-protocol.md) | [ZH](docs/zh/ipc-protocol.md) |
 | What gets tested | [testing](docs/en/testing.md) | [VI](docs/vi/testing.md) | [ZH](docs/zh/testing.md) |
@@ -71,28 +78,55 @@ table points sideways into the other two.
 
 Start with [the overview](docs/en/index.md).
 
-## What changed in 0.1.11
+## What changed in 1.0.0
 
-**The updater is gone.** `--check-update`, `--update` and `--rollback-update`
-no longer exist, and there is no index URL, mirror list or signing key left in
-the build.
+**The first beta.** 1.0.0 is the same installer code as 0.1.22, re-versioned
+and re-documented after a complete roadmap audit. No discovery, planning,
+partitioning, `pacstrap`, bootloader, desktop, safety-gate, IPC or config-schema
+behaviour changed.
 
-It was never automatic — `--check-update` only reported. What was automatic was
-the chain underneath it, and that chain broke four times in one day. The
-failure mode was always the same shape: one host stopped answering, another
-kept serving a frozen copy of the index, and every camareLOL in the field
-reported itself current.
+What did change:
 
-This matters if you are on 0.1.10 or older: your binary has an updater that asks
-an address which no longer resolves. It cannot install anything, so nothing is
-at risk. Download this release and replace the binary — see
+- The Cargo workspace, `Cargo.lock`, npm package, PKGBUILD template and
+  dual-boot helper now agree on **1.0.0**.
+- The GitHub release is a **pre-release**; npm publishes 1.0.0 under the
+  **`beta`** tag. `npm install -g @wenker-ai/camarelo` still installs 0.1.22.
+- The docs were corrected: stale alpha wording, the removed `u` update key,
+  and the old "layout UI comes in Stage 3" claim are gone.
+- Release tooling now reads notes from `docs/releases/<version>.md`, supports
+  a pre-release flag, supports `NPM_TAG=beta`, and accepts
+  `CAMARELOL_CHANNEL=beta`.
+
+The full, item-by-item notes — including the three partial Stage 2 items and
+the deferred real-Windows work — are in
+[docs/releases/1.0.0.md](docs/releases/1.0.0.md).
+
+If you are on 0.1.10 or older, you still have the removed updater in your
+binary. It asks an address that no longer resolves and cannot install
+anything. Download 1.0.0 and replace the binary by hand — see
 [Updating](docs/en/update.md).
 
-Also removed: the website and its update mirror. Three hosts in one day proved
-that a deployment chain you depend on is a liability, not an asset.
+## Install 1.0.0 beta
 
-The installer, the safety gate, the IPC protocol and the Java catalog are
-unchanged.
+The beta is opt-in. The default one-liner resolves the newest **stable**
+release, which is still 0.1.22. To install the beta, pin the tag or ask for the
+beta channel:
+
+```console
+$ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh \
+    | CAMARELOL_VERSION=v1.0.0 bash
+```
+
+```console
+$ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh \
+    | CAMARELOL_CHANNEL=beta bash
+```
+
+Via npm:
+
+```console
+$ npm install -g @wenker-ai/camarelo@beta
+```
 
 ## Install
 
@@ -137,7 +171,11 @@ Or let the helper fetch it for you:
 ```console
 $ git clone https://github.com/tamkogay9876-code/camareLOL
 $ cd camareLOL && sudo ./install.sh --binary
+$ CAMARELOL_VERSION=v1.0.0 sudo -E ./install.sh --binary   # beta tag
 ```
+
+`install.sh --binary` downloads the release `SHA256SUMS` and refuses a binary
+that does not match it.
 
 ### Via npm
 
@@ -145,7 +183,8 @@ On a running Arch system, npm is one more way in:
 
 ```console
 $ sudo pacman -S --needed nodejs npm curl
-$ npm install -g @wenker-ai/camarelo
+$ npm install -g @wenker-ai/camarelo          # stable latest: 0.1.22
+$ npm install -g @wenker-ai/camarelo@beta     # 1.0.0 beta
 ```
 
 On the **archiso** (live ISO), the pacman database is empty — use
@@ -187,18 +226,25 @@ $ ./build.sh lint             # clippy + rustfmt
 
 ### From the tarball (`makepkg`)
 
-Each release ships a `PKGBUILD`:
+Each release ships a `PKGBUILD` pinned to that release's tarball:
 
 ```console
-$ VERSION=0.1.10
+$ VERSION=1.0.0
 $ curl -fLO "https://github.com/tamkogay9876-code/camareLOL/releases/download/v$VERSION/camarelol-$VERSION.tar.gz"
-$ tar xf "camarelol-$VERSION.tar.gz" && cd "camarelol-$VERSION"
+$ curl -fLO "https://github.com/tamkogay9876-code/camareLOL/releases/download/v$VERSION/PKGBUILD"
+$ tar xf "camarelol-$VERSION.tar.gz"
+$ cp PKGBUILD "camarelol-$VERSION/"
+$ cd "camarelol-$VERSION"
 $ makepkg -si
 ```
 
+The `PKGBUILD` attached to the release carries the tarball's own SHA-256; the
+copy inside the tarball cannot, because it was sealed before the checksum was
+known. Use the attached file.
+
 `releases/latest/download/` takes **the exact file name**, so it has to be built
 from the tag name; there is no way to use that path without knowing the version
-in advance.
+in advance. That is why the 1.0.0 beta uses explicit `v1.0.0` URLs.
 
 The full VirtualBox acceptance test is documented in
 [docs/en/testing.md](docs/en/testing.md), and a hands-on guide for running it
@@ -210,8 +256,10 @@ yourself is in [docs/en/vm-testing.md](docs/en/vm-testing.md).
   Microsoft-reserved partitions, live-system mounts.
 - Plans GPT/MBR layouts: ESP, BIOS boot, `/`, `/home`, swap — with filesystem
   choices (ext4, btrfs, xfs) and firmware-aware validation.
-- Detects Windows and refuses to touch it; dual-boot layout is planned, never
-  executed blindly.
+- Detects Windows and refuses to touch it. Keep-everything dual-boot is
+  implemented: existing partitions stay `format=false`, the ESP is reused, and
+  new partitions are appended inside a free gap; a real-machine install and
+  first boot were confirmed on 24 October 2026.
 - Installs a minimal Arch system: pacstrap, fstab, bootloader (GRUB/systemd-boot),
   locale, keymap, timezone, hostname, users, sudo policy, services, initramfs.
 - Safety gate: locked by default; `--allow-destructive` + typed confirmation
@@ -230,8 +278,12 @@ yourself is in [docs/en/vm-testing.md](docs/en/vm-testing.md).
 - Install AUR packages without an explicit opt-in and a normal-user build.
 - Resize NTFS (the acceptance criteria for it are documented but the feature is
   deferred — see [docs/en/roadmap.md](docs/en/roadmap.md)).
-- Dual-boot: detection and preservation rules are implemented; the layout UI for
-  reusing an existing ESP comes in Stage 3.
+- Boot a real Windows install from the generated menu entry, or shrink Windows
+  from inside Windows. The keep-everything side and the menu entry are
+  VM-proven; the real-Windows leg is deferred.
+- Suggest a GPU driver from the parsed model. The model is read and shown; a
+  model-keyed driver choice is still partial.
+- Manual partitioning, LUKS and Btrfs subvolume layouts — no code.
 
 ## Architecture
 
@@ -265,6 +317,8 @@ cd python && python3 -m unittest discover -s tests -v
 cd java && ./build.sh
 python scripts/check_lang_table.py              # doc tables point at the right language
 python scripts/check_pkgbuild.py                # PKGBUILD matches the newest tag
+python scripts/check_secrets.py                 # no credential in the tree
+python scripts/check_workflows.py               # workflow YAML is valid to GitHub
 cargo clippy --workspace --all-targets -- -D warnings
 ```
 

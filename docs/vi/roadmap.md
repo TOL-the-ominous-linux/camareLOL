@@ -5,6 +5,10 @@
 
 Những gì đã làm, những gì chưa, và — ở chỗ chưa — vì sao.
 
+**Bản hiện tại:** `1.0.0`, beta đầu tiên (26/10/2026). Bản này đóng gói mã cài
+đặt của 0.1.22 cùng đợt rà soát roadmap và cập nhật tài liệu; thẻ npm `latest`
+vẫn là 0.1.22 cho tới khi beta được thăng cấp.
+
 ## Stage 1 — MVP
 
 Hoàn tất.
@@ -116,7 +120,8 @@ filesystem, và thứ tự mount root-trước-ESP.
 - [x] Gói npm `@wenker-ai/camarelo` — mỗi lần pack tải binary từ GitHub Release
       đúng phiên bản trong `package.json`, đối chiếu `SHA256SUMS`, bắt
       `--version` phải khớp, chạy test gói rồi mới pack; publish là một bước
-      riêng, tường minh. 0.1.18 là bản được công bố `latest`.
+      riêng, tường minh. 1.0.0 là beta đầu tiên dưới dist-tag `beta`;
+      `latest` vẫn là 0.1.22 cho tới khi thăng cấp.
 
 ## Stage 6 — Dual-boot cạnh một hệ điều hành có sẵn
 

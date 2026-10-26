@@ -2,7 +2,7 @@
 #
 # Gom tài nguyên cho một bản phát hành. Không tự tạo release, không ký.
 #
-#   ./scripts/make-release.sh 0.1.10
+#   ./scripts/make-release.sh 1.0.0
 #
 # Đưa ra out/:
 #   camarelol                 binary, build từ thẻ đúng phiên bản này
@@ -22,7 +22,7 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_DIR"
 
 VERSION="${1:-}"
-[ -n "$VERSION" ] || { printf '%s\n' "cách dùng: $0 <phiên bản, ví dụ 0.1.10>" >&2; exit 1; }
+[ -n "$VERSION" ] || { printf '%s\n' "cách dùng: $0 <phiên bản, ví dụ 1.0.0>" >&2; exit 1; }
 VERSION="${VERSION#v}"
 
 OUT_DIR="${CAMARELOL_RELEASE_OUT:-$REPO_DIR/out/release}"
@@ -85,12 +85,15 @@ install -m 0755 target/release/camarelol "$OUT_DIR/camarelol"
 # ------------------------------------------------------------- catalog Java
 # Không phải thứ binary cần, nhưng release nào cũng kèm, và dựng lại từ mã
 # nguồn thay vì lấy từ máy nào đó.
+if [ -n "${JAVA_HOME:-}" ] && [ -x "$JAVA_HOME/bin/javac" ]; then
+    export PATH="$JAVA_HOME/bin:$PATH"
+fi
 if command -v javac >/dev/null 2>&1; then
     java/build.sh "$OUT_DIR/java" >/dev/null
     cp "$OUT_DIR/java/camarelol-catalog.jar" "$OUT_DIR/camarelol-catalog.jar"
     note "catalog Java"
 else
-    note "bỏ qua catalog Java — không tìm thấy javac"
+    note "bỏ qua catalog Java — không tìm thấy javac (đặt JAVA_HOME nếu có JDK)"
 fi
 
 # --------------------------------------------------------- tarball mã nguồn
@@ -170,6 +173,13 @@ fi
 
 printf '\nXong. Kiểm tra lại trước khi phát hành:\n\n'
 note "phiên bản trong binary : $("$OUT_DIR/camarelol" --version | head -1)"
+if [ -f "$REPO_DIR/docs/releases/$VERSION.md" ]; then
+    note "ghi chú phát hành      : docs/releases/$VERSION.md"
+else
+    note "THIẾU docs/releases/$VERSION.md — upload-release sẽ từ chối"
+fi
 printf '\nTiếp theo:\n\n'
-note "1. gh release create $TAG --title ... --notes ... $OUT_DIR/camarelol"
-note "2. $OUT_DIR/camarelol-$VERSION.tar.gz  $OUT_DIR/camarelol-catalog.jar  $PKGBUILD_OUT"
+note "1. ./scripts/upload-release.sh $VERSION [--prerelease]"
+note "   (release tạo nháp, upload đủ asset rồi mới publish)"
+note "2. NPM_TAG=beta ./npm/build.sh publish \"\$HOME/Tài liệu/cắt cy/npmrc.txt\""
+note "3. Kiểm tra lại SHA256SUMS và 'camarelol --version' từ asset đã tải."
