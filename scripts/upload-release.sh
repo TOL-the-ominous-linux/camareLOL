@@ -73,6 +73,14 @@ for f in "camarelol" "camarelol-$VERSION.tar.gz" "camarelol-catalog.jar" "PKGBUI
     [ -f "$f" ] || { echo "thiếu asset $f trong out/release/" >&2; exit 1; }
 done
 
+# Đừng bao giờ tải lên một bộ tệp mà chính nó không khớp SHA256SUMS. Lần phát
+# hành 1.0.0 đầu tiên suýt tải lên bảng băm còn sót từ 0.1.22 vì make-release
+# cũ không sinh lại tệp này — kiểm ở đây chặn đúng kiểu lỗi đó.
+sha256sum -c SHA256SUMS >/dev/null \
+    || { echo "SHA256SUMS không khớp các asset trong out/release/ — dừng." >&2; exit 1; }
+grep -q " camarelol-$VERSION.tar.gz$" SHA256SUMS \
+    || { echo "SHA256SUMS không có camarelol-$VERSION.tar.gz — dừng." >&2; exit 1; }
+
 # ------------------------------------------------------------------ release cũ?
 CODE="$(curl -sS -o /dev/null -w '%{http_code}' \
     -H "Authorization: token $TOKEN" -H "Accept: application/vnd.github+json" \

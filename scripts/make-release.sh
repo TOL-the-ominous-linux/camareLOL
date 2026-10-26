@@ -8,6 +8,8 @@
 #   camarelol                 binary, build từ thẻ đúng phiên bản này
 #   camarelol-X.Y.Z.tar.gz    mã nguồn, để PKGBUILD dựng lại
 #   camarelol-catalog.jar     catalog Java
+#   PKGBUILD                  bản sinh ra, ghim sha256 của tarball
+#   SHA256SUMS                phủ cả bốn tệp trên
 #
 # Rồi tạo release trên GitHub từ các tệp này. Bước đó cố ý không nằm ở đây:
 # nó cần mạng và tài khoản, và gộp vào đây sẽ khiến việc "chỉ build" trở
@@ -93,7 +95,8 @@ if command -v javac >/dev/null 2>&1; then
     cp "$OUT_DIR/java/camarelol-catalog.jar" "$OUT_DIR/camarelol-catalog.jar"
     note "catalog Java"
 else
-    note "bỏ qua catalog Java — không tìm thấy javac (đặt JAVA_HOME nếu có JDK)"
+    die "không tìm thấy javac — release nào cũng kèm camarelol-catalog.jar.
+    Cài JDK 17+ hoặc đặt JAVA_HOME để build catalog."
 fi
 
 # --------------------------------------------------------- tarball mã nguồn
@@ -127,6 +130,18 @@ if not (n1 and n2):
 open(dst, "w", encoding="utf-8").write(text)
 PY
 note "PKGBUILD (pkgver $VERSION, sha256 đã ghim)"
+
+# ------------------------------------------------------------- SHA256SUMS
+# Sinh lại từ đầu, không nối vào tệp cũ. Một SHA256SUMS còn sót dòng của bản
+# trước sẽ khiến `sha256sum -c` báo lỗi — hoặc tệ hơn, nếu chỉ thiếu tệp mới
+# thì người dùng vẫn thấy "OK" cho những tệp không còn được phát hành.
+# upload-release.sh tải đúng tệp này lên, nên nó phải phủ đúng bốn asset.
+(
+    cd "$OUT_DIR"
+    sha256sum camarelol "camarelol-$VERSION.tar.gz" camarelol-catalog.jar PKGBUILD > SHA256SUMS
+    sha256sum -c SHA256SUMS >/dev/null
+)
+note "SHA256SUMS (4 tệp, đã tự kiểm)"
 # Cargo có thể dựng lại mà không chạy lại build script, khiến nó trả về binary
 # của lần build trước — binary đó vẫn mang thẻ cũ. Thẻ trong tên tệp là ý
 # định; thẻ bên trong binary là sự thật, và hai thứ phải khớp trước khi phát
