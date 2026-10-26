@@ -35,7 +35,7 @@ source=("https://github.com/tamkogay9876-code/camareLOL/releases/download/v$pkgv
 # Không phải SKIP. Đây là dự án kiểm tra sha256 của chính nó trước khi cài bất
 # cứ thứ gì; để ngoại trừ nó ở đây thì việc kiểm tra đó chỉ còn đúng khi người
 # dùng tự làm, và im lặng sai khi không.
-sha256sums=('a604ecbb75cbf31fd08a7c318cce07a778d6a7fbac1dd63428616d5179dfaa8c')
+sha256sums=('c833c826cc3c19f21a0b53542e1b82a97bc9d31ee20247c9e220301a0085559e')
 
 _pkgdir() {
     # The release tarball is created from the repository root, so the directory
