@@ -239,11 +239,26 @@ pub fn parse_lsblk_json(raw: &str) -> Result<Vec<StorageDevice>> {
             // Ignore partitions at the top level (should not happen) and roms.
             continue;
         }
+        let name = str_field(d, "name").unwrap_or_default();
+        if is_virtual_block_device(&name) {
+            // `lsblk` labels these "disk" too. zram0 is RAM, ram0 is RAM,
+            // nbd0 is a network block device and md0 is an assembled array.
+            // Offering one as an install target is either a guaranteed
+            // "too small" plan or, worse, an install into volatile memory.
+            continue;
+        }
         let mut dev = parse_disk(d)?;
         dev.risk = dev.assess_risk();
         out.push(dev);
     }
     Ok(out)
+}
+
+/// Block-device names that are not disks a user can install an OS onto.
+fn is_virtual_block_device(name: &str) -> bool {
+    ["zram", "ram", "nbd", "md", "dm-", "loop", "fd"]
+        .iter()
+        .any(|prefix| name.starts_with(prefix))
 }
 
 fn parse_disk(d: &Value) -> Result<StorageDevice> {
@@ -495,6 +510,14 @@ mod tests {
         assert!(!disks[0].partitions[0].has_filesystem());
         assert_eq!(disks[0].assess_risk(), RiskLevel::Medium);
         assert_eq!(disks[0].kind, DeviceKind::Virtual);
+    }
+
+    #[test]
+    fn virtual_block_devices_are_not_offered_as_disks() {
+        let raw = r#"{"blockdevices":[{"name":"zram0","type":"disk","size":4294967296,"rota":false,"rm":false},{"name":"ram0","type":"disk","size":16777216,"rota":false,"rm":false},{"name":"nbd0","type":"disk","size":1073741824,"rota":false,"rm":false},{"name":"md0","type":"disk","size":1073741824,"rota":false,"rm":false},{"name":"loop0","type":"disk","size":1048576,"rota":false,"rm":false},{"name":"sda","type":"disk","size":21474836480,"rota":true,"rm":false}]}"#;
+        let disks = parse_lsblk_json(raw).unwrap();
+        assert_eq!(disks.len(), 1);
+        assert_eq!(disks[0].kernel_name, "sda");
     }
 
     #[test]

@@ -418,7 +418,7 @@ fn cmd_self_test(mock: Option<PathBuf>) -> Result<bool, CamarelolError> {
     ok = ok && loaded.hostname == cfg.hostname;
 
     // E. full simulated install
-    if let Some(d) = core.devices.first() {
+    if let Some(d) = empty {
         let plan = core.plan_for(&d.path)?;
         // run_install() resolves the firmware from the profile; pin it to the
         // mode the plan was actually built for, otherwise the preflight would
@@ -443,6 +443,12 @@ fn cmd_self_test(mock: Option<PathBuf>) -> Result<bool, CamarelolError> {
             report.phases.len()
         );
         ok = ok && matches!(report.outcome, Outcome::Completed);
+    } else {
+        // Most installed machines have no empty disk, and that is not a
+        // failure: the simulated install needs a target it may format. Using
+        // `devices.first()` here made --self-test fail on every normal
+        // desktop (and picked zram on hosts that have it).
+        println!("6. simulated install: skipped (no empty disk)");
     }
 
     println!("selftest result: {}", if ok { "PASS" } else { "FAIL" });
