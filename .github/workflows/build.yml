@@ -53,7 +53,14 @@ jobs:
         run: |
           ./target/debug/camarelol --version
           ./target/debug/camarelol --scan > /dev/null
-          ./target/debug/camarelol --self-test
+          # GitHub's runners are Ubuntu. camareLOL must REFUSE an unvalidated
+          # host, so a self-test that exits 0 here would be the bug. Assert the
+          # refusal instead of demanding a green self-test on the wrong OS.
+          if ./target/debug/camarelol --self-test; then
+            echo "self-test passed on an unsupported host — expected a refusal" >&2
+            exit 1
+          fi
+          ./target/debug/camarelol --self-test 2>&1 | grep -q 'REFUSED'
 
   python:
     name: Python tools
