@@ -26,7 +26,7 @@
 #
 # Biến môi trường:
 #   CAMARELOL_PREFIX   nơi cài (mặc định /usr/local/bin)
-#   CAMARELOL_VERSION  ghim một bản cụ thể, ví dụ v1.0.0 (mặc định: mới nhất)
+#   CAMARELOL_VERSION  ghim một bản cụ thể, ví dụ v1.0.1 (mặc định: mới nhất)
 #   CAMARELOL_CHANNEL  stable (mặc định) hoặc beta — beta lấy cả pre-release
 #   CAMARELOL_NOINSTALL=1  không cài vào hệ thống, chỉ tải về thư mục hiện tại
 # ---------------------------------------------------------------------------

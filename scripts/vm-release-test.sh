@@ -19,8 +19,8 @@ SHOTS="${SHOTS:-/tmp/opencode/vm-shots}"
 # ở đây khiến bài kiểm tra âm thầm dùng bản cũ nhất mà vẫn báo là đang kiểm tra
 # bản mới — và nó cứ thế vẫn xanh.
 #
-# Kiểm bản beta 1.0.0 (pre-release, không nằm trong /releases/latest):
-#   SERIES=https://github.com/tamkogay9876-code/camareLOL/releases/download/v1.0.0 \
+# Kiểm bản beta 1.0.1 (pre-release, không nằm trong /releases/latest):
+#   SERIES=https://github.com/tamkogay9876-code/camareLOL/releases/download/v1.0.1 \
 #       ./scripts/vm-release-test.sh all
 SERIES="${SERIES:-https://github.com/tamkogay9876-code/camareLOL/releases/latest/download}"
 mkdir -p "$SHOTS"

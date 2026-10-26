@@ -2,8 +2,8 @@
 # ---------------------------------------------------------------------------
 # Tạo GitHub release từ out/release/ và tải mọi asset lên.
 #
-#   ./scripts/upload-release.sh 1.0.0
-#   ./scripts/upload-release.sh 1.0.0 --prerelease
+#   ./scripts/upload-release.sh 1.0.1
+#   ./scripts/upload-release.sh 1.0.1 --prerelease
 #
 # Nội dung release đọc từ docs/releases/<phiên bản>.md. Không hard-code ghi
 # chú của một bản cụ thể trong script này nữa: bản 0.1.22 từng nằm trong

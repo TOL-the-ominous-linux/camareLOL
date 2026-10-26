@@ -10,13 +10,13 @@
 
 [Tiếng Anh](README.md) · **Tiếng Việt** · [中文](docs/zh/index.md)
 
-> ## ⚠ BETA — bản beta đầu tiên 1.0.0
+> ## ⚠ BETA — 1.0.1 beta
 >
-> camareLOL **1.0.0** là bản beta đầu tiên. Đợt rà soát roadmap đã xong: mỗi
-> mục hoặc đã có bằng chứng chạy thật, hoặc được ghi rõ là **một phần**, hoặc
-> bị hoãn kèm lý do. Điều đó không có nghĩa là "đã hoàn hảo" — ba mục desktop
-> vẫn còn một phần, dual-boot với Windows thật vẫn bị hoãn, và chương trình
-> này xoá ổ đĩa.
+> camareLOL **1.0.1** là bản beta hiện tại; **1.0.0** là bản beta đầu tiên.
+> Đợt rà soát roadmap đã xong: mỗi mục hoặc đã có bằng chứng chạy thật, hoặc
+> được ghi rõ là **một phần**, hoặc bị hoãn kèm lý do. Điều đó không có nghĩa
+> là "đã hoàn hảo" — ba mục desktop vẫn còn một phần, dual-boot với Windows
+> thật vẫn bị hoãn, và chương trình này xoá ổ đĩa.
 >
 > Các bản trước đã chứng minh vì sao phải cần bằng chứng: ba tên gói Arch viết
 > sai đã qua **toàn bộ** unit test và chỉ chết trong VirtualBox —
@@ -30,12 +30,13 @@
 > 2. Chạy từ **Arch live ISO**, không phải trên máy bạn đang dùng.
 > 3. Sao lưu mọi thứ trước khi cài bất cứ thứ gì.
 >
-> `1.0.0` là beta, không phải lời hứa ổn định. Thẻ npm `latest` vẫn là
+> `1.0.1` là beta, không phải lời hứa ổn định. Thẻ npm `latest` vẫn là
 > **0.1.22**; bản beta nằm ở dist-tag `beta` và là GitHub pre-release. Hãy
-> cài có chủ ý — xem [Cài 1.0.0 beta](#cài-100-beta).
+> cài có chủ ý — xem [Cài 1.0.1 beta](#cài-101-beta).
 >
 > Ghi chú phát hành đầy đủ, gồm bằng chứng và giới hạn đã biết:
-> [docs/releases/1.0.0.md](docs/releases/1.0.0.md).
+> [docs/releases/1.0.1.md](docs/releases/1.0.1.md). Ghi chú của bản beta đầu
+> tiên vẫn ở [docs/releases/1.0.0.md](docs/releases/1.0.0.md).
 
 camareLOL cài Arch Linux từ terminal mà không bắt bạn gõ hàng chục lệnh
 shell. Nó dò phần cứng, đề xuất cách phân vùng an toàn, cho bạn xem chính
@@ -58,6 +59,7 @@ Viết bằng ba ngôn ngữ. Mỗi trang có bảng trỏ sang hai ngôn ngữ 
 | Chủ đề | Tiếng Việt | English | 中文 |
 |---|---|---|---|
 | Tổng quan | [index](docs/vi/index.md) | [EN](docs/en/index.md) | [ZH](docs/zh/index.md) |
+| Ghi chú 1.0.1 | [releases/1.0.1](docs/releases/1.0.1.md) | — | — |
 | Ghi chú 1.0.0 | [releases/1.0.0](docs/releases/1.0.0.md) | — | — |
 | Ba thành phần | [architecture](docs/vi/architecture.md) | [EN](docs/en/architecture.md) | [ZH](docs/zh/architecture.md) |
 | Giao thức IPC | [ipc-protocol](docs/vi/ipc-protocol.md) | [EN](docs/en/ipc-protocol.md) | [ZH](docs/zh/ipc-protocol.md) |
@@ -68,14 +70,29 @@ Viết bằng ba ngôn ngữ. Mỗi trang có bảng trỏ sang hai ngôn ngữ 
 
 Bắt đầu với [tổng quan](docs/vi/index.md).
 
-## Cài 1.0.0 beta
+## Thay đổi trong 1.0.1
+
+**Sửa lỗi dò đĩa và self-test.** `lsblk` gọi zram, ram, nbd, md và loop là
+`disk`; camareLOL đã liệt kê chúng trên màn hình Storage. Trên máy có zram,
+`--self-test` chọn zram làm ổ trống, trượt kiểm tra dung lượng và báo FAIL.
+Một zram đủ lớn để qua ngưỡng tối thiểu sẽ trở thành đích cài vào bộ nhớ
+volatile.
+
+1.0.1 lọc các thiết bị khối ảo đó ngay khi dò, và `--self-test` bỏ qua phần
+cài mô phỏng khi không có ổ trống thay vì chạy nó trên hệ thống đang dùng.
+Không có thay đổi nào ở lập kế hoạch, phân vùng, `pacstrap`, bootloader,
+desktop, safety gate, IPC hay schema cấu hình.
+
+Ghi chú đầy đủ: [docs/releases/1.0.1.md](docs/releases/1.0.1.md).
+
+## Cài 1.0.1 beta
 
 Bản beta là tuỳ chọn. Lệnh một dòng mặc định vẫn lấy bản **ổn định** mới nhất
 (0.1.22). Muốn cài beta, ghim tag hoặc chọn kênh beta:
 
 ```console
 $ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh \
-    | CAMARELOL_VERSION=v1.0.0 bash
+    | CAMARELOL_VERSION=v1.0.1 bash
 ```
 
 ```console
@@ -131,7 +148,7 @@ $ sudo ./camarelol             # mở TUI
 ```console
 $ sudo pacman -S --needed nodejs npm curl
 $ npm install -g @wenker-ai/camarelo          # latest ổn định: 0.1.22
-$ npm install -g @wenker-ai/camarelo@beta     # beta 1.0.0
+$ npm install -g @wenker-ai/camarelo@beta     # beta 1.0.1
 ```
 
 Trên **archiso** (live ISO) cơ sở dữ liệu pacman rỗng — dùng

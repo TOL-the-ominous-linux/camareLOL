@@ -3,9 +3,10 @@
 
 > Trình cài đặt TUI cho Arch Linux, ưu tiên an toàn, hỗ trợ ba ngôn ngữ.
 
-**Bản hiện tại:** `1.0.0` — beta đầu tiên (GitHub pre-release). Thẻ npm
+**Bản hiện tại:** `1.0.1` — beta (GitHub pre-release). Thẻ npm
 `latest` vẫn là `0.1.22`; bản beta là `@wenker-ai/camarelo@beta`.
-Đọc [ghi chú phát hành 1.0.0](../releases/1.0.0.md).
+Đọc [ghi chú phát hành 1.0.1](../releases/1.0.1.md). Ghi chú của bản beta đầu
+tiên vẫn ở [1.0.0](../releases/1.0.0.md).
 
 camareLOL cài Arch Linux từ terminal. Nó phát hiện phần cứng của bạn, đề xuất
 một cách phân vùng, cho bạn xem chính xác nó sắp làm gì, và chỉ ghi vào ổ đĩa
@@ -28,11 +29,11 @@ Bản thân trình cài đặt nói tiếng Việt, tiếng Anh và tiếng Trun
 ## Cài đặt
 
 Chạy nó từ ISO sống của Arch — đó là nơi một trình cài đặt thuộc về. Lệnh một
-dòng mặc định lấy bản **ổn định** mới nhất (0.1.22); beta 1.0.0 là tuỳ chọn:
+dòng mặc định lấy bản **ổn định** mới nhất (0.1.22); beta 1.0.1 là tuỳ chọn:
 
 ```console
 $ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh \
-    | CAMARELOL_VERSION=v1.0.0 bash
+    | CAMARELOL_VERSION=v1.0.1 bash
 $ camarelol --self-test      # kiểm không phá huỷ; an toàn trên máy thật
 $ sudo camarelol             # mở TUI
 ```
@@ -45,8 +46,8 @@ pre-release mới nhất. Bỏ cả hai để dùng kênh ổn định.
 Nếu bạn muốn tự tải binary, nhớ giữ `-f` và `-L`:
 
 ```console
-$ curl -fLO https://github.com/tamkogay9876-code/camareLOL/releases/download/v1.0.0/camarelol
-$ curl -fLO https://github.com/tamkogay9876-code/camareLOL/releases/download/v1.0.0/SHA256SUMS
+$ curl -fLO https://github.com/tamkogay9876-code/camareLOL/releases/download/v1.0.1/camarelol
+$ curl -fLO https://github.com/tamkogay9876-code/camareLOL/releases/download/v1.0.1/SHA256SUMS
 $ sha256sum -c SHA256SUMS
 ```
 

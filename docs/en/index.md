@@ -2,9 +2,10 @@
 
 > A safety-first TUI installer for Arch Linux, in three languages.
 
-**Current release:** `1.0.0` — first beta (GitHub pre-release). The npm
-`latest` tag deliberately stays on `0.1.22`; the beta is `@wenker-ai/camarelo@beta`.
-Read the [1.0.0 release notes](../releases/1.0.0.md).
+**Current release:** `1.0.1` — beta (GitHub pre-release). The npm `latest` tag
+deliberately stays on `0.1.22`; the beta is `@wenker-ai/camarelo@beta`.
+Read the [1.0.1 release notes](../releases/1.0.1.md). The first beta's notes
+remain at [1.0.0](../releases/1.0.0.md).
 
 camareLOL installs Arch Linux from the terminal. It detects your hardware,
 proposes a layout, shows you exactly what it is about to do, and only writes to
@@ -27,12 +28,12 @@ The installer itself speaks Vietnamese, English and Simplified Chinese (`--lang 
 ## Install
 
 Run it from the Arch live ISO, which is where an installer belongs. The default
-one-liner resolves the newest **stable** release (0.1.22); the 1.0.0 beta is
+one-liner resolves the newest **stable** release (0.1.22); the 1.0.1 beta is
 opt-in:
 
 ```console
 $ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh \
-    | CAMARELOL_VERSION=v1.0.0 bash
+    | CAMARELOL_VERSION=v1.0.1 bash
 $ camarelol --self-test      # non-destructive checks; safe on a real machine
 $ sudo camarelol             # the TUI
 ```
@@ -45,8 +46,8 @@ pre-release. Omit both for the stable channel.
 If you would rather download the binary yourself, keep `-f` and `-L`:
 
 ```console
-$ curl -fLO https://github.com/tamkogay9876-code/camareLOL/releases/download/v1.0.0/camarelol
-$ curl -fLO https://github.com/tamkogay9876-code/camareLOL/releases/download/v1.0.0/SHA256SUMS
+$ curl -fLO https://github.com/tamkogay9876-code/camareLOL/releases/download/v1.0.1/camarelol
+$ curl -fLO https://github.com/tamkogay9876-code/camareLOL/releases/download/v1.0.1/SHA256SUMS
 $ sha256sum -c SHA256SUMS
 ```
 

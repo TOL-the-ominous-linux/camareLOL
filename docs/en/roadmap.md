@@ -4,9 +4,11 @@
 
 What is built, what is not, and — where it is not — why.
 
-**Current release:** `1.0.0`, the first beta (26 October 2026). It packages the
-0.1.22 installer code with the roadmap audit and documentation overhaul; the
-npm `latest` tag remains on 0.1.22 until the beta is promoted.
+**Current release:** `1.0.1`, the second beta (26 October 2026). It fixes
+virtual block devices (zram/ram/nbd/md/loop) being offered as install disks and
+`--self-test` failing when there is no empty disk. `1.0.0` was the first beta:
+the 0.1.22 installer code plus the roadmap audit and documentation overhaul.
+The npm `latest` tag remains on 0.1.22 until a beta is promoted.
 
 ## Stage 1 — MVP
 
@@ -121,8 +123,8 @@ filesystem kind, and root-before-ESP mount order.
       the GitHub release of exactly the version in `package.json`, verifies it
       against `SHA256SUMS`, requires `--version` to agree, runs the package
       tests, and only then packs; publish is a separate explicit step. 1.0.0
-      is the first beta under the `beta` dist-tag; `latest` remains 0.1.22
-      until promotion.
+      was the first beta and 1.0.1 is the current one, both under the `beta`
+      dist-tag; `latest` remains 0.1.22 until promotion.
 
 ## Stage 6 — Dual-boot beside an existing OS
 

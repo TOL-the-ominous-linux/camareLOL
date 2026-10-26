@@ -115,7 +115,7 @@ Kết quả cần thấy: 12/12 phase completed, reboot vào được greetd/Hyp
 
 ---
 
-## Cách B2 — dual-boot máy thật bằng chính camareLOL 1.0.0 beta (khuyến nghị)
+## Cách B2 — dual-boot máy thật bằng chính camareLOL 1.0.1 beta (khuyến nghị)
 
 Chính là đường mà VM `camarelol-dualboot` đã chứng minh (run 4 & 7), giờ chạy
 trên đĩa của máy này: camareLOL giữ nguyên EndeavourOS (sda3) và dùng lại
@@ -167,10 +167,10 @@ sudo dd if="$HOME/Tài liệu/carameLOL/.test/archlinux-x86_64.iso" \
 iwctl                       # Wi-Fi nếu không có dây
 ping -c1 archlinux.org      # mạng phải sống, pacstrap cần internet
 
-# Tải bản phát hành 1.0.0 beta (CAMARELOL_CHANNEL=beta chọn pre-release mới nhất)
+# Tải bản phát hành 1.0.1 beta (CAMARELOL_CHANNEL=beta chọn pre-release mới nhất)
 curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh \
     | CAMARELOL_CHANNEL=beta bash
-camarelol --version         # phải in "camareLOL 1.0.0 (tag v1.0.0…)"
+camarelol --version         # phải in "camareLOL 1.0.1 (tag v1.0.1…)"
 
 # Xóa sda1, mở khe cho planner
 sgdisk --delete=1 /dev/sda

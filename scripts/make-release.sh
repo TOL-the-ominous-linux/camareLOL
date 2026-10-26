@@ -2,7 +2,7 @@
 #
 # Gom tài nguyên cho một bản phát hành. Không tự tạo release, không ký.
 #
-#   ./scripts/make-release.sh 1.0.0
+#   ./scripts/make-release.sh 1.0.1
 #
 # Đưa ra out/:
 #   camarelol                 binary, build từ thẻ đúng phiên bản này
@@ -24,7 +24,7 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_DIR"
 
 VERSION="${1:-}"
-[ -n "$VERSION" ] || { printf '%s\n' "cách dùng: $0 <phiên bản, ví dụ 1.0.0>" >&2; exit 1; }
+[ -n "$VERSION" ] || { printf '%s\n' "cách dùng: $0 <phiên bản, ví dụ 1.0.1>" >&2; exit 1; }
 VERSION="${VERSION#v}"
 
 OUT_DIR="${CAMARELOL_RELEASE_OUT:-$REPO_DIR/out/release}"

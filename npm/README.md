@@ -1,6 +1,6 @@
 # @wenker-ai/camarelo
 
-**camareLOL 1.0.0 — first beta.** A safety-first TUI installer for Arch Linux,
+**camareLOL 1.0.1 — second beta.** A safety-first TUI installer for Arch Linux,
 with a Vietnamese soul.
 
 > The npm `latest` tag is still **0.1.22**. Install this beta with
@@ -15,7 +15,8 @@ plan → review → confirm → execute → verify — with a safety gate in fro
 every destructive operation.
 
 - Repository: <https://github.com/tamkogay9876-code/camareLOL>
-- Release notes: <https://github.com/tamkogay9876-code/camareLOL/blob/main/docs/releases/1.0.0.md>
+- Release notes: <https://github.com/tamkogay9876-code/camareLOL/blob/main/docs/releases/1.0.1.md>
+- First beta: <https://github.com/tamkogay9876-code/camareLOL/blob/main/docs/releases/1.0.0.md>
 - Documentation: <https://github.com/tamkogay9876-code/camareLOL/tree/main/docs>
 
 ## Install
@@ -60,10 +61,22 @@ $ sudo camarelol --allow-destructive --execute
 and a typed confirmation phrase (`ERASE` or `ERASE AND WIPE`) on the Review
 screen. `--preview` shows the complete plan and writes nothing.
 
-## What is in 1.0.0
+## What changed in 1.0.1
 
-1.0.0 is the same installer code as 0.1.22, re-versioned and re-documented
-after a complete roadmap audit. It includes:
+`lsblk` labels `zram0`, `ram0`, `nbd0`, `md0` and `loop0` as type `disk`.
+camareLOL trusted that label and listed them on the Storage screen: on the
+packaging host, `/dev/zram0` appeared as a 4 GiB SATA SSD. `--self-test` then
+picked zram as the empty disk, failed the 8 GiB minimum, and reported FAIL on
+a host where nothing was wrong. A zram large enough to pass the planner's
+minimum would have been a target for an install into volatile memory.
+
+1.0.1 filters those virtual block devices at discovery, and `--self-test` runs
+its simulated install on the empty disk it found — or prints
+`skipped (no empty disk)` instead of running it against the installed system.
+Real disks, virtio (`vd*`, `xv*`), NVMe, MMC and USB devices are unchanged.
+
+The installer itself is otherwise the same code as 1.0.0 — which was 0.1.22
+re-versioned and re-documented after a complete roadmap audit. It includes:
 
 - GPT/MBR planning, ext4/btrfs/xfs, firmware-aware validation.
 - Minimal Arch install: pacstrap, fstab, GRUB or systemd-boot, locale, keymap,
@@ -123,8 +136,8 @@ machine has what it needs and prints what to install.
 Every release ships `SHA256SUMS`:
 
 ```console
-$ curl -fLO https://github.com/tamkogay9876-code/camareLOL/releases/download/v1.0.0/camarelol
-$ curl -fLO https://github.com/tamkogay9876-code/camareLOL/releases/download/v1.0.0/SHA256SUMS
+$ curl -fLO https://github.com/tamkogay9876-code/camareLOL/releases/download/v1.0.1/camarelol
+$ curl -fLO https://github.com/tamkogay9876-code/camareLOL/releases/download/v1.0.1/SHA256SUMS
 $ sha256sum -c SHA256SUMS
 ```
 

@@ -4,9 +4,10 @@
 
 camareLOL does not update itself.
 
-The current release is **1.0.0**, the first beta. It is published as a GitHub
-pre-release and under the npm `beta` dist-tag; `latest` remains 0.1.22 until
-the beta is promoted. The install commands below show both channels.
+The current release is **1.0.1**, the second beta; **1.0.0** was the first.
+It is published as a GitHub pre-release and under the npm `beta` dist-tag;
+`latest` remains 0.1.22 until the beta is promoted. The install commands below
+show both channels.
 
 ---
 
@@ -40,11 +41,11 @@ the one-liner; it resolves the newest **stable** release and verifies it:
 $ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh | bash
 ```
 
-For the 1.0.0 beta, pin the tag or use the beta channel:
+For the 1.0.1 beta, pin the tag or use the beta channel:
 
 ```console
 $ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh \
-    | CAMARELOL_VERSION=v1.0.0 bash
+    | CAMARELOL_VERSION=v1.0.1 bash
 ```
 
 ```console
@@ -61,9 +62,9 @@ against the release checksums, and replace the binary:
 ```console
 $ sudo pacman -S wget                 # if you do not have it
 $ sudo wget -O /usr/local/bin/camarelol \
-    https://github.com/tamkogay9876-code/camareLOL/releases/download/v1.0.0/camarelol
+    https://github.com/tamkogay9876-code/camareLOL/releases/download/v1.0.1/camarelol
 $ sudo wget -O /tmp/SHA256SUMS \
-    https://github.com/tamkogay9876-code/camareLOL/releases/download/v1.0.0/SHA256SUMS
+    https://github.com/tamkogay9876-code/camareLOL/releases/download/v1.0.1/SHA256SUMS
 $ cd /usr/local/bin && grep ' camarelol$' /tmp/SHA256SUMS | sha256sum -c -
 $ sudo chmod +x /usr/local/bin/camarelol
 $ camarelol --version                  # check what you now have
@@ -113,7 +114,7 @@ Requires `node` and `npm`:
 ```console
 $ sudo pacman -S --needed nodejs npm curl
 $ npm install -g @wenker-ai/camarelo          # stable latest: 0.1.22
-$ npm install -g @wenker-ai/camarelo@beta     # 1.0.0 beta
+$ npm install -g @wenker-ai/camarelo@beta     # 1.0.1 beta
 ```
 
 The npm wrapper asks to connect Wi-Fi before running the installer — including
@@ -240,15 +241,15 @@ markers, so a later release cannot ship without it.
 
 ```console
 $ camarelol --version
-camareLOL 1.0.0 (tag v1.0.0, commit abc1234)
+camareLOL 1.0.1 (tag v1.0.1, commit abc1234)
 ```
 
 Three parts, and they should agree:
 
 | Part | Meaning |
 |---|---|
-| `1.0.0` | the release this binary was built from |
-| `tag v1.0.0` | the git tag, which is what the release is named |
+| `1.0.1` | the release this binary was built from |
+| `tag v1.0.1` | the git tag, which is what the release is named |
 | `commit abc1234` | the exact commit |
 
 If it says `[built from a dirty working tree]`, that binary was compiled from

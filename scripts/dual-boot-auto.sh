@@ -3,7 +3,7 @@
 #
 # WHAT THIS DOES, in plain English:
 #   1. verifies it is running as root on an Arch live ISO with internet;
-#   2. downloads the 1.0.0 beta binary via the official bootstrap script
+#   2. downloads the 1.0.1 beta binary via the official bootstrap script
 #      (beta channel; set CAMARELOL_VERSION to pin another tag);
 #   3. inspects /dev/sda and REFUSES unless the layout matches: GPT,
 #      every sda partition unmounted, one small vfat EFI System Partition
@@ -57,7 +57,8 @@ echo "internet reachable."
 # ---------------------------------------------------------------- 3. fetch the installer
 bold "== step 3/6: downloading camareLOL $MIN_VERSION (beta channel) =="
 curl -fsSL "$BOOTSTRAP_URL" -o /root/camarelol.sh
-# 1.0.0 is the first beta and is published as a GitHub pre-release, so the
+# 1.0.1 is the current beta (1.0.0 was the first) and is published as a GitHub
+# pre-release, so the
 # default stable resolver would keep installing 0.1.22. Pin the beta channel;
 # CAMARELOL_VERSION can still override it for a later run.
 CAMARELOL_CHANNEL="${CAMARELOL_CHANNEL:-beta}" bash /root/camarelol.sh
