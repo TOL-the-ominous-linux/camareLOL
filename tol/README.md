@@ -2,6 +2,14 @@
 
 > Linux, without the cheerful marketing.
 
+<p align="center">
+  <img src="../assets/tol/banner.png" alt="The Ominous Linux" width="720">
+</p>
+
+> The TOL mark is inspired by the visual language of the band TOOL. TOL is not
+> affiliated with, endorsed by, or connected to TOOL, its members or its
+> management.
+
 **The Ominous Linux** — **TOL** — is the group behind camareLOL and the projects
 that grow out of it. It is not a distribution, and it does not have a company
 behind it. It is a name for a way of building Linux tooling: state the risk,

@@ -37,12 +37,13 @@ asset to build a business on, even when the band is friendly about it.
 |---|---|---|
 | `ink` | `#000000` | background, eye's dark half |
 | `paper` | `#F2F0EB` | body text on dark, light backgrounds |
-| `signal` | sample from the banner (`assets/tol/banner.png`) | the eye's red half, accents |
+| `signal` | `#F90000` | the eye's red half, accents |
 | `dim` | `#6E6A63` | secondary text, rules |
 
-`signal` is deliberately not guessed here: the red in the artwork is the source
-of truth. Sample it once from the PNG, write the hex into this table, and stop
-inventing new reds. Until then, do not place the mark next to a different red.
+`signal` is not a guess: it is the mean of the bright-red pixels in
+`assets/tol/logo.png` (`#F90000`, measured 2026-10-27). The artwork also carries
+darker reds — `#A10809`, `#5E0D0E` — for shading; those belong to the image, not
+to the palette. Do not place the mark next to a different red.
 
 Only these four. No gradients, no glow, no drop shadows. The mark works because
 it is flat.
@@ -59,9 +60,11 @@ Place the source art here:
 
 | File | What it is |
 |---|---|
-| `assets/tol/banner.png` | wide banner, eye + wordmark, for README headers and the organisation profile |
-| `assets/tol/logo.png` | square or near-square mark, for avatars |
-| `assets/tol/logo-transparent.png` | optional: mark with the background removed |
+| `assets/tol/banner.png` (2170×725) | wide banner, eye + wordmark, for README headers and the organisation profile |
+| `assets/tol/logo.png` (552×335) | the mark on a near-black field |
+| `assets/tol/eye-trimmed.png` | the mark, cropped to its bounding box |
+| `assets/tol/eye-transparent.png` | the mark with the dark field keyed to alpha — for light backgrounds |
+| `assets/tol/avatar-512.png` | 512×512 square avatar on the dark field |
 
 Requirements for the two required files:
 
