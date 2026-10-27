@@ -270,7 +270,8 @@ camareLOL là dự án đầu tiên của **The Ominous Linux (TOL)** — tên g
 công cụ Linux nói thẳng rủi ro và đưa ra bằng chứng. TOL cũng là nơi đặt dòng
 **LOL kernel** đang được lên kế hoạch.
 
-- [TOL là gì](tol/README.md)
+- [TOL là gì](tol/README.md) — trang chủ:
+  <https://github.com/tamkogay9876-code/the-ominous-linux>
 - [Thương hiệu và cách dùng logo](tol/BRAND.md) — biểu tượng lấy cảm hứng từ
   ban nhạc TOOL và luôn đi kèm dòng ghi công đó
 - [LOL kernel](tol/LOL-KERNEL.md) — đang lên kế hoạch, chưa phát hành

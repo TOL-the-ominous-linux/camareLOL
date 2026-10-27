@@ -348,7 +348,8 @@ camareLOL is the first project of **The Ominous Linux (TOL)** — a name for Lin
 tooling that states the risk and shows the evidence. TOL is also where the
 planned **LOL kernel** line lives.
 
-- [What TOL is](tol/README.md)
+- [What TOL is](tol/README.md) — landing page:
+  <https://github.com/tamkogay9876-code/the-ominous-linux>
 - [Brand and logo usage](tol/BRAND.md) — the mark is inspired by the band TOOL
   and carries that attribution line
 - [LOL kernel](tol/LOL-KERNEL.md) — planned, not shipped
