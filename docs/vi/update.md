@@ -32,34 +32,34 @@ camareLOL không có gói cho `pacman`, và cũng không có gói AUR. Chạy l�
 dòng lệnh một dòng ở trên; nó tự lấy bản **ổn định** mới nhất rồi kiểm tra:
 
 ```console
-$ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh | bash
+$ curl -fsSL https://raw.githubusercontent.com/TOL-the-ominous-linux/camareLOL/main/scripts/camarelol.sh | bash
 ```
 
 Bản 1.0.1 là beta hiện tại; 1.0.0 là bản beta đầu tiên. Bản 1.0.1 phát hành
 dưới dạng GitHub pre-release. Ghim tag hoặc chọn kênh beta:
 
 ```console
-$ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh \
+$ curl -fsSL https://raw.githubusercontent.com/TOL-the-ominous-linux/camareLOL/main/scripts/camarelol.sh \
     | CAMARELOL_VERSION=v1.0.1 bash
 ```
 
 ```console
-$ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh \
+$ curl -fsSL https://raw.githubusercontent.com/TOL-the-ominous-linux/camareLOL/main/scripts/camarelol.sh \
     | CAMARELOL_CHANNEL=beta bash
 ```
 
 ### Tải tay
 
 Tải bản bạn muốn từ
-[Releases](https://github.com/tamkogay9876-code/camareLOL/releases) rồi thay
+[Releases](https://github.com/TOL-the-ominous-linux/camareLOL/releases) rồi thay
 binary:
 
 ```console
 $ sudo pacman -S wget                 # nếu máy chưa có
 $ sudo wget -O /usr/local/bin/camarelol \
-    https://github.com/tamkogay9876-code/camareLOL/releases/download/v1.0.1/camarelol
+    https://github.com/TOL-the-ominous-linux/camareLOL/releases/download/v1.0.1/camarelol
 $ sudo wget -O /tmp/SHA256SUMS \
-    https://github.com/tamkogay9876-code/camareLOL/releases/download/v1.0.1/SHA256SUMS
+    https://github.com/TOL-the-ominous-linux/camareLOL/releases/download/v1.0.1/SHA256SUMS
 $ cd /usr/local/bin && grep ' camarelol$' /tmp/SHA256SUMS | sha256sum -c -
 $ sudo chmod +x /usr/local/bin/camarelol
 $ camarelol --version                  # xem mình đang có bản nào

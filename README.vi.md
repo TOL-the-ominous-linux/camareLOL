@@ -48,9 +48,9 @@ toàn đứng trước mọi thao tác phá huỷ.
 
 | | |
 |---|---|
-| Phát hành | <https://github.com/tamkogay9876-code/camareLOL/releases> |
-| Thảo luận | <https://github.com/tamkogay9876-code/camareLOL/discussions> |
-| Vấn đề | <https://github.com/tamkogay9876-code/camareLOL/issues> |
+| Phát hành | <https://github.com/TOL-the-ominous-linux/camareLOL/releases> |
+| Thảo luận | <https://github.com/TOL-the-ominous-linux/camareLOL/discussions> |
+| Vấn đề | <https://github.com/TOL-the-ominous-linux/camareLOL/issues> |
 
 ## Tài liệu
 
@@ -91,12 +91,12 @@ Bản beta là tuỳ chọn. Lệnh một dòng mặc định vẫn lấy bản 
 (0.1.22). Muốn cài beta, ghim tag hoặc chọn kênh beta:
 
 ```console
-$ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh \
+$ curl -fsSL https://raw.githubusercontent.com/TOL-the-ominous-linux/camareLOL/main/scripts/camarelol.sh \
     | CAMARELOL_VERSION=v1.0.1 bash
 ```
 
 ```console
-$ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh \
+$ curl -fsSL https://raw.githubusercontent.com/TOL-the-ominous-linux/camareLOL/main/scripts/camarelol.sh \
     | CAMARELOL_CHANNEL=beta bash
 ```
 
@@ -113,7 +113,7 @@ $ npm install -g @wenker-ai/camarelo@beta
 Cách nhanh nhất, và không thể cài nhầm thứ:
 
 ```console
-$ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh | bash
+$ curl -fsSL https://raw.githubusercontent.com/TOL-the-ominous-linux/camareLOL/main/scripts/camarelol.sh | bash
 ```
 
 Nó tự lấy bản phát hành mới nhất, **kiểm tra ba lớp** — mã HTTP, ELF magic,
@@ -134,7 +134,7 @@ như một kịch bản shell. Một trình cài đặt xoá ổ đĩa không đ
 
 ### Từ bản phát hành
 
-Tải binary từ [Releases](https://github.com/tamkogay9876-code/camareLOL/releases)
+Tải binary từ [Releases](https://github.com/TOL-the-ominous-linux/camareLOL/releases)
 rồi chạy từ Arch live ISO:
 
 ```console
@@ -271,7 +271,7 @@ công cụ Linux nói thẳng rủi ro và đưa ra bằng chứng. TOL cũng l�
 **LOL kernel** đang được lên kế hoạch.
 
 - [TOL là gì](tol/README.md) — trang chủ:
-  <https://github.com/tamkogay9876-code/the-ominous-linux>
+  <https://github.com/TOL-the-ominous-linux/.github>
 - [Thương hiệu và cách dùng logo](tol/BRAND.md) — biểu tượng lấy cảm hứng từ
   ban nhạc TOOL và luôn đi kèm dòng ghi công đó
 - [LOL kernel](tol/LOL-KERNEL.md) — đang lên kế hoạch, chưa phát hành

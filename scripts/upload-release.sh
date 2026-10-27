@@ -45,8 +45,8 @@ NOTES="$REPO_DIR/docs/releases/$VERSION.md"
 }
 [ -s "$NOTES" ] || { echo "ghi chú phát hành rỗng: $NOTES" >&2; exit 1; }
 
-API="https://api.github.com/repos/tamkogay9876-code/camareLOL/releases"
-REPO_API="https://api.github.com/repos/tamkogay9876-code/camareLOL"
+API="https://api.github.com/repos/TOL-the-ominous-linux/camareLOL/releases"
+REPO_API="https://api.github.com/repos/TOL-the-ominous-linux/camareLOL"
 
 TOKEN="${CAMARELOL_GH_TOKEN:-}"
 if [ -z "$TOKEN" ]; then
@@ -122,7 +122,7 @@ echo "   release id $RELEASE_ID"
 for f in "camarelol" "camarelol-$VERSION.tar.gz" "camarelol-catalog.jar" "PKGBUILD" "SHA256SUMS"; do
     echo "== tải $f =="
     curl -fsS -X POST \
-        "https://uploads.github.com/repos/tamkogay9876-code/camareLOL/releases/$RELEASE_ID/assets?name=$f" \
+        "https://uploads.github.com/repos/TOL-the-ominous-linux/camareLOL/releases/$RELEASE_ID/assets?name=$f" \
         -H "Authorization: token $TOKEN" -H "Content-Type: application/octet-stream" \
         --data-binary "@$f" \
         | python3 -c 'import json,sys; d=json.load(sys.stdin); print("  →", d["state"], d["browser_download_url"])'

@@ -2,7 +2,7 @@
 # ---------------------------------------------------------------------------
 # camareLOL — cài binary bằng một dòng, chạy được trực tiếp từ live ISO.
 #
-#   curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/TOL-the-ominous-linux/camareLOL/main/scripts/camarelol.sh | bash
 #
 # Tệp này tự chứa, không cần clone kho. Nó làm đúng ba việc rồi đưa quyền
 # kiểm soát lại cho bạn: tải binary, CHỨNG MINH nó là binary thật, và chạy
@@ -32,7 +32,7 @@
 # ---------------------------------------------------------------------------
 set -euo pipefail
 
-REPO="tamkogay9876-code/camareLOL"
+REPO="TOL-the-ominous-linux/camareLOL"
 CHANNEL="${CAMARELOL_CHANNEL:-stable}"
 PREFIX="${CAMARELOL_PREFIX:-/usr/local/bin}"
 NOINSTALL="${CAMARELOL_NOINSTALL:-0}"

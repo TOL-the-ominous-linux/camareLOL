@@ -3,13 +3,13 @@
   "version": "1.0.1",
   "description": "camareLOL \u2014 a safety-first TUI installer for Arch Linux, with a Vietnamese soul",
   "license": "GPL-3.0-or-later",
-  "homepage": "https://github.com/tamkogay9876-code/camareLOL",
+  "homepage": "https://github.com/TOL-the-ominous-linux/camareLOL",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/tamkogay9876-code/camareLOL.git"
+    "url": "git+https://github.com/TOL-the-ominous-linux/camareLOL.git"
   },
   "bugs": {
-    "url": "https://github.com/tamkogay9876-code/camareLOL/issues"
+    "url": "https://github.com/TOL-the-ominous-linux/camareLOL/issues"
   },
   "keywords": [
     "arch",

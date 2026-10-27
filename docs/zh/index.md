@@ -18,9 +18,9 @@ camareLOL 从终端安装 Arch Linux。它会检测你的硬件、提出一个�
 
 | | |
 |---|---|
-| 发布版本 | <https://github.com/tamkogay9876-code/camareLOL/releases> |
-| 讨论 | <https://github.com/tamkogay9876-code/camareLOL/discussions> |
-| 问题 | <https://github.com/tamkogay9876-code/camareLOL/issues> |
+| 发布版本 | <https://github.com/TOL-the-ominous-linux/camareLOL/releases> |
+| 讨论 | <https://github.com/TOL-the-ominous-linux/camareLOL/discussions> |
+| 问题 | <https://github.com/TOL-the-ominous-linux/camareLOL/issues> |
 
 ## 语言
 
@@ -32,7 +32,7 @@ camareLOL 从终端安装 Arch Linux。它会检测你的硬件、提出一个�
 **稳定版**（0.1.22）；1.0.1 beta 需要显式选择：
 
 ```console
-$ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh \
+$ curl -fsSL https://raw.githubusercontent.com/TOL-the-ominous-linux/camareLOL/main/scripts/camarelol.sh \
     | CAMARELOL_VERSION=v1.0.1 bash
 $ camarelol --self-test      # 非破坏性检查；在真实机器上运行也安全
 $ sudo camarelol             # 打开 TUI
@@ -46,8 +46,8 @@ $ sudo camarelol             # 打开 TUI
 如果你想自己下载二进制文件，请保留 `-f` 和 `-L`：
 
 ```console
-$ curl -fLO https://github.com/tamkogay9876-code/camareLOL/releases/download/v1.0.1/camarelol
-$ curl -fLO https://github.com/tamkogay9876-code/camareLOL/releases/download/v1.0.1/SHA256SUMS
+$ curl -fLO https://github.com/TOL-the-ominous-linux/camareLOL/releases/download/v1.0.1/camarelol
+$ curl -fLO https://github.com/TOL-the-ominous-linux/camareLOL/releases/download/v1.0.1/SHA256SUMS
 $ sha256sum -c SHA256SUMS
 ```
 
@@ -64,10 +64,10 @@ camareLOL 不会自我更新。没有更新器，没有索引地址，代码里�
 它会解析最新的**稳定版**并校验：
 
 ```console
-$ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh | bash
+$ curl -fsSL https://raw.githubusercontent.com/TOL-the-ominous-linux/camareLOL/main/scripts/camarelol.sh | bash
 ```
 
-或者从 <https://github.com/tamkogay9876-code/camareLOL/releases>
+或者从 <https://github.com/TOL-the-ominous-linux/camareLOL/releases>
 下载想要的版本，手动替换二进制文件。
 
 ## 文档

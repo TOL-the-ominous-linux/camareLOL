@@ -11,7 +11,7 @@ pkgver=1.0.1
 pkgrel=1
 pkgdesc="A modern, safety-first TUI installer for Arch Linux"
 arch=('x86_64')
-url="https://github.com/tamkogay9876-code/camareLOL"
+url="https://github.com/TOL-the-ominous-linux/camareLOL"
 license=('GPL3')
 depends=(
     'util-linux'            # lsblk, findmnt, blkid
@@ -31,7 +31,7 @@ optdepends=(
 options=('!strip' '!debug')
 # URL đầy đủ, không phải tên tệp trần: `source` cho một tệp tải về từ mạng phải
 # là URL. Tên tệp trần khiến makepkg tìm trong thư mục hiện tại và hỏng.
-source=("https://github.com/tamkogay9876-code/camareLOL/releases/download/v$pkgver/$pkgname-$pkgver.tar.gz")
+source=("https://github.com/TOL-the-ominous-linux/camareLOL/releases/download/v$pkgver/$pkgname-$pkgver.tar.gz")
 # Không phải SKIP. Đây là dự án kiểm tra sha256 của chính nó trước khi cài bất
 # cứ thứ gì; để ngoại trừ nó ở đây thì việc kiểm tra đó chỉ còn đúng khi người
 # dùng tự làm, và im lặng sai khi không.

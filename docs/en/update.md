@@ -38,33 +38,33 @@ camareLOL is not packaged for `pacman`, and there is no AUR package. Re-run
 the one-liner; it resolves the newest **stable** release and verifies it:
 
 ```console
-$ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh | bash
+$ curl -fsSL https://raw.githubusercontent.com/TOL-the-ominous-linux/camareLOL/main/scripts/camarelol.sh | bash
 ```
 
 For the 1.0.1 beta, pin the tag or use the beta channel:
 
 ```console
-$ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh \
+$ curl -fsSL https://raw.githubusercontent.com/TOL-the-ominous-linux/camareLOL/main/scripts/camarelol.sh \
     | CAMARELOL_VERSION=v1.0.1 bash
 ```
 
 ```console
-$ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh \
+$ curl -fsSL https://raw.githubusercontent.com/TOL-the-ominous-linux/camareLOL/main/scripts/camarelol.sh \
     | CAMARELOL_CHANNEL=beta bash
 ```
 
 ### By hand
 
 Download the release you want from
-[Releases](https://github.com/tamkogay9876-code/camareLOL/releases), verify it
+[Releases](https://github.com/TOL-the-ominous-linux/camareLOL/releases), verify it
 against the release checksums, and replace the binary:
 
 ```console
 $ sudo pacman -S wget                 # if you do not have it
 $ sudo wget -O /usr/local/bin/camarelol \
-    https://github.com/tamkogay9876-code/camareLOL/releases/download/v1.0.1/camarelol
+    https://github.com/TOL-the-ominous-linux/camareLOL/releases/download/v1.0.1/camarelol
 $ sudo wget -O /tmp/SHA256SUMS \
-    https://github.com/tamkogay9876-code/camareLOL/releases/download/v1.0.1/SHA256SUMS
+    https://github.com/TOL-the-ominous-linux/camareLOL/releases/download/v1.0.1/SHA256SUMS
 $ cd /usr/local/bin && grep ' camarelol$' /tmp/SHA256SUMS | sha256sum -c -
 $ sudo chmod +x /usr/local/bin/camarelol
 $ camarelol --version                  # check what you now have

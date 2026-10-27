@@ -30,33 +30,33 @@ camareLOL 没有 `pacman` 软件包，也没有 AUR 软件包。重新运行上�
 它会解析最新的**稳定版**并校验：
 
 ```console
-$ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh | bash
+$ curl -fsSL https://raw.githubusercontent.com/TOL-the-ominous-linux/camareLOL/main/scripts/camarelol.sh | bash
 ```
 
 1.0.1 是当前 beta；1.0.0 是首个 beta。它同样以 GitHub pre-release 发布。
 固定 tag 或选择 beta 通道：
 
 ```console
-$ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh \
+$ curl -fsSL https://raw.githubusercontent.com/TOL-the-ominous-linux/camareLOL/main/scripts/camarelol.sh \
     | CAMARELOL_VERSION=v1.0.1 bash
 ```
 
 ```console
-$ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh \
+$ curl -fsSL https://raw.githubusercontent.com/TOL-the-ominous-linux/camareLOL/main/scripts/camarelol.sh \
     | CAMARELOL_CHANNEL=beta bash
 ```
 
 ### 手动下载
 
-从 [Releases](https://github.com/tamkogay9876-code/camareLOL/releases)
+从 [Releases](https://github.com/TOL-the-ominous-linux/camareLOL/releases)
 下载想要的版本，替换二进制文件：
 
 ```console
 $ sudo pacman -S wget                 # 如果还没有的话
 $ sudo wget -O /usr/local/bin/camarelol \
-    https://github.com/tamkogay9876-code/camareLOL/releases/download/v1.0.1/camarelol
+    https://github.com/TOL-the-ominous-linux/camareLOL/releases/download/v1.0.1/camarelol
 $ sudo wget -O /tmp/SHA256SUMS \
-    https://github.com/tamkogay9876-code/camareLOL/releases/download/v1.0.1/SHA256SUMS
+    https://github.com/TOL-the-ominous-linux/camareLOL/releases/download/v1.0.1/SHA256SUMS
 $ cd /usr/local/bin && grep ' camarelol$' /tmp/SHA256SUMS | sha256sum -c -
 $ sudo chmod +x /usr/local/bin/camarelol
 $ camarelol --version                  # 看看现在装的是哪一版

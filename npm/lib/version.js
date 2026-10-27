@@ -35,7 +35,7 @@ async function latestRelease(timeoutMs = 8000) {
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), timeoutMs);
   try {
-    const res = await fetch('https://api.github.com/repos/tamkogay9876-code/camareLOL/releases/latest', {
+    const res = await fetch('https://api.github.com/repos/TOL-the-ominous-linux/camareLOL/releases/latest', {
       signal: ac.signal,
       headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'camarelol-npm' },
     });

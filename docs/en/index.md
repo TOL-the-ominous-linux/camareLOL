@@ -17,9 +17,9 @@ destructive operation.
 
 | | |
 |---|---|
-| Releases | <https://github.com/tamkogay9876-code/camareLOL/releases> |
-| Discussions | <https://github.com/tamkogay9876-code/camareLOL/discussions> |
-| Issues | <https://github.com/tamkogay9876-code/camareLOL/issues> |
+| Releases | <https://github.com/TOL-the-ominous-linux/camareLOL/releases> |
+| Discussions | <https://github.com/TOL-the-ominous-linux/camareLOL/discussions> |
+| Issues | <https://github.com/TOL-the-ominous-linux/camareLOL/issues> |
 
 ## Languages
 
@@ -32,7 +32,7 @@ one-liner resolves the newest **stable** release (0.1.22); the 1.0.1 beta is
 opt-in:
 
 ```console
-$ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh \
+$ curl -fsSL https://raw.githubusercontent.com/TOL-the-ominous-linux/camareLOL/main/scripts/camarelol.sh \
     | CAMARELOL_VERSION=v1.0.1 bash
 $ camarelol --self-test      # non-destructive checks; safe on a real machine
 $ sudo camarelol             # the TUI
@@ -46,8 +46,8 @@ pre-release. Omit both for the stable channel.
 If you would rather download the binary yourself, keep `-f` and `-L`:
 
 ```console
-$ curl -fLO https://github.com/tamkogay9876-code/camareLOL/releases/download/v1.0.1/camarelol
-$ curl -fLO https://github.com/tamkogay9876-code/camareLOL/releases/download/v1.0.1/SHA256SUMS
+$ curl -fLO https://github.com/TOL-the-ominous-linux/camareLOL/releases/download/v1.0.1/camarelol
+$ curl -fLO https://github.com/TOL-the-ominous-linux/camareLOL/releases/download/v1.0.1/SHA256SUMS
 $ sha256sum -c SHA256SUMS
 ```
 
@@ -65,11 +65,11 @@ package. Re-run the one-liner; it picks the newest **stable** release and
 verifies it:
 
 ```console
-$ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh | bash
+$ curl -fsSL https://raw.githubusercontent.com/TOL-the-ominous-linux/camareLOL/main/scripts/camarelol.sh | bash
 ```
 
 Or download the release you want from
-<https://github.com/tamkogay9876-code/camareLOL/releases> and replace the
+<https://github.com/TOL-the-ominous-linux/camareLOL/releases> and replace the
 binary by hand.
 
 ## Documentation

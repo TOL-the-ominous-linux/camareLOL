@@ -20,9 +20,9 @@ SHOTS="${SHOTS:-/tmp/opencode/vm-shots}"
 # bản mới — và nó cứ thế vẫn xanh.
 #
 # Kiểm bản beta 1.0.1 (pre-release, không nằm trong /releases/latest):
-#   SERIES=https://github.com/tamkogay9876-code/camareLOL/releases/download/v1.0.1 \
+#   SERIES=https://github.com/TOL-the-ominous-linux/camareLOL/releases/download/v1.0.1 \
 #       ./scripts/vm-release-test.sh all
-SERIES="${SERIES:-https://github.com/tamkogay9876-code/camareLOL/releases/latest/download}"
+SERIES="${SERIES:-https://github.com/TOL-the-ominous-linux/camareLOL/releases/latest/download}"
 mkdir -p "$SHOTS"
 
 say() { printf '\n=== %s ===\n' "$*"; }

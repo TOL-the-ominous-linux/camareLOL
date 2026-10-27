@@ -28,7 +28,7 @@ VERSION="${1:-}"
 VERSION="${VERSION#v}"
 
 OUT_DIR="${CAMARELOL_RELEASE_OUT:-$REPO_DIR/out/release}"
-BASE_URL="${CAMARELOL_BASE_URL:-https://github.com/tamkogay9876-code/camareLOL/releases/download/v$VERSION}"
+BASE_URL="${CAMARELOL_BASE_URL:-https://github.com/TOL-the-ominous-linux/camareLOL/releases/download/v$VERSION}"
 
 die() { printf '%s\n' "$*" >&2; exit 1; }
 note() { printf '  %s\n' "$*"; }

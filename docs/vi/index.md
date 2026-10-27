@@ -18,9 +18,9 @@ cổng an toàn đứng trước mọi thao tác phá huỷ.
 
 | | |
 |---|---|
-| Bản phát hành | <https://github.com/tamkogay9876-code/camareLOL/releases> |
-| Thảo luận | <https://github.com/tamkogay9876-code/camareLOL/discussions> |
-| Vấn đề | <https://github.com/tamkogay9876-code/camareLOL/issues> |
+| Bản phát hành | <https://github.com/TOL-the-ominous-linux/camareLOL/releases> |
+| Thảo luận | <https://github.com/TOL-the-ominous-linux/camareLOL/discussions> |
+| Vấn đề | <https://github.com/TOL-the-ominous-linux/camareLOL/issues> |
 
 ## Ngôn ngữ
 
@@ -32,7 +32,7 @@ Chạy nó từ ISO sống của Arch — đó là nơi một trình cài đặt
 dòng mặc định lấy bản **ổn định** mới nhất (0.1.22); beta 1.0.1 là tuỳ chọn:
 
 ```console
-$ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh \
+$ curl -fsSL https://raw.githubusercontent.com/TOL-the-ominous-linux/camareLOL/main/scripts/camarelol.sh \
     | CAMARELOL_VERSION=v1.0.1 bash
 $ camarelol --self-test      # kiểm không phá huỷ; an toàn trên máy thật
 $ sudo camarelol             # mở TUI
@@ -46,8 +46,8 @@ pre-release mới nhất. Bỏ cả hai để dùng kênh ổn định.
 Nếu bạn muốn tự tải binary, nhớ giữ `-f` và `-L`:
 
 ```console
-$ curl -fLO https://github.com/tamkogay9876-code/camareLOL/releases/download/v1.0.1/camarelol
-$ curl -fLO https://github.com/tamkogay9876-code/camareLOL/releases/download/v1.0.1/SHA256SUMS
+$ curl -fLO https://github.com/TOL-the-ominous-linux/camareLOL/releases/download/v1.0.1/camarelol
+$ curl -fLO https://github.com/TOL-the-ominous-linux/camareLOL/releases/download/v1.0.1/SHA256SUMS
 $ sha256sum -c SHA256SUMS
 ```
 
@@ -65,11 +65,11 @@ AUR. Chạy lại dòng một dòng ở trên; nó tự lấy bản **ổn đị
 kiểm tra:
 
 ```console
-$ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh | bash
+$ curl -fsSL https://raw.githubusercontent.com/TOL-the-ominous-linux/camareLOL/main/scripts/camarelol.sh | bash
 ```
 
 Hoặc tải bản bạn muốn từ
-<https://github.com/tamkogay9876-code/camareLOL/releases> và thay binary
+<https://github.com/TOL-the-ominous-linux/camareLOL/releases> và thay binary
 bằng tay.
 
 ## Tài liệu

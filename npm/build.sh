@@ -33,7 +33,7 @@ command -v sha256sum >/dev/null 2>&1 || fail "cần sha256sum trên PATH"
 VERSION="$(python3 -c 'import json; print(json.load(open("package.json"))["version"])')"
 [ -n "$VERSION" ] || fail "không đọc được phiên bản trong package.json"
 TAG="v$VERSION"
-BASE="https://github.com/tamkogay9876-code/camareLOL/releases/download/$TAG"
+BASE="https://github.com/TOL-the-ominous-linux/camareLOL/releases/download/$TAG"
 
 echo "Đóng gói @wenker-ai/camarelo $VERSION ($TAG)"
 

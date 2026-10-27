@@ -119,10 +119,10 @@ UPDATING:
     server to erased data. There is no pacman package and no AUR package —
     re-run the one-liner; it picks the newest release and verifies it:
 
-        curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh | bash
+        curl -fsSL https://raw.githubusercontent.com/TOL-the-ominous-linux/camareLOL/main/scripts/camarelol.sh | bash
 
     Or download the release you want from
-    https://github.com/tamkogay9876-code/camareLOL/releases and replace the
+    https://github.com/TOL-the-ominous-linux/camareLOL/releases and replace the
     binary by hand.
 "
 }

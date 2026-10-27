@@ -23,7 +23,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { execFileSync, spawnSync } = require('node:child_process');
 
-const REPO = 'tamkogay9876-code/camareLOL';
+const REPO = 'TOL-the-ominous-linux/camareLOL';
 const DOWNLOAD_BASE = `https://github.com/${REPO}/releases/download`;
 
 function have(cmd) {

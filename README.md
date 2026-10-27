@@ -54,9 +54,9 @@ destructive operation.
 
 | | |
 |---|---|
-| Releases | <https://github.com/tamkogay9876-code/camareLOL/releases> |
-| Discussions | <https://github.com/tamkogay9876-code/camareLOL/discussions> |
-| Issues | <https://github.com/tamkogay9876-code/camareLOL/issues> |
+| Releases | <https://github.com/TOL-the-ominous-linux/camareLOL/releases> |
+| Discussions | <https://github.com/TOL-the-ominous-linux/camareLOL/discussions> |
+| Issues | <https://github.com/TOL-the-ominous-linux/camareLOL/issues> |
 
 There is no website. The documentation is Markdown in `docs/`, which GitHub
 renders in the repository itself — no server to run, nothing to break.
@@ -130,12 +130,12 @@ release, which is still 0.1.22. To install the beta, pin the tag or ask for the
 beta channel:
 
 ```console
-$ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh \
+$ curl -fsSL https://raw.githubusercontent.com/TOL-the-ominous-linux/camareLOL/main/scripts/camarelol.sh \
     | CAMARELOL_VERSION=v1.0.1 bash
 ```
 
 ```console
-$ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh \
+$ curl -fsSL https://raw.githubusercontent.com/TOL-the-ominous-linux/camareLOL/main/scripts/camarelol.sh \
     | CAMARELOL_CHANNEL=beta bash
 ```
 
@@ -152,7 +152,7 @@ $ npm install -g @wenker-ai/camarelo@beta
 The fastest way in, and the one that cannot install the wrong thing:
 
 ```console
-$ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh | bash
+$ curl -fsSL https://raw.githubusercontent.com/TOL-the-ominous-linux/camareLOL/main/scripts/camarelol.sh | bash
 ```
 
 It resolves the newest release, **verifies it three ways** — HTTP status, ELF
@@ -174,7 +174,7 @@ what it downloaded is an error page.
 ### From a release
 
 Download the binary from
-[Releases](https://github.com/tamkogay9876-code/camareLOL/releases) and run it
+[Releases](https://github.com/TOL-the-ominous-linux/camareLOL/releases) and run it
 from the Arch live ISO:
 
 ```console
@@ -186,7 +186,7 @@ $ sudo ./camarelol             # the TUI
 Or let the helper fetch it for you:
 
 ```console
-$ git clone https://github.com/tamkogay9876-code/camareLOL
+$ git clone https://github.com/TOL-the-ominous-linux/camareLOL
 $ cd camareLOL && sudo ./install.sh --binary
 $ CAMARELOL_VERSION=v1.0.1 sudo -E ./install.sh --binary   # beta tag
 ```
@@ -225,11 +225,11 @@ server to erased data. There is no `pacman` package and no AUR package. Re-run
 the one-liner; it picks the newest release and verifies it:
 
 ```console
-$ curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh | bash
+$ curl -fsSL https://raw.githubusercontent.com/TOL-the-ominous-linux/camareLOL/main/scripts/camarelol.sh | bash
 ```
 
 Or download the release you want from
-[Releases](https://github.com/tamkogay9876-code/camareLOL/releases) and replace
+[Releases](https://github.com/TOL-the-ominous-linux/camareLOL/releases) and replace
 the binary by hand.
 
 ### From source
@@ -247,8 +247,8 @@ Each release ships a `PKGBUILD` pinned to that release's tarball:
 
 ```console
 $ VERSION=1.0.1
-$ curl -fLO "https://github.com/tamkogay9876-code/camareLOL/releases/download/v$VERSION/camarelol-$VERSION.tar.gz"
-$ curl -fLO "https://github.com/tamkogay9876-code/camareLOL/releases/download/v$VERSION/PKGBUILD"
+$ curl -fLO "https://github.com/TOL-the-ominous-linux/camareLOL/releases/download/v$VERSION/camarelol-$VERSION.tar.gz"
+$ curl -fLO "https://github.com/TOL-the-ominous-linux/camareLOL/releases/download/v$VERSION/PKGBUILD"
 $ tar xf "camarelol-$VERSION.tar.gz"
 $ cp PKGBUILD "camarelol-$VERSION/"
 $ cd "camarelol-$VERSION"
@@ -349,7 +349,7 @@ tooling that states the risk and shows the evidence. TOL is also where the
 planned **LOL kernel** line lives.
 
 - [What TOL is](tol/README.md) — landing page:
-  <https://github.com/tamkogay9876-code/the-ominous-linux>
+  <https://github.com/TOL-the-ominous-linux/.github>
 - [Brand and logo usage](tol/BRAND.md) — the mark is inspired by the band TOOL
   and carries that attribution line
 - [LOL kernel](tol/LOL-KERNEL.md) — planned, not shipped

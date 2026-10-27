@@ -14,10 +14,10 @@ exactly what it is about to do, and writes to a disk only after you confirm.
 plan → review → confirm → execute → verify — with a safety gate in front of
 every destructive operation.
 
-- Repository: <https://github.com/tamkogay9876-code/camareLOL>
-- Release notes: <https://github.com/tamkogay9876-code/camareLOL/blob/main/docs/releases/1.0.1.md>
-- First beta: <https://github.com/tamkogay9876-code/camareLOL/blob/main/docs/releases/1.0.0.md>
-- Documentation: <https://github.com/tamkogay9876-code/camareLOL/tree/main/docs>
+- Repository: <https://github.com/TOL-the-ominous-linux/camareLOL>
+- Release notes: <https://github.com/TOL-the-ominous-linux/camareLOL/blob/main/docs/releases/1.0.1.md>
+- First beta: <https://github.com/TOL-the-ominous-linux/camareLOL/blob/main/docs/releases/1.0.0.md>
+- Documentation: <https://github.com/TOL-the-ominous-linux/camareLOL/tree/main/docs>
 
 ## Install
 
@@ -136,8 +136,8 @@ machine has what it needs and prints what to install.
 Every release ships `SHA256SUMS`:
 
 ```console
-$ curl -fLO https://github.com/tamkogay9876-code/camareLOL/releases/download/v1.0.1/camarelol
-$ curl -fLO https://github.com/tamkogay9876-code/camareLOL/releases/download/v1.0.1/SHA256SUMS
+$ curl -fLO https://github.com/TOL-the-ominous-linux/camareLOL/releases/download/v1.0.1/camarelol
+$ curl -fLO https://github.com/TOL-the-ominous-linux/camareLOL/releases/download/v1.0.1/SHA256SUMS
 $ sha256sum -c SHA256SUMS
 ```
 
@@ -148,4 +148,4 @@ pack.
 
 ## License
 
-GPL-3.0-or-later. Source: <https://github.com/tamkogay9876-code/camareLOL>
+GPL-3.0-or-later. Source: <https://github.com/TOL-the-ominous-linux/camareLOL>

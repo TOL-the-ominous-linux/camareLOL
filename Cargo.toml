@@ -6,7 +6,7 @@ members = ["core", "tui"]
 version = "1.0.1"
 edition = "2021"
 license = "GPL-3.0-or-later"
-repository = "https://github.com/tamkogay9876-code/camareLOL"
+repository = "https://github.com/TOL-the-ominous-linux/camareLOL"
 authors = ["camareLOL contributors"]
 
 [profile.release]

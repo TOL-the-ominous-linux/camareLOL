@@ -76,8 +76,8 @@ Bên trong ISO sống:
 ```console
 # mount -o remount,rw /          # a live ISO usually mounts read-only
 # pacman -Sy --needed curl
-# curl -fLO https://github.com/tamkogay9876-code/camareLOL/releases/download/v1.0.1/camarelol
-# curl -fLO https://github.com/tamkogay9876-code/camareLOL/releases/download/v1.0.1/SHA256SUMS
+# curl -fLO https://github.com/TOL-the-ominous-linux/camareLOL/releases/download/v1.0.1/camarelol
+# curl -fLO https://github.com/TOL-the-ominous-linux/camareLOL/releases/download/v1.0.1/SHA256SUMS
 # sha256sum -c SHA256SUMS
 # chmod +x camarelol
 # ./camarelol --self-test

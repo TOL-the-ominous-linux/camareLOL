@@ -11,7 +11,7 @@
 # ---------------------------------------------------------------------------
 set -euo pipefail
 
-REPO="https://github.com/tamkogay9876-code/camareLOL"
+REPO="https://github.com/TOL-the-ominous-linux/camareLOL"
 PREFIX="${PREFIX:-/usr/local}"
 BIN="$PREFIX/bin/camarelol"
 

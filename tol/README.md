@@ -19,8 +19,8 @@ show the evidence, and never claim a result that was not verified.
 |---|---|
 | Short name | TOL |
 | Projects | [camareLOL](../README.md), [LOL kernel](LOL-KERNEL.md) |
-| Repository | <https://github.com/tamkogay9876-code/camareLOL> |
-| Landing page | <https://github.com/tamkogay9876-code/the-ominous-linux> (becomes the `.github` profile when the organisation exists) |
+| Repository | <https://github.com/TOL-the-ominous-linux/camareLOL> |
+| Landing page | <https://github.com/TOL-the-ominous-linux/.github> — the organisation profile repository |
 | Status | brand and documentation, October 2026 |
 
 ## Why "ominous"

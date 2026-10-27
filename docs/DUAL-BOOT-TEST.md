@@ -38,7 +38,7 @@
 > chuỗi lệnh tay của B2-1/B2-2 bằng:
 >
 > ```bash
-> curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/refs/heads/main/scripts/dual-boot-auto.sh -o dual-boot-auto.sh
+> curl -fsSL https://raw.githubusercontent.com/TOL-the-ominous-linux/camareLOL/refs/heads/main/scripts/dual-boot-auto.sh -o dual-boot-auto.sh
 > bash dual-boot-auto.sh
 > ```
 >
@@ -102,7 +102,7 @@ sudo dd if=archlinux-x86_64.iso of=/dev/sdX bs=4M status=progress oflag=sync
 # 2. Boot USB, chọn "Arch Linux install medium"
 
 # 3. Trong live ISO, tải camareLOL
-curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh | bash
+curl -fsSL https://raw.githubusercontent.com/TOL-the-ominous-linux/camareLOL/main/scripts/camarelol.sh | bash
 
 # 4. Chạy thử không ghi gì trước
 camarelol --preview
@@ -168,7 +168,7 @@ iwctl                       # Wi-Fi nếu không có dây
 ping -c1 archlinux.org      # mạng phải sống, pacstrap cần internet
 
 # Tải bản phát hành 1.0.1 beta (CAMARELOL_CHANNEL=beta chọn pre-release mới nhất)
-curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/main/scripts/camarelol.sh \
+curl -fsSL https://raw.githubusercontent.com/TOL-the-ominous-linux/camareLOL/main/scripts/camarelol.sh \
     | CAMARELOL_CHANNEL=beta bash
 camarelol --version         # phải in "camareLOL 1.0.1 (tag v1.0.1…)"
 

@@ -20,7 +20,7 @@
 # sgdisk --zap-all, or write anything before the typed confirmations.
 #
 # Usage (from the live ISO, as root):
-#   curl -fsSL https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/refs/heads/main/scripts/dual-boot-auto.sh -o dual-boot-auto.sh
+#   curl -fsSL https://raw.githubusercontent.com/TOL-the-ominous-linux/camareLOL/refs/heads/main/scripts/dual-boot-auto.sh -o dual-boot-auto.sh
 #   bash dual-boot-auto.sh
 #
 # Overridable via environment: TARGET_DISK (/dev/sda), HOSTNAME (camarelol),
@@ -32,7 +32,7 @@ TARGET_DISK="${TARGET_DISK:-/dev/sda}"
 DISK_BASENAME="$(basename "$TARGET_DISK")"
 HOSTNAME_DEF="${HOSTNAME:-camarelol}"
 TIMEZONE_DEF="${TIMEZONE:-Asia/Ho_Chi_Minh}"
-BOOTSTRAP_URL="https://raw.githubusercontent.com/tamkogay9876-code/camareLOL/refs/heads/main/scripts/camarelol.sh"
+BOOTSTRAP_URL="https://raw.githubusercontent.com/TOL-the-ominous-linux/camareLOL/refs/heads/main/scripts/camarelol.sh"
 MIN_VERSION="1.0.0"
 
 bold() { printf '\033[1m%s\033[0m\n' "$*"; }
