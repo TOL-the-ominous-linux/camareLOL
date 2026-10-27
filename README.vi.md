@@ -279,7 +279,7 @@ công cụ Linux nói thẳng rủi ro và đưa ra bằng chứng. TOL cũng l�
 ## I USE ARCH BTW
 
 <p align="center">
-  <img src="assets/arch.webp" alt="Arch Linux" width="110">
+  <img src="assets/arch.png" alt="Arch Linux" width="110">
 </p>
 
 Cài Arch là một lựa chọn, không phải một công việc nặng nhọc. camareLOL tồn

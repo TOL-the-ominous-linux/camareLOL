@@ -357,7 +357,7 @@ planned **LOL kernel** line lives.
 ## I USE ARCH BTW
 
 <p align="center">
-  <img src="assets/arch.webp" alt="Arch Linux" width="110">
+  <img src="assets/arch.png" alt="Arch Linux" width="110">
 </p>
 
 Installing Arch is a choice, not a chore. camareLOL exists so that the choice
