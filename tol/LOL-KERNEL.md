@@ -1,5 +1,9 @@
 # LOL kernel
 
+Home repository: <https://github.com/TOL-the-ominous-linux/kernel> — the policy,
+the patch set (empty by design) and, eventually, the PKGBUILD live there. This
+page stays the source of truth for *why*; that repo is *where*.
+
 **Status: planned. Nothing is built, packaged or shipped yet.**
 
 This page exists so the name has a definition before it has code. If the project

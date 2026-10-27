@@ -51,8 +51,10 @@ destructive operation. Vietnamese, English and Simplified Chinese.
 
 The kernel line that camareLOL installs, or offers to install, when a machine
 needs more than the stock Arch kernel. Arch-based, built as normal packages, no
-out-of-tree surprises. **Planned; nothing is shipped yet.** Read
-[LOL-KERNEL.md](LOL-KERNEL.md) for the definition and the current state.
+out-of-tree surprises. **Planned; nothing is shipped yet.** The
+[LOL kernel repository](https://github.com/TOL-the-ominous-linux/kernel) holds
+the policy and the patch set;
+[LOL-KERNEL.md](LOL-KERNEL.md) is the definition and the current state.
 
 ## Naming
 
@@ -75,7 +77,8 @@ attribution line that must travel with the logo.
 ## Contributing
 
 TOL has no contributor programme yet. Issues and discussions for camareLOL live
-in the camareLOL repository. If you want to work on the kernel line, read
+in the camareLOL repository. If you want to work on the kernel line, start at
+<https://github.com/TOL-the-ominous-linux/kernel> and read
 [LOL-KERNEL.md](LOL-KERNEL.md) first: the constraints there are the project.
 
 ## License

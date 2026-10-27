@@ -345,14 +345,16 @@ A full install is verified in a VirtualBox VM — see
 ## Part of The Ominous Linux
 
 camareLOL is the first project of **The Ominous Linux (TOL)** — a name for Linux
-tooling that states the risk and shows the evidence. TOL is also where the
-planned **LOL kernel** line lives.
+tooling that states the risk and shows the evidence. The planned **LOL kernel**
+line has its own repository:
+<https://github.com/TOL-the-ominous-linux/kernel>.
 
 - [What TOL is](tol/README.md) — landing page:
   <https://github.com/TOL-the-ominous-linux/.github>
 - [Brand and logo usage](tol/BRAND.md) — the mark is inspired by the band TOOL
   and carries that attribution line
-- [LOL kernel](tol/LOL-KERNEL.md) — planned, not shipped
+- [LOL kernel](tol/LOL-KERNEL.md) — planned, not shipped;
+  [kernel repo](https://github.com/TOL-the-ominous-linux/kernel)
 
 ## I USE ARCH BTW
 
