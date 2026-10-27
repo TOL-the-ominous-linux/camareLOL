@@ -342,6 +342,17 @@ cargo clippy --workspace --all-targets -- -D warnings
 A full install is verified in a VirtualBox VM — see
 [docs/en/testing.md](docs/en/testing.md).
 
+## Part of The Ominous Linux
+
+camareLOL is the first project of **The Ominous Linux (TOL)** — a name for Linux
+tooling that states the risk and shows the evidence. TOL is also where the
+planned **LOL kernel** line lives.
+
+- [What TOL is](tol/README.md)
+- [Brand and logo usage](tol/BRAND.md) — the mark is inspired by the band TOOL
+  and carries that attribution line
+- [LOL kernel](tol/LOL-KERNEL.md) — planned, not shipped
+
 ## I USE ARCH BTW
 
 <p align="center">
