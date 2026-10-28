@@ -103,8 +103,8 @@ appears on a light page.
 
 - The group is **The Ominous Linux**, short **TOL**. Not "T.O.L." in body text.
 - The installer is **camareLOL**, one word, lowercase `c`, capital `LOL`.
-- The kernel line is **LOL kernel**; package names are `linux-lol`,
-  `linux-lol-headers`.
+- The kernel line is **iLOL kernel**; package names are `linux-ilol`,
+  `linux-ilol-headers`.
 - Do not write "LOL" on its own as a product name. In a terminal, outside this
   project, it means something else entirely.
 

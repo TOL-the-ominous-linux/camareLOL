@@ -1,6 +1,6 @@
-# LOL kernel
+# iLOL kernel
 
-Home repository: <https://github.com/TOL-the-ominous-linux/kernel> — the policy,
+Home repository: <https://github.com/TOL-the-ominous-linux/ilol-kernel> — the policy,
 the patch set (empty by design) and, eventually, the PKGBUILD live there. This
 page stays the source of truth for *why*; that repo is *where*.
 
@@ -12,18 +12,18 @@ a confident README and no tests.
 
 ## What it is
 
-`LOL kernel` is the kernel line that camareLOL may install when the stock Arch
+`iLOL kernel` is the kernel line that camareLOL may install when the stock Arch
 kernel is not enough for a machine. It is **Arch-based**: the package tracks
 Arch's `linux` package, keeps Arch's configuration and patch set, and adds a
 small, documented set of changes. It is delivered as normal Arch packages:
 
 | Package | Provides |
 |---|---|
-| `linux-lol` | the kernel image, modules and firmware hooks |
-| `linux-lol-headers` | headers for out-of-tree modules |
+| `linux-ilol` | the kernel image, modules and firmware hooks |
+| `linux-ilol-headers` | headers for out-of-tree modules |
 
 `uname -r` must show the suffix, so a support request can tell which kernel is
-running: `6.x.y-arch1-1-lol`.
+running: `6.x.y-arch1-1-ilol`.
 
 ## What it is not
 
@@ -31,7 +31,7 @@ running: `6.x.y-arch1-1-lol`.
   choice inside that install, not a separate OS.
 - **Not a fork with its own subsystem.** TOL does not maintain a Linux fork.
   Patches come from upstream, from Arch, or from a named source with a link.
-- **Not the default.** Stock `linux` stays the default. `linux-lol` is opt-in,
+- **Not the default.** Stock `linux` stays the default. `linux-ilol` is opt-in,
   chosen explicitly, and the installer must say so on the Review screen.
 - **Not a performance meme.** No "gaming" sysctl bundles, no scheduler swaps
   without a measured reason, no patch that only exists to make a benchmark
@@ -85,7 +85,7 @@ patch set does, even if the Arch `pkgver` is the same.
 - [ ] A PKGBUILD in a TOL repository, building from Arch's source tarball.
 - [ ] A written patch list with one line of justification per patch.
 - [ ] The package builds in a clean chroot, not on the author's desktop.
-- [ ] `linux-lol` and `linux-lol-headers` install and remove cleanly alongside
+- [ ] `linux-ilol` and `linux-ilol-headers` install and remove cleanly alongside
       stock `linux`.
 - [ ] Boot tested in a VM: firmware → bootloader → kernel → userspace, with the
       `-lol` suffix visible in `uname -r`.
@@ -98,11 +98,11 @@ patch set does, even if the Arch `pkgver` is the same.
 - [ ] The release notes say which Arch kernel it tracks and how to go back to
       stock `linux`.
 
-Until every box is ticked, the honest description of `linux-lol` is "planned".
+Until every box is ticked, the honest description of `linux-ilol` is "planned".
 
 ## Relationship to camareLOL
 
-camareLOL does not need the LOL kernel to work. The installer's job is to put a
+camareLOL does not need the iLOL kernel to work. The installer's job is to put a
 working Arch system on a disk, and stock `linux` does that. The kernel line is a
 separate, optional package; if it is ever offered in the installer, it must be
 

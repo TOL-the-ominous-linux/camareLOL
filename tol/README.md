@@ -18,7 +18,7 @@ show the evidence, and never claim a result that was not verified.
 | | |
 |---|---|
 | Short name | TOL |
-| Projects | [camareLOL](../README.md), [LOL kernel](LOL-KERNEL.md) |
+| Projects | [camareLOL](../README.md), [iLOL kernel](LOL-KERNEL.md) |
 | Repository | <https://github.com/TOL-the-ominous-linux/camareLOL> |
 | Landing page | <https://github.com/TOL-the-ominous-linux/.github> — the organisation profile repository |
 | Status | brand and documentation, October 2026 |
@@ -47,12 +47,12 @@ destructive operation. Vietnamese, English and Simplified Chinese.
 - npm: `@wenker-ai/camarelo`.
 - It installs Arch Linux. It is not a distribution and does not ship a kernel.
 
-### LOL kernel
+### iLOL kernel
 
 The kernel line that camareLOL installs, or offers to install, when a machine
 needs more than the stock Arch kernel. Arch-based, built as normal packages, no
 out-of-tree surprises. **Planned; nothing is shipped yet.** The
-[LOL kernel repository](https://github.com/TOL-the-ominous-linux/kernel) holds
+[iLOL kernel repository](https://github.com/TOL-the-ominous-linux/ilol-kernel) holds
 the policy and the patch set;
 [LOL-KERNEL.md](LOL-KERNEL.md) is the definition and the current state.
 
@@ -62,7 +62,7 @@ the policy and the patch set;
 |---|---|
 | `TOL`, `The Ominous Linux` | the group |
 | `camareLOL` | the installer (one `m`, then `are`) |
-| `LOL kernel`, `linux-lol` | the kernel line; package names use `linux-lol` |
+| `iLOL kernel`, `linux-ilol` | the kernel line; package names use `linux-ilol` |
 | `LOL` alone | avoid it — it reads as "laughing out loud" outside this context |
 
 `camareLOL` is the spelling used by the binary, the npm package, the tag names
@@ -78,7 +78,7 @@ attribution line that must travel with the logo.
 
 TOL has no contributor programme yet. Issues and discussions for camareLOL live
 in the camareLOL repository. If you want to work on the kernel line, start at
-<https://github.com/TOL-the-ominous-linux/kernel> and read
+<https://github.com/TOL-the-ominous-linux/ilol-kernel> and read
 [LOL-KERNEL.md](LOL-KERNEL.md) first: the constraints there are the project.
 
 ## License
