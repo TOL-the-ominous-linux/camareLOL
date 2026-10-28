@@ -61,7 +61,7 @@ Place the source art here:
 | File | What it is |
 |---|---|
 | `assets/tol/banner.png` (2170×725) | wide banner, eye + wordmark, for README headers and the organisation profile |
-| `assets/tol/logo.png` (992×838) | the ASCII mark, hand-drawn terminal glyphs, on the dark field `#120F0F` |
+| `assets/tol/logo.png` (552×690) | the ASCII mark, hand-drawn terminal glyphs, trimmed to the eye's bounding box (no field padding) |
 | `assets/tol/eye-trimmed.png` | the mark, cropped to its bounding box |
 | `assets/tol/eye-transparent.png` | the mark with the dark field keyed to alpha — for light backgrounds |
 | `assets/tol/avatar-512.png` | 512×512 square avatar on the dark field |
