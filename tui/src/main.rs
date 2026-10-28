@@ -171,11 +171,18 @@ fn main() {
 
     if args.self_test {
         match cmd_self_test(args.mock.clone()) {
-            Ok(true) => {
+            Ok(SelfTestOutcome::Pass) => {
                 println!("self-test: OK");
                 std::process::exit(0);
             }
-            Ok(false) => {
+            // Exit 2: the environment is not a machine camareLOL supports.
+            // Distinct from 1 so scripts and CI can tell "wrong distro"
+            // apart from "the tool failed one of its own checks".
+            Ok(SelfTestOutcome::SkipOnHost) => {
+                println!("self-test: SKIP (host unsupported)");
+                std::process::exit(2);
+            }
+            Ok(SelfTestOutcome::Fail) => {
                 println!("self-test: FAILED");
                 std::process::exit(1);
             }
@@ -322,14 +329,28 @@ fn cmd_scan(mock: Option<PathBuf>) -> Result<(), CamarelolError> {
     Ok(())
 }
 
+/// Outcome of `--self-test`. A machine camareLOL never supported is not a
+/// failure of the tool: it reports [`SelfTestOutcome::SkipOnHost`] and the
+/// caller exits 2, so a script can tell "wrong environment" apart from
+/// "the tool is broken".
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SelfTestOutcome {
+    Pass,
+    SkipOnHost,
+    Fail,
+}
+
 /// Non-destructive acceptance checks derived from the specification.
-fn cmd_self_test(mock: Option<PathBuf>) -> Result<bool, CamarelolError> {
+fn cmd_self_test(mock: Option<PathBuf>) -> Result<SelfTestOutcome, CamarelolError> {
     let devices = match mock {
         Some(p) => camarelol_core::storage::load_survey(p.to_str().unwrap_or_default())?,
         None => scan_devices()?,
     };
     let core = camarelol_core::Core::with_devices(devices);
     let mut ok = true;
+    // Only the host gate can turn a failing run into a skip. Every other
+    // check exercises camareLOL's own machinery, wherever it runs.
+    let mut host_bad = false;
     let empty = core.devices.iter().find(|d| d.is_empty());
     // Host identity first and explicitly. Every later check assumes Arch +
     // systemd, so a "self-test failed" with no mention of the host would send
@@ -339,7 +360,7 @@ fn cmd_self_test(mock: Option<PathBuf>) -> Result<bool, CamarelolError> {
     println!("   supported: {}", host.supported);
     if !host.supported {
         println!("   REFUSED: {}", host.reason);
-        ok = false;
+        host_bad = true;
     }
     println!("1. devices discovered: {}", core.devices.len());
     for d in &core.devices {
@@ -451,8 +472,20 @@ fn cmd_self_test(mock: Option<PathBuf>) -> Result<bool, CamarelolError> {
         println!("6. simulated install: skipped (no empty disk)");
     }
 
-    println!("selftest result: {}", if ok { "PASS" } else { "FAIL" });
-    Ok(ok)
+    if !ok {
+        println!("selftest result: FAIL");
+        println!(
+            "   machinery broke on a host it runs anywhere — this is a bug, please report it."
+        );
+        return Ok(SelfTestOutcome::Fail);
+    }
+    if host_bad {
+        println!("selftest result: SKIP (host unsupported)");
+        println!("   the machinery checks above still ran: this says nothing bad about camareLOL.");
+        return Ok(SelfTestOutcome::SkipOnHost);
+    }
+    println!("selftest result: PASS");
+    Ok(SelfTestOutcome::Pass)
 }
 
 /// Write a redacted diagnostics report and return where it went.

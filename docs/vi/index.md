@@ -41,7 +41,9 @@ $ sudo camarelol             # mở TUI
 Dùng `CAMARELOL_CHANNEL=beta` thay cho `CAMARELOL_VERSION` để theo bản
 pre-release mới nhất. Bỏ cả hai để dùng kênh ổn định.
 
-`--self-test` không bao giờ ghi vào ổ đĩa. Hãy chạy nó trước.
+`--self-test` không bao giờ ghi vào ổ đĩa. Hãy chạy nó trước. Mã kết thúc: `0`
+mọi kiểm tra qua, `2` máy này không phải host được hỗ trợ (môi trường ngoài
+phạm vi — không phải lỗi của công cụ), `1` có kiểm tra thật sự thất bại.
 
 Nếu bạn muốn tự tải binary, nhớ giữ `-f` và `-L`:
 

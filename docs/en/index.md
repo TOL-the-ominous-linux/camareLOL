@@ -41,7 +41,9 @@ $ sudo camarelol             # the TUI
 Use `CAMARELOL_CHANNEL=beta` instead of `CAMARELOL_VERSION` to follow the newest
 pre-release. Omit both for the stable channel.
 
-`--self-test` never writes to a disk. Run it first.
+`--self-test` never writes to a disk. Run it first. Exit codes: `0` all
+checks passed, `2` this machine is not a supported host (the environment is out
+of scope — not a bug in the tool), `1` a check genuinely failed.
 
 If you would rather download the binary yourself, keep `-f` and `-L`:
 
