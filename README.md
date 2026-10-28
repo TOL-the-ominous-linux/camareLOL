@@ -10,9 +10,9 @@
 
 **English** · [Tiếng Việt](README.vi.md) · [中文](docs/zh/index.md)
 
-## ⚠ BETA — 1.0.1 beta
+## ⚠ BETA — 1.0.2 beta
 
-camareLOL **1.0.1** is the current beta; **1.0.0** was the first. The roadmap
+camareLOL **1.0.2** is the current beta; **1.0.0** was the first. The roadmap
 audit is complete: every item is either shipped with evidence, explicitly
 marked partial, or deferred with a written reason. That is not the same as
 "finished" — three desktop items are still partial, real-Windows dual-boot is
@@ -35,9 +35,9 @@ installed disk rather than the menu. Still:
    fix.
 3. Back up everything first.
 
-`1.0.1` is a beta, not a promise of stability. The npm `latest` tag stays on
+`1.0.2` is a beta, not a promise of stability. The npm `latest` tag stays on
 **0.1.22**; the beta is published under the `beta` dist-tag and as a GitHub
-pre-release. Install it deliberately — see [Install 1.0.1 beta](#install-101-beta).
+pre-release. Install it deliberately — see [Install 1.0.2 beta](#install-102-beta).
 
 The full release notes, including evidence and known limitations, are in
 [docs/releases/1.0.1.md](docs/releases/1.0.1.md). The first beta's notes remain
@@ -69,6 +69,7 @@ table points sideways into the other two.
 | Topic | English | Tiếng Việt | 中文 |
 |---|---|---|---|
 | Overview | [index](docs/en/index.md) | [VI](docs/vi/index.md) | [ZH](docs/zh/index.md) |
+| 1.0.2 release notes | [releases/1.0.2](docs/releases/1.0.2.md) | — | — |
 | 1.0.1 release notes | [releases/1.0.1](docs/releases/1.0.1.md) | — | — |
 | 1.0.0 release notes | [releases/1.0.0](docs/releases/1.0.0.md) | — | — |
 | The three components | [architecture](docs/en/architecture.md) | [VI](docs/vi/architecture.md) | [ZH](docs/zh/architecture.md) |
@@ -79,6 +80,19 @@ table points sideways into the other two.
 | What is not built yet | [roadmap](docs/en/roadmap.md) | [VI](docs/vi/roadmap.md) | [ZH](docs/zh/roadmap.md) |
 
 Start with [the overview](docs/en/index.md).
+
+## What changed in 1.0.2
+
+**An honesty fix in `--self-test`.** On a machine camareLOL does not support
+(say, Ubuntu), the 1.0.1 self-test reported FAIL even though every machinery
+check had passed — what failed was the host gate, by design. 1.0.2 reports
+`SKIP (host unsupported)` with **exit 2** for that case: `0` = PASS, `2` =
+environment out of scope, `1` = a machinery check failed (report that).
+Exit codes are now documented on the quick-start pages, and the release
+notes carry first-hand output from a full Arch-in-QEMU run of the 1.0.1
+assets — including a 12-phase simulated install and a clean TUI session.
+
+The full notes are in [docs/releases/1.0.2.md](docs/releases/1.0.2.md).
 
 ## What changed in 1.0.1
 
@@ -120,10 +134,10 @@ the deferred real-Windows work — are in
 
 If you are on 0.1.10 or older, you still have the removed updater in your
 binary. It asks an address that no longer resolves and cannot install
-anything. Download 1.0.1 and replace the binary by hand — see
+anything. Download 1.0.2 and replace the binary by hand — see
 [Updating](docs/en/update.md).
 
-## Install 1.0.1 beta
+## Install 1.0.2 beta
 
 The beta is opt-in. The default one-liner resolves the newest **stable**
 release, which is still 0.1.22. To install the beta, pin the tag or ask for the
@@ -131,7 +145,7 @@ beta channel:
 
 ```console
 $ curl -fsSL https://raw.githubusercontent.com/TOL-the-ominous-linux/camareLOL/main/scripts/camarelol.sh \
-    | CAMARELOL_VERSION=v1.0.1 bash
+    | CAMARELOL_VERSION=v1.0.2 bash
 ```
 
 ```console
@@ -188,7 +202,7 @@ Or let the helper fetch it for you:
 ```console
 $ git clone https://github.com/TOL-the-ominous-linux/camareLOL
 $ cd camareLOL && sudo ./install.sh --binary
-$ CAMARELOL_VERSION=v1.0.1 sudo -E ./install.sh --binary   # beta tag
+$ CAMARELOL_VERSION=v1.0.2 sudo -E ./install.sh --binary   # beta tag
 ```
 
 `install.sh --binary` downloads the release `SHA256SUMS` and refuses a binary
@@ -201,7 +215,7 @@ On a running Arch system, npm is one more way in:
 ```console
 $ sudo pacman -S --needed nodejs npm curl
 $ npm install -g @wenker-ai/camarelo          # stable latest: 0.1.22
-$ npm install -g @wenker-ai/camarelo@beta     # 1.0.1 beta
+$ npm install -g @wenker-ai/camarelo@beta     # 1.0.2 beta
 ```
 
 On the **archiso** (live ISO), the pacman database is empty — use
@@ -246,7 +260,7 @@ $ ./build.sh lint             # clippy + rustfmt
 Each release ships a `PKGBUILD` pinned to that release's tarball:
 
 ```console
-$ VERSION=1.0.1
+$ VERSION=1.0.2
 $ curl -fLO "https://github.com/TOL-the-ominous-linux/camareLOL/releases/download/v$VERSION/camarelol-$VERSION.tar.gz"
 $ curl -fLO "https://github.com/TOL-the-ominous-linux/camareLOL/releases/download/v$VERSION/PKGBUILD"
 $ tar xf "camarelol-$VERSION.tar.gz"
@@ -261,7 +275,7 @@ known. Use the attached file.
 
 `releases/latest/download/` takes **the exact file name**, so it has to be built
 from the tag name; there is no way to use that path without knowing the version
-in advance. That is why the 1.0.1 beta uses explicit `v1.0.1` URLs.
+in advance. That is why the 1.0.2 beta uses explicit `v1.0.2` URLs.
 
 The full VirtualBox acceptance test is documented in
 [docs/en/testing.md](docs/en/testing.md), and a hands-on guide for running it

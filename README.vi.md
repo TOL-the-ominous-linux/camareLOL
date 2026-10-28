@@ -10,9 +10,9 @@
 
 [Tiếng Anh](README.md) · **Tiếng Việt** · [中文](docs/zh/index.md)
 
-> ## ⚠ BETA — 1.0.1 beta
+> ## ⚠ BETA — 1.0.2 beta
 >
-> camareLOL **1.0.1** là bản beta hiện tại; **1.0.0** là bản beta đầu tiên.
+> camareLOL **1.0.2** là bản beta hiện tại; **1.0.0** là bản beta đầu tiên.
 > Đợt rà soát roadmap đã xong: mỗi mục hoặc đã có bằng chứng chạy thật, hoặc
 > được ghi rõ là **một phần**, hoặc bị hoãn kèm lý do. Điều đó không có nghĩa
 > là "đã hoàn hảo" — ba mục desktop vẫn còn một phần, dual-boot với Windows
@@ -30,9 +30,9 @@
 > 2. Chạy từ **Arch live ISO**, không phải trên máy bạn đang dùng.
 > 3. Sao lưu mọi thứ trước khi cài bất cứ thứ gì.
 >
-> `1.0.1` là beta, không phải lời hứa ổn định. Thẻ npm `latest` vẫn là
+> `1.0.2` là beta, không phải lời hứa ổn định. Thẻ npm `latest` vẫn là
 > **0.1.22**; bản beta nằm ở dist-tag `beta` và là GitHub pre-release. Hãy
-> cài có chủ ý — xem [Cài 1.0.1 beta](#cài-101-beta).
+> cài có chủ ý — xem [Cài 1.0.2 beta](#cài-102-beta).
 >
 > Ghi chú phát hành đầy đủ, gồm bằng chứng và giới hạn đã biết:
 > [docs/releases/1.0.1.md](docs/releases/1.0.1.md). Ghi chú của bản beta đầu
@@ -70,6 +70,18 @@ Viết bằng ba ngôn ngữ. Mỗi trang có bảng trỏ sang hai ngôn ngữ 
 
 Bắt đầu với [tổng quan](docs/vi/index.md).
 
+## Thay đổi trong 1.0.2
+
+**Sửa chỗ thiếu trung thực của `--self-test`.** Trên máy camareLOL không hỗ trợ
+(ví dụ Ubuntu), bản 1.0.1 báo FAIL dù mọi kiểm tra máy móc đều qua — thứ đã
+lỗi là host gate, đúng thiết kế. 1.0.2 báo `SKIP (host unsupported)` với
+**exit 2** cho trường hợp đó: `0` = PASS, `2` = môi trường ngoài phạm vi,
+`1` = một kiểm tra thất bại thật (hãy báo lỗi). Mã kết thúc được liệt kê trên
+trang quick-start, và ghi chú phát hành kèm bằng chứng chạy thật trong
+Arch-in-QEMU của bản 1.0.1 — gồm cả install mô phỏng 12 pha và phiên TUI sạch.
+
+Toàn bộ ghi chú ở [docs/releases/1.0.2.md](docs/releases/1.0.2.md).
+
 ## Thay đổi trong 1.0.1
 
 **Sửa lỗi dò đĩa và self-test.** `lsblk` gọi zram, ram, nbd, md và loop là
@@ -85,14 +97,14 @@ desktop, safety gate, IPC hay schema cấu hình.
 
 Ghi chú đầy đủ: [docs/releases/1.0.1.md](docs/releases/1.0.1.md).
 
-## Cài 1.0.1 beta
+## Cài 1.0.2 beta
 
 Bản beta là tuỳ chọn. Lệnh một dòng mặc định vẫn lấy bản **ổn định** mới nhất
 (0.1.22). Muốn cài beta, ghim tag hoặc chọn kênh beta:
 
 ```console
 $ curl -fsSL https://raw.githubusercontent.com/TOL-the-ominous-linux/camareLOL/main/scripts/camarelol.sh \
-    | CAMARELOL_VERSION=v1.0.1 bash
+    | CAMARELOL_VERSION=v1.0.2 bash
 ```
 
 ```console
@@ -148,7 +160,7 @@ $ sudo ./camarelol             # mở TUI
 ```console
 $ sudo pacman -S --needed nodejs npm curl
 $ npm install -g @wenker-ai/camarelo          # latest ổn định: 0.1.22
-$ npm install -g @wenker-ai/camarelo@beta     # beta 1.0.1
+$ npm install -g @wenker-ai/camarelo@beta     # beta 1.0.2
 ```
 
 Trên **archiso** (live ISO) cơ sở dữ liệu pacman rỗng — dùng
