@@ -178,18 +178,22 @@ fn device_kind(
     match transport {
         Some("usb") => return DeviceKind::Usb,
         Some("nvme") => return DeviceKind::NvmeSsd,
+        // virtio / xen block devices announce themselves by transport (virtio)
+        // or by name; both are virtual, regardless of the rotational flag that
+        // some hypervisors set on sparse images.
+        Some("virtio") => return DeviceKind::Virtual,
         _ => {}
     }
     if name.starts_with("nvme") {
         DeviceKind::NvmeSsd
     } else if name.starts_with("mmcblk") {
         DeviceKind::Mmc
+    } else if name.starts_with("vd") || name.starts_with("xvd") {
+        DeviceKind::Virtual
     } else if removable {
         DeviceKind::Usb
     } else if rotational {
         DeviceKind::SataHdd
-    } else if name.starts_with("vd") || name.starts_with("xvd") {
-        DeviceKind::Virtual
     } else {
         DeviceKind::SataSsd
     }
@@ -499,6 +503,28 @@ mod tests {
         assert!(d.has_windows());
         assert_eq!(d.assess_risk(), RiskLevel::High);
         assert_eq!(d.identity_strength(), IdentityStrength::KernelNameOnly);
+    }
+
+    #[test]
+    fn virtio_disk_with_rotational_flag_is_virtual() {
+        // A qcow2 virtio disk reports rotational:true on some stacks; the name
+        // (vd*) and the transport (virtio) must win over that flag, otherwise
+        // the TUI labels a virtual disk "SATA HDD" (1.0.2 quirk).
+        let raw = r#"{"blockdevices":[{"name":"vda","type":"disk","size":21474836480,"rota":true,"rm":false,"tran":"virtio","pttype":null},{"name":"xvda","type":"disk","size":10737418240,"rota":true,"rm":false,"tran":null,"pttype":null}]}"#;
+        let disks = parse_lsblk_json(raw).unwrap();
+        assert_eq!(disks.len(), 2);
+        assert_eq!(disks[0].kernel_name, "vda");
+        assert_eq!(disks[0].kind, DeviceKind::Virtual);
+        assert_eq!(disks[1].kernel_name, "xvda");
+        assert_eq!(disks[1].kind, DeviceKind::Virtual);
+    }
+
+    #[test]
+    fn rotational_sata_disk_stays_sata_hdd() {
+        let raw = r#"{"blockdevices":[{"name":"sda","type":"disk","size":21474836480,"rota":true,"rm":false,"tran":"sata","pttype":null}]}"#;
+        let disks = parse_lsblk_json(raw).unwrap();
+        assert_eq!(disks.len(), 1);
+        assert_eq!(disks[0].kind, DeviceKind::SataHdd);
     }
 
     #[test]

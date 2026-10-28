@@ -10,9 +10,9 @@
 
 **English** · [Tiếng Việt](README.vi.md) · [中文](docs/zh/index.md)
 
-## ⚠ BETA — 1.0.2 beta
+## ⚠ BETA — 1.0.3 beta
 
-camareLOL **1.0.2** is the current beta; **1.0.0** was the first. The roadmap
+camareLOL **1.0.3** is the current beta; **1.0.0** was the first. The roadmap
 audit is complete: every item is either shipped with evidence, explicitly
 marked partial, or deferred with a written reason. That is not the same as
 "finished" — three desktop items are still partial, real-Windows dual-boot is
@@ -35,9 +35,9 @@ installed disk rather than the menu. Still:
    fix.
 3. Back up everything first.
 
-`1.0.2` is a beta, not a promise of stability. The npm `latest` tag stays on
+`1.0.3` is a beta, not a promise of stability. The npm `latest` tag stays on
 **0.1.22**; the beta is published under the `beta` dist-tag and as a GitHub
-pre-release. Install it deliberately — see [Install 1.0.2 beta](#install-102-beta).
+pre-release. Install it deliberately — see [Install 1.0.3 beta](#install-103-beta).
 
 The full release notes, including evidence and known limitations, are in
 [docs/releases/1.0.1.md](docs/releases/1.0.1.md). The first beta's notes remain
@@ -69,6 +69,7 @@ table points sideways into the other two.
 | Topic | English | Tiếng Việt | 中文 |
 |---|---|---|---|
 | Overview | [index](docs/en/index.md) | [VI](docs/vi/index.md) | [ZH](docs/zh/index.md) |
+| 1.0.3 release notes | [releases/1.0.3](docs/releases/1.0.3.md) | — | — |
 | 1.0.2 release notes | [releases/1.0.2](docs/releases/1.0.2.md) | — | — |
 | 1.0.1 release notes | [releases/1.0.1](docs/releases/1.0.1.md) | — | — |
 | 1.0.0 release notes | [releases/1.0.0](docs/releases/1.0.0.md) | — | — |
@@ -80,6 +81,18 @@ table points sideways into the other two.
 | What is not built yet | [roadmap](docs/en/roadmap.md) | [VI](docs/vi/roadmap.md) | [ZH](docs/zh/roadmap.md) |
 
 Start with [the overview](docs/en/index.md).
+
+## What changed in 1.0.3
+
+**One mislabelled line, fixed.** The 1.0.2 run-in-QEMU evidence honestly noted
+a virtio disk showing `kind: "SataHdd"` while `transport: "virtio"` sat on the
+same line. The kind classifier consulted the `rotational` flag before the
+virtio name prefixes — some hypervisors set that flag on sparse images.
+1.0.3 reorders the checks: a virtio disk is correctly labelled
+`Virtual Disk`, with regression tests pinning both the virtio and the
+genuine-SATA cases. Cosmetic fix only; planning never depended on the label.
+
+The full notes are in [docs/releases/1.0.3.md](docs/releases/1.0.3.md).
 
 ## What changed in 1.0.2
 
@@ -134,10 +147,10 @@ the deferred real-Windows work — are in
 
 If you are on 0.1.10 or older, you still have the removed updater in your
 binary. It asks an address that no longer resolves and cannot install
-anything. Download 1.0.2 and replace the binary by hand — see
+anything. Download 1.0.3 and replace the binary by hand — see
 [Updating](docs/en/update.md).
 
-## Install 1.0.2 beta
+## Install 1.0.3 beta
 
 The beta is opt-in. The default one-liner resolves the newest **stable**
 release, which is still 0.1.22. To install the beta, pin the tag or ask for the
@@ -145,7 +158,7 @@ beta channel:
 
 ```console
 $ curl -fsSL https://raw.githubusercontent.com/TOL-the-ominous-linux/camareLOL/main/scripts/camarelol.sh \
-    | CAMARELOL_VERSION=v1.0.2 bash
+    | CAMARELOL_VERSION=v1.0.3 bash
 ```
 
 ```console
@@ -202,7 +215,7 @@ Or let the helper fetch it for you:
 ```console
 $ git clone https://github.com/TOL-the-ominous-linux/camareLOL
 $ cd camareLOL && sudo ./install.sh --binary
-$ CAMARELOL_VERSION=v1.0.2 sudo -E ./install.sh --binary   # beta tag
+$ CAMARELOL_VERSION=v1.0.3 sudo -E ./install.sh --binary   # beta tag
 ```
 
 `install.sh --binary` downloads the release `SHA256SUMS` and refuses a binary
@@ -215,7 +228,7 @@ On a running Arch system, npm is one more way in:
 ```console
 $ sudo pacman -S --needed nodejs npm curl
 $ npm install -g @wenker-ai/camarelo          # stable latest: 0.1.22
-$ npm install -g @wenker-ai/camarelo@beta     # 1.0.2 beta
+$ npm install -g @wenker-ai/camarelo@beta     # 1.0.3 beta
 ```
 
 On the **archiso** (live ISO), the pacman database is empty — use
@@ -260,7 +273,7 @@ $ ./build.sh lint             # clippy + rustfmt
 Each release ships a `PKGBUILD` pinned to that release's tarball:
 
 ```console
-$ VERSION=1.0.2
+$ VERSION=1.0.3
 $ curl -fLO "https://github.com/TOL-the-ominous-linux/camareLOL/releases/download/v$VERSION/camarelol-$VERSION.tar.gz"
 $ curl -fLO "https://github.com/TOL-the-ominous-linux/camareLOL/releases/download/v$VERSION/PKGBUILD"
 $ tar xf "camarelol-$VERSION.tar.gz"
@@ -275,7 +288,7 @@ known. Use the attached file.
 
 `releases/latest/download/` takes **the exact file name**, so it has to be built
 from the tag name; there is no way to use that path without knowing the version
-in advance. That is why the 1.0.2 beta uses explicit `v1.0.2` URLs.
+in advance. That is why the 1.0.3 beta uses explicit `v1.0.3` URLs.
 
 The full VirtualBox acceptance test is documented in
 [docs/en/testing.md](docs/en/testing.md), and a hands-on guide for running it

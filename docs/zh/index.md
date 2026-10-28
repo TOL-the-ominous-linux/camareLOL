@@ -4,10 +4,10 @@
 
 > 一个安全优先的 Arch Linux TUI 安装器，提供三种语言。
 
-**当前版本：** `1.0.2` —— beta（GitHub pre-release）。npm 的
+**当前版本：** `1.0.3` —— beta（GitHub pre-release）。npm 的
 `latest` 标签仍指向 `0.1.22`；beta 位于 `@wenker-ai/camarelo@beta`。
-请阅读 [1.0.2 发布说明](../releases/1.0.2.md)。较早的 beta：
-[1.0.1](../releases/1.0.1.md)、[1.0.0](../releases/1.0.0.md)。
+请阅读 [1.0.3 发布说明](../releases/1.0.3.md)。较早的 beta：
+[1.0.2](../releases/1.0.2.md)、[1.0.1](../releases/1.0.1.md)、[1.0.0](../releases/1.0.0.md)。
 
 camareLOL 从终端安装 Arch Linux。它会检测你的硬件、提出一个布局方案、
 准确展示它即将做什么，并且只有在你输入确认短语之后才会写入磁盘。
@@ -29,11 +29,11 @@ camareLOL 从终端安装 Arch Linux。它会检测你的硬件、提出一个�
 ## 安装
 
 在 Arch 实时 ISO 中运行它——安装器就该在那里运行。默认的一行命令解析最新的
-**稳定版**（0.1.22）；1.0.2 beta 需要显式选择：
+**稳定版**（0.1.22）；1.0.3 beta 需要显式选择：
 
 ```console
 $ curl -fsSL https://raw.githubusercontent.com/TOL-the-ominous-linux/camareLOL/main/scripts/camarelol.sh \
-    | CAMARELOL_VERSION=v1.0.2 bash
+    | CAMARELOL_VERSION=v1.0.3 bash
 $ camarelol --self-test      # 非破坏性检查；在真实机器上运行也安全
 $ sudo camarelol             # 打开 TUI
 ```
@@ -47,8 +47,8 @@ $ sudo camarelol             # 打开 TUI
 如果你想自己下载二进制文件，请保留 `-f` 和 `-L`：
 
 ```console
-$ curl -fLO https://github.com/TOL-the-ominous-linux/camareLOL/releases/download/v1.0.2/camarelol
-$ curl -fLO https://github.com/TOL-the-ominous-linux/camareLOL/releases/download/v1.0.2/SHA256SUMS
+$ curl -fLO https://github.com/TOL-the-ominous-linux/camareLOL/releases/download/v1.0.3/camarelol
+$ curl -fLO https://github.com/TOL-the-ominous-linux/camareLOL/releases/download/v1.0.3/SHA256SUMS
 $ sha256sum -c SHA256SUMS
 ```
 

@@ -10,9 +10,9 @@
 
 [Tiếng Anh](README.md) · **Tiếng Việt** · [中文](docs/zh/index.md)
 
-> ## ⚠ BETA — 1.0.2 beta
+> ## ⚠ BETA — 1.0.3 beta
 >
-> camareLOL **1.0.2** là bản beta hiện tại; **1.0.0** là bản beta đầu tiên.
+> camareLOL **1.0.3** là bản beta hiện tại; **1.0.0** là bản beta đầu tiên.
 > Đợt rà soát roadmap đã xong: mỗi mục hoặc đã có bằng chứng chạy thật, hoặc
 > được ghi rõ là **một phần**, hoặc bị hoãn kèm lý do. Điều đó không có nghĩa
 > là "đã hoàn hảo" — ba mục desktop vẫn còn một phần, dual-boot với Windows
@@ -30,9 +30,9 @@
 > 2. Chạy từ **Arch live ISO**, không phải trên máy bạn đang dùng.
 > 3. Sao lưu mọi thứ trước khi cài bất cứ thứ gì.
 >
-> `1.0.2` là beta, không phải lời hứa ổn định. Thẻ npm `latest` vẫn là
+> `1.0.3` là beta, không phải lời hứa ổn định. Thẻ npm `latest` vẫn là
 > **0.1.22**; bản beta nằm ở dist-tag `beta` và là GitHub pre-release. Hãy
-> cài có chủ ý — xem [Cài 1.0.2 beta](#cài-102-beta).
+> cài có chủ ý — xem [Cài 1.0.3 beta](#cài-103-beta).
 >
 > Ghi chú phát hành đầy đủ, gồm bằng chứng và giới hạn đã biết:
 > [docs/releases/1.0.1.md](docs/releases/1.0.1.md). Ghi chú của bản beta đầu
@@ -70,6 +70,18 @@ Viết bằng ba ngôn ngữ. Mỗi trang có bảng trỏ sang hai ngôn ngữ 
 
 Bắt đầu với [tổng quan](docs/vi/index.md).
 
+## Thay đổi trong 1.0.3
+
+**Sửa một dòng bị gán nhãn sai.** Bằng chứng chạy-QEMU của 1.0.2 trung thực
+ghi nhận disk virtio hiện `kind: "SataHdd"` dù trên cùng dòng là
+`transport: "virtio"` — classifier đọc cờ `rotational` trước các prefix tên
+virtio, và vài hypervisor đặt cờ này cho image sparse. 1.0.3 đổi thứ tự: disk
+virtio được dán nhãn đúng `Virtual Disk`, kèm test hồi quy cho cả hai trường
+hợp virtio và SATA thật. Chỉ là sửa hiển thị; phần lập kế hoạch không phụ
+thuộc nhãn này.
+
+Toàn bộ ghi chú ở [docs/releases/1.0.3.md](docs/releases/1.0.3.md).
+
 ## Thay đổi trong 1.0.2
 
 **Sửa chỗ thiếu trung thực của `--self-test`.** Trên máy camareLOL không hỗ trợ
@@ -97,14 +109,14 @@ desktop, safety gate, IPC hay schema cấu hình.
 
 Ghi chú đầy đủ: [docs/releases/1.0.1.md](docs/releases/1.0.1.md).
 
-## Cài 1.0.2 beta
+## Cài 1.0.3 beta
 
 Bản beta là tuỳ chọn. Lệnh một dòng mặc định vẫn lấy bản **ổn định** mới nhất
 (0.1.22). Muốn cài beta, ghim tag hoặc chọn kênh beta:
 
 ```console
 $ curl -fsSL https://raw.githubusercontent.com/TOL-the-ominous-linux/camareLOL/main/scripts/camarelol.sh \
-    | CAMARELOL_VERSION=v1.0.2 bash
+    | CAMARELOL_VERSION=v1.0.3 bash
 ```
 
 ```console
@@ -160,7 +172,7 @@ $ sudo ./camarelol             # mở TUI
 ```console
 $ sudo pacman -S --needed nodejs npm curl
 $ npm install -g @wenker-ai/camarelo          # latest ổn định: 0.1.22
-$ npm install -g @wenker-ai/camarelo@beta     # beta 1.0.2
+$ npm install -g @wenker-ai/camarelo@beta     # beta 1.0.3
 ```
 
 Trên **archiso** (live ISO) cơ sở dữ liệu pacman rỗng — dùng

@@ -2,10 +2,10 @@
 
 > A safety-first TUI installer for Arch Linux, in three languages.
 
-**Current release:** `1.0.2` — beta (GitHub pre-release). The npm `latest` tag
+**Current release:** `1.0.3` — beta (GitHub pre-release). The npm `latest` tag
 deliberately stays on `0.1.22`; the beta is `@wenker-ai/camarelo@beta`.
-Read the [1.0.2 release notes](../releases/1.0.2.md). Earlier betas:
-[1.0.1](../releases/1.0.1.md), [1.0.0](../releases/1.0.0.md).
+Read the [1.0.3 release notes](../releases/1.0.3.md). Earlier betas:
+[1.0.2](../releases/1.0.2.md), [1.0.1](../releases/1.0.1.md), [1.0.0](../releases/1.0.0.md).
 
 camareLOL installs Arch Linux from the terminal. It detects your hardware,
 proposes a layout, shows you exactly what it is about to do, and only writes to
@@ -28,12 +28,12 @@ The installer itself speaks Vietnamese, English and Simplified Chinese (`--lang 
 ## Install
 
 Run it from the Arch live ISO, which is where an installer belongs. The default
-one-liner resolves the newest **stable** release (0.1.22); the 1.0.2 beta is
+one-liner resolves the newest **stable** release (0.1.22); the 1.0.3 beta is
 opt-in:
 
 ```console
 $ curl -fsSL https://raw.githubusercontent.com/TOL-the-ominous-linux/camareLOL/main/scripts/camarelol.sh \
-    | CAMARELOL_VERSION=v1.0.2 bash
+    | CAMARELOL_VERSION=v1.0.3 bash
 $ camarelol --self-test      # non-destructive checks; safe on a real machine
 $ sudo camarelol             # the TUI
 ```
@@ -48,8 +48,8 @@ of scope — not a bug in the tool), `1` a check genuinely failed.
 If you would rather download the binary yourself, keep `-f` and `-L`:
 
 ```console
-$ curl -fLO https://github.com/TOL-the-ominous-linux/camareLOL/releases/download/v1.0.2/camarelol
-$ curl -fLO https://github.com/TOL-the-ominous-linux/camareLOL/releases/download/v1.0.2/SHA256SUMS
+$ curl -fLO https://github.com/TOL-the-ominous-linux/camareLOL/releases/download/v1.0.3/camarelol
+$ curl -fLO https://github.com/TOL-the-ominous-linux/camareLOL/releases/download/v1.0.3/SHA256SUMS
 $ sha256sum -c SHA256SUMS
 ```
 
