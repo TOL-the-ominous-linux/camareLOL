@@ -193,6 +193,19 @@ mix: Rust, C, C++, shell, HTML/CSS, Makefile. A bonus parallel: a FAT32
 partition boots on far more firmware than an ext4 loopback does, precisely
 because every UEFI can read FAT32. Nothing exists yet — not a design, not a
 repo, not a line of code — and it changes nothing about camareLOL itself.
+Two forms are imagined: a Windows-only GUI (easier to use, FAT32-only),
+and the best-supported one — a Linux TUI/CLI with a list-style picker,
+automatic .iso download, logo detection, and a deliberately manual part.
+
+**tOrsiLOL — a preset-script distribution.** Also only a sketch: it would
+install curated `.nix`, `.lua` and `.sh` script templates for Linux users
+(auto-setup of Hyprland, hardening, theming, and similar presets), driven
+by a GUI. Honest caveat recorded with the idea: `.nix` templates only have
+their full meaning under NixOS or the Nix package manager, so either Nix
+itself ships with the presets or the naming invites the misunderstanding
+that any `.nix` applies anywhere. Sequenced after siroLOL: once there is a
+standard install path, tOrsiLOL presets have something to stand on.
+Nothing exists yet for this one either — no design, no repo, no code.
 
 ## Deliberately deferred
 

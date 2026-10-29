@@ -190,7 +190,20 @@ Bộ ngôn ngữ định hướng: Rust, C, C++, shell, HTML/CSS, Makefile. Mộ
 điểm cộng song hành: partition FAT32 boot được trên nhiều firmware hơn
 nhiều so với loopback ext4, chính vì mọi UEFI đều đọc được FAT32. Chưa
 có gì tồn tại — không thiết kế, không repo, không một dòng code — và nó
-không đổi gì trong chính camareLOL.
+không đổi gì trong chính camareLOL. Hai hình thái được hình dung: một
+GUI chạy trên Windows (dễ dùng hơn, chỉ hỗ trợ FAT32), và hình thái được
+hỗ trợ tốt nhất — TUI/CLI trên Linux, danh sách chọn lên xuống, tự tải
+.iso về, nhận diện logo, và một phần cố ý làm thủ công.
+
+**tOrsiLOL — bản phân phối theo preset-script.** Cũng chỉ là phác thảo:
+cài cho người dùng Linux các mẫu script `.nix`, `.lua`, `.sh` được lựa
+kỹ (tự cài và thiết lập Hyprland, tăng bảo mật, làm đẹp, v.v), điều
+khiển bằng GUI. Lưu ý thành thật ghi kèm: script `.nix` chỉ có nghĩa
+đầy đủ trên NixOS hoặc với Nix package manager — hoặc Nix đi kèm các
+preset, hoặc cách đặt tên sẽ gây hiểu lầm rằng `.nix` nào cũng chạy
+được ở đâu cũng được. Xếp sau siroLOL: khi đã có đường cài chuẩn,
+các preset của tOrsiLOL mới có chỗ mà bám vào. Cái này cũng chưa có
+gì cả — không thiết kế, không repo, không code.
 
 ## Cố ý hoãn lại
 
