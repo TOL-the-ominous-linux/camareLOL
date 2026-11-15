@@ -5,11 +5,13 @@
 
 Những gì đã làm, những gì chưa, và — ở chỗ chưa — vì sao.
 
-**Bản hiện tại:** `1.0.1`, beta thứ hai (26/10/2026). Bản này sửa việc thiết bị
-khối ảo (zram/ram/nbd/md/loop) bị coi là ổ cài được và lỗi `--self-test` báo
-FAIL khi máy không có ổ trống. `1.0.0` là beta đầu tiên: mã cài đặt 0.1.22 cùng
-đợt rà soát roadmap và cập nhật tài liệu. Thẻ npm `latest` vẫn là 0.1.22 cho
-tới khi một bản beta được thăng cấp.
+**Bản hiện tại:** `1.0.3`, beta thứ tư (28/10/2026). Bản này sửa việc disk
+virtio bị gán nhãn `SATA HDD` trong khảo sát lưu trữ — chỉ là hiển thị, kèm test
+hồi quy; phần lập kế hoạch không đọc trường đó. `1.0.2` khiến `--self-test` báo
+`SKIP`, exit 2, trên máy không hỗ trợ thay vì FAIL; `1.0.1` lọc
+zram/ram/nbd/md/loop khỏi bước dò đĩa. `1.0.0` là beta đầu tiên: mã cài đặt
+0.1.22 cùng đợt rà soát roadmap và cập nhật tài liệu. Thẻ npm `latest` vẫn là
+0.1.22 cho tới khi một bản beta được thăng cấp.
 
 ## Stage 1 — MVP
 
@@ -122,8 +124,8 @@ filesystem, và thứ tự mount root-trước-ESP.
 - [x] Gói npm `@wenker-ai/camarelo` — mỗi lần pack tải binary từ GitHub Release
       đúng phiên bản trong `package.json`, đối chiếu `SHA256SUMS`, bắt
       `--version` phải khớp, chạy test gói rồi mới pack; publish là một bước
-      riêng, tường minh. 1.0.0 là beta đầu tiên và 1.0.1 là bản hiện tại, cả
-      hai đều dưới dist-tag `beta`; `latest` vẫn là 0.1.22 cho tới khi thăng
+      riêng, tường minh. 1.0.0 là beta đầu tiên và 1.0.3 là bản hiện tại, tất
+      cả đều dưới dist-tag `beta`; `latest` vẫn là 0.1.22 cho tới khi thăng
       cấp.
 
 ## Stage 6 — Dual-boot cạnh một hệ điều hành có sẵn

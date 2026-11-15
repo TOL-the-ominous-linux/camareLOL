@@ -35,8 +35,7 @@
 > cài có chủ ý — xem [Cài 1.0.3 beta](#cài-103-beta).
 >
 > Ghi chú phát hành đầy đủ, gồm bằng chứng và giới hạn đã biết:
-> [docs/releases/1.0.1.md](docs/releases/1.0.1.md). Ghi chú của bản beta đầu
-> tiên vẫn ở [docs/releases/1.0.0.md](docs/releases/1.0.0.md).
+> [docs/releases/1.0.3.md](docs/releases/1.0.3.md).
 
 camareLOL cài Arch Linux từ terminal mà không bắt bạn gõ hàng chục lệnh
 shell. Nó dò phần cứng, đề xuất cách phân vùng an toàn, cho bạn xem chính
@@ -59,6 +58,8 @@ Viết bằng ba ngôn ngữ. Mỗi trang có bảng trỏ sang hai ngôn ngữ 
 | Chủ đề | Tiếng Việt | English | 中文 |
 |---|---|---|---|
 | Tổng quan | [index](docs/vi/index.md) | [EN](docs/en/index.md) | [ZH](docs/zh/index.md) |
+| Ghi chú 1.0.3 | [releases/1.0.3](docs/releases/1.0.3.md) | — | — |
+| Ghi chú 1.0.2 | [releases/1.0.2](docs/releases/1.0.2.md) | — | — |
 | Ghi chú 1.0.1 | [releases/1.0.1](docs/releases/1.0.1.md) | — | — |
 | Ghi chú 1.0.0 | [releases/1.0.0](docs/releases/1.0.0.md) | — | — |
 | Ba thành phần | [architecture](docs/vi/architecture.md) | [EN](docs/en/architecture.md) | [ZH](docs/zh/architecture.md) |
@@ -70,44 +71,21 @@ Viết bằng ba ngôn ngữ. Mỗi trang có bảng trỏ sang hai ngôn ngữ 
 
 Bắt đầu với [tổng quan](docs/vi/index.md).
 
-## Thay đổi trong 1.0.3
+## Lịch sử phát hành
 
-**Sửa một dòng bị gán nhãn sai.** Bằng chứng chạy-QEMU của 1.0.2 trung thực
-ghi nhận disk virtio hiện `kind: "SataHdd"` dù trên cùng dòng là
-`transport: "virtio"` — classifier đọc cờ `rotational` trước các prefix tên
-virtio, và vài hypervisor đặt cờ này cho image sparse. 1.0.3 đổi thứ tự: disk
-virtio được dán nhãn đúng `Virtual Disk`, kèm test hồi quy cho cả hai trường
-hợp virtio và SATA thật. Chỉ là sửa hiển thị; phần lập kế hoạch không phụ
-thuộc nhãn này.
+Mỗi bản được ghi một lần, trong tệp riêng — đã sửa gì, bằng chứng nào, và cái
+gì không đổi. README không nhắc lại.
 
-Toàn bộ ghi chú ở [docs/releases/1.0.3.md](docs/releases/1.0.3.md).
+| Bản | Đã sửa gì |
+|---|---|
+| [1.0.3](docs/releases/1.0.3.md) | disk virtio bị gán nhãn `SataHdd`; chỉ hiển thị, kèm test hồi quy |
+| [1.0.2](docs/releases/1.0.2.md) | `--self-test` báo FAIL trên máy không hỗ trợ; nay `SKIP`, exit 2 |
+| [1.0.1](docs/releases/1.0.1.md) | zram/ram/nbd/md/loop bị liệt kê là ổ cài được |
+| [1.0.0](docs/releases/1.0.0.md) | beta đầu tiên: mã 0.1.22, roadmap đã rà soát |
 
-## Thay đổi trong 1.0.2
-
-**Sửa chỗ thiếu trung thực của `--self-test`.** Trên máy camareLOL không hỗ trợ
-(ví dụ Ubuntu), bản 1.0.1 báo FAIL dù mọi kiểm tra máy móc đều qua — thứ đã
-lỗi là host gate, đúng thiết kế. 1.0.2 báo `SKIP (host unsupported)` với
-**exit 2** cho trường hợp đó: `0` = PASS, `2` = môi trường ngoài phạm vi,
-`1` = một kiểm tra thất bại thật (hãy báo lỗi). Mã kết thúc được liệt kê trên
-trang quick-start, và ghi chú phát hành kèm bằng chứng chạy thật trong
-Arch-in-QEMU của bản 1.0.1 — gồm cả install mô phỏng 12 pha và phiên TUI sạch.
-
-Toàn bộ ghi chú ở [docs/releases/1.0.2.md](docs/releases/1.0.2.md).
-
-## Thay đổi trong 1.0.1
-
-**Sửa lỗi dò đĩa và self-test.** `lsblk` gọi zram, ram, nbd, md và loop là
-`disk`; camareLOL đã liệt kê chúng trên màn hình Storage. Trên máy có zram,
-`--self-test` chọn zram làm ổ trống, trượt kiểm tra dung lượng và báo FAIL.
-Một zram đủ lớn để qua ngưỡng tối thiểu sẽ trở thành đích cài vào bộ nhớ
-volatile.
-
-1.0.1 lọc các thiết bị khối ảo đó ngay khi dò, và `--self-test` bỏ qua phần
-cài mô phỏng khi không có ổ trống thay vì chạy nó trên hệ thống đang dùng.
-Không có thay đổi nào ở lập kế hoạch, phân vùng, `pacstrap`, bootloader,
-desktop, safety gate, IPC hay schema cấu hình.
-
-Ghi chú đầy đủ: [docs/releases/1.0.1.md](docs/releases/1.0.1.md).
+Nếu bạn đang dùng 0.1.10 hoặc cũ hơn, binary vẫn còn trình cập nhật đã bị bỏ:
+nó hỏi một địa chỉ không còn phân giải và không cài được gì. Tải 1.0.3 và thay
+binary bằng tay — xem [Cập nhật](docs/vi/update.md).
 
 ## Cài 1.0.3 beta
 

@@ -35,12 +35,12 @@ dòng lệnh một dòng ở trên; nó tự lấy bản **ổn định** mới 
 $ curl -fsSL https://raw.githubusercontent.com/TOL-the-ominous-linux/camareLOL/main/scripts/camarelol.sh | bash
 ```
 
-Bản 1.0.1 là beta hiện tại; 1.0.0 là bản beta đầu tiên. Bản 1.0.1 phát hành
+Bản 1.0.3 là beta hiện tại; 1.0.0 là bản beta đầu tiên. Bản 1.0.3 phát hành
 dưới dạng GitHub pre-release. Ghim tag hoặc chọn kênh beta:
 
 ```console
 $ curl -fsSL https://raw.githubusercontent.com/TOL-the-ominous-linux/camareLOL/main/scripts/camarelol.sh \
-    | CAMARELOL_VERSION=v1.0.1 bash
+    | CAMARELOL_VERSION=v1.0.3 bash
 ```
 
 ```console
@@ -57,9 +57,9 @@ binary:
 ```console
 $ sudo pacman -S wget                 # nếu máy chưa có
 $ sudo wget -O /usr/local/bin/camarelol \
-    https://github.com/TOL-the-ominous-linux/camareLOL/releases/download/v1.0.1/camarelol
+    https://github.com/TOL-the-ominous-linux/camareLOL/releases/download/v1.0.3/camarelol
 $ sudo wget -O /tmp/SHA256SUMS \
-    https://github.com/TOL-the-ominous-linux/camareLOL/releases/download/v1.0.1/SHA256SUMS
+    https://github.com/TOL-the-ominous-linux/camareLOL/releases/download/v1.0.3/SHA256SUMS
 $ cd /usr/local/bin && grep ' camarelol$' /tmp/SHA256SUMS | sha256sum -c -
 $ sudo chmod +x /usr/local/bin/camarelol
 $ camarelol --version                  # xem mình đang có bản nào
@@ -231,15 +231,15 @@ này không thể bỏ sót nó.
 
 ```console
 $ camarelol --version
-camareLOL 1.0.1 (tag v1.0.1, commit abc1234)
+camareLOL 1.0.3 (tag v1.0.3, commit abc1234)
 ```
 
 Ba phần, và chúng nên khớp nhau:
 
 | Phần | Ý nghĩa |
 |---|---|
-| `1.0.1` | bản phát hành binary được build từ |
-| `tag v1.0.1` | thẻ git, cũng là tên bản phát hành |
+| `1.0.3` | bản phát hành binary được build từ |
+| `tag v1.0.3` | thẻ git, cũng là tên bản phát hành |
 | `commit abc1234` | đúng commit đó |
 
 Nếu nó ghi `[built from a dirty working tree]`, binary đó được biên dịch từ thay

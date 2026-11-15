@@ -40,9 +40,7 @@ installed disk rather than the menu. Still:
 pre-release. Install it deliberately — see [Install 1.0.3 beta](#install-103-beta).
 
 The full release notes, including evidence and known limitations, are in
-[docs/releases/1.0.1.md](docs/releases/1.0.1.md). The first beta's notes remain
-at [docs/releases/1.0.0.md](docs/releases/1.0.0.md).
-
+[docs/releases/1.0.3.md](docs/releases/1.0.3.md).
 
 camareLOL installs Arch Linux from the terminal without making you type dozens
 of shell commands. It detects your hardware, proposes a safe layout, shows you
@@ -82,68 +80,17 @@ table points sideways into the other two.
 
 Start with [the overview](docs/en/index.md).
 
-## What changed in 1.0.3
+## Release history
 
-**One mislabelled line, fixed.** The 1.0.2 run-in-QEMU evidence honestly noted
-a virtio disk showing `kind: "SataHdd"` while `transport: "virtio"` sat on the
-same line. The kind classifier consulted the `rotational` flag before the
-virtio name prefixes — some hypervisors set that flag on sparse images.
-1.0.3 reorders the checks: a virtio disk is correctly labelled
-`Virtual Disk`, with regression tests pinning both the virtio and the
-genuine-SATA cases. Cosmetic fix only; planning never depended on the label.
+Each release is documented once, in its own file — the fix, the evidence, and
+what did not change. The README does not repeat them.
 
-The full notes are in [docs/releases/1.0.3.md](docs/releases/1.0.3.md).
-
-## What changed in 1.0.2
-
-**An honesty fix in `--self-test`.** On a machine camareLOL does not support
-(say, Ubuntu), the 1.0.1 self-test reported FAIL even though every machinery
-check had passed — what failed was the host gate, by design. 1.0.2 reports
-`SKIP (host unsupported)` with **exit 2** for that case: `0` = PASS, `2` =
-environment out of scope, `1` = a machinery check failed (report that).
-Exit codes are now documented on the quick-start pages, and the release
-notes carry first-hand output from a full Arch-in-QEMU run of the 1.0.1
-assets — including a 12-phase simulated install and a clean TUI session.
-
-The full notes are in [docs/releases/1.0.2.md](docs/releases/1.0.2.md).
-
-## What changed in 1.0.1
-
-**A discovery and self-test fix.** `lsblk` labels zram, ram, nbd, md and loop
-devices as type `disk`; camareLOL listed them on the Storage screen. On a host
-with zram, `--self-test` picked zram as the empty disk, failed the size check
-and reported FAIL. A zram large enough to pass the planner's minimum would have
-been a target for an install into volatile memory.
-
-1.0.1 filters those virtual block devices at discovery, and `--self-test` now
-skips the simulated install when there is no empty disk instead of running it
-against the installed system. No planning, partitioning, `pacstrap`,
-bootloader, desktop, safety-gate, IPC or config-schema behaviour changed.
-
-The full notes are in [docs/releases/1.0.1.md](docs/releases/1.0.1.md).
-
-## What changed in 1.0.0
-
-**The first beta.** 1.0.0 is the same installer code as 0.1.22, re-versioned
-and re-documented after a complete roadmap audit. No discovery, planning,
-partitioning, `pacstrap`, bootloader, desktop, safety-gate, IPC or config-schema
-behaviour changed.
-
-What did change:
-
-- The Cargo workspace, `Cargo.lock`, npm package, PKGBUILD template and
-  dual-boot helper now agree on **1.0.0**.
-- The GitHub release is a **pre-release**; npm publishes 1.0.0 under the
-  **`beta`** tag. `npm install -g @wenker-ai/camarelo` still installs 0.1.22.
-- The docs were corrected: stale alpha wording, the removed `u` update key,
-  and the old "layout UI comes in Stage 3" claim are gone.
-- Release tooling now reads notes from `docs/releases/<version>.md`, supports
-  a pre-release flag, supports `NPM_TAG=beta`, and accepts
-  `CAMARELOL_CHANNEL=beta`.
-
-The full, item-by-item notes — including the three partial Stage 2 items and
-the deferred real-Windows work — are in
-[docs/releases/1.0.0.md](docs/releases/1.0.0.md).
+| Release | What it fixed |
+|---|---|
+| [1.0.3](docs/releases/1.0.3.md) | a virtio disk labelled `SataHdd`; display only, with regression tests |
+| [1.0.2](docs/releases/1.0.2.md) | `--self-test` reported FAIL on unsupported hosts; now `SKIP`, exit 2 |
+| [1.0.1](docs/releases/1.0.1.md) | zram/ram/nbd/md/loop offered as install disks |
+| [1.0.0](docs/releases/1.0.0.md) | first beta: 0.1.22's installer code, roadmap audited |
 
 If you are on 0.1.10 or older, you still have the removed updater in your
 binary. It asks an address that no longer resolves and cannot install

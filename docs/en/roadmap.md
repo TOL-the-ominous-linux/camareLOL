@@ -4,11 +4,13 @@
 
 What is built, what is not, and — where it is not — why.
 
-**Current release:** `1.0.1`, the second beta (26 October 2026). It fixes
-virtual block devices (zram/ram/nbd/md/loop) being offered as install disks and
-`--self-test` failing when there is no empty disk. `1.0.0` was the first beta:
-the 0.1.22 installer code plus the roadmap audit and documentation overhaul.
-The npm `latest` tag remains on 0.1.22 until a beta is promoted.
+**Current release:** `1.0.3`, the fourth beta (28 October 2026). It fixes a
+virtio disk being labelled `SATA HDD` in the storage survey — display only,
+with regression tests; planning never read that field. `1.0.2` made
+`--self-test` report `SKIP`, exit 2, on an unsupported host instead of FAIL;
+`1.0.1` filtered zram/ram/nbd/md/loop out of disk discovery. `1.0.0` was the
+first beta: the 0.1.22 installer code plus the roadmap audit and documentation
+overhaul. The npm `latest` tag remains on 0.1.22 until a beta is promoted.
 
 ## Stage 1 — MVP
 
@@ -123,7 +125,7 @@ filesystem kind, and root-before-ESP mount order.
       the GitHub release of exactly the version in `package.json`, verifies it
       against `SHA256SUMS`, requires `--version` to agree, runs the package
       tests, and only then packs; publish is a separate explicit step. 1.0.0
-      was the first beta and 1.0.1 is the current one, both under the `beta`
+      was the first beta and 1.0.3 is the current one, all under the `beta`
       dist-tag; `latest` remains 0.1.22 until promotion.
 
 ## Stage 6 — Dual-boot beside an existing OS
