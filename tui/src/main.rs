@@ -35,9 +35,34 @@ struct Args {
     scan: bool,
     self_test: bool,
     scripted: Option<PathBuf>,
+    /// Headless installs have no screen to type a LUKS passphrase into, and it
+    /// must not be in the profile (nor in argv, where `ps` would show it).
+    luks_passphrase_file: Option<PathBuf>,
     language: Option<String>,
     postcheck: bool,
     postcheck_root: Option<PathBuf>,
+}
+
+/// Read a LUKS passphrase from the first line of a file.
+///
+/// Only the newline is stripped: a passphrase may legitimately have leading or
+/// trailing spaces, and trimming them would produce a container nobody can
+/// open with the passphrase the user wrote down.
+fn read_passphrase_file(path: &std::path::Path) -> Result<String, String> {
+    let text = std::fs::read_to_string(path).map_err(|e| {
+        format!(
+            "cannot read the LUKS passphrase file {}: {e}",
+            path.display()
+        )
+    })?;
+    let first = text.lines().next().unwrap_or_default().to_string();
+    if first.is_empty() {
+        return Err(format!(
+            "the LUKS passphrase file {} is empty",
+            path.display()
+        ));
+    }
+    Ok(first)
 }
 
 fn parse_args() -> Result<Args, String> {
@@ -62,6 +87,7 @@ fn parse_args_from(argv: Vec<String>) -> Result<Args, String> {
             "--scan" => a.scan = true,
             "--self-test" => a.self_test = true,
             "--scripted" => a.scripted = args.next().map(PathBuf::from),
+            "--luks-passphrase-file" => a.luks_passphrase_file = args.next().map(PathBuf::from),
             "--lang" => a.language = args.next(),
             "--postcheck" => a.postcheck = true,
             "--postcheck-root" => a.postcheck_root = args.next().map(PathBuf::from),
@@ -93,6 +119,9 @@ OPTIONS:
     --scan                    Print the storage survey as JSON and exit
     --self-test               Run the non-destructive acceptance checks
     --scripted <FILE>         Install without a UI (for automated testing)
+    --luks-passphrase-file <FILE>
+                              Read the LUKS passphrase from the first line of
+                              FILE (scripted installs of an encrypted root)
     --preview                 Simulate the whole installation and write nothing
     --allow-destructive       Arm the safety gate (still requires confirmation)
     --execute                 Really write to disk (default is dry-run)
@@ -217,11 +246,22 @@ fn main() {
     }
 
     if let Some(cfg_path) = args.scripted.clone() {
+        let passphrase = match args.luks_passphrase_file.as_deref() {
+            Some(path) => match read_passphrase_file(path) {
+                Ok(p) => Some(p),
+                Err(e) => {
+                    eprintln!("{e}");
+                    std::process::exit(1);
+                }
+            },
+            None => None,
+        };
         match scripted::run_scripted(
             &cfg_path,
             args.mock.as_deref(),
             args.allow_destructive && args.execute,
             args.preview,
+            passphrase.as_deref(),
         ) {
             Ok(report) => {
                 println!("{}", report.render());

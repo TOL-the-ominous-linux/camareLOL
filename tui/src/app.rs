@@ -42,6 +42,7 @@ pub enum Screen {
     DiskMode,
     Layout,
     Filesystem,
+    Encryption,
     Accounts,
     Bootloader,
     Desktop,
@@ -55,7 +56,7 @@ pub enum Screen {
 }
 
 impl Screen {
-    pub const ORDER: [Screen; 16] = [
+    pub const ORDER: [Screen; 17] = [
         Screen::Welcome,
         Screen::Language,
         Screen::Keyboard,
@@ -64,6 +65,7 @@ impl Screen {
         Screen::DiskMode,
         Screen::Layout,
         Screen::Filesystem,
+        Screen::Encryption,
         Screen::Accounts,
         Screen::Bootloader,
         Screen::Desktop,
@@ -84,6 +86,7 @@ impl Screen {
             Screen::DiskMode => "How should this disk be used?",
             Screen::Layout => "Partition layout",
             Screen::Filesystem => "Filesystem",
+            Screen::Encryption => "Disk encryption",
             Screen::Accounts => "Hostname and accounts",
             Screen::Bootloader => "Bootloader",
             Screen::Desktop => "Desktop environment",
@@ -189,6 +192,14 @@ pub struct App {
     pub user_is_admin: bool,
     pub confirm_phrase: String,
 
+    // disk encryption (LUKS2 on /). The passphrase is held in memory only and
+    // is never written to a profile — like the account passwords beside it.
+    pub encrypt_root: bool,
+    /// 0 = the yes/no row, 1 = passphrase, 2 = confirmation.
+    pub luks_row: usize,
+    pub luks_passphrase: String,
+    pub luks_confirm: String,
+
     // runtime
     pub message: Option<String>,
     pub error: Option<CamarelolError>,
@@ -277,6 +288,10 @@ impl App {
             selected_disk: None,
             plan: None,
             field: Field::None,
+            encrypt_root: false,
+            luks_row: 0,
+            luks_passphrase: String::new(),
+            luks_confirm: String::new(),
             hostname: "archlinux".into(),
             root_password: String::new(),
             root_password_confirm: String::new(),
@@ -430,6 +445,7 @@ impl App {
             } else {
                 None
             },
+            encrypt_root: self.encrypt_root,
         };
         // Selected "Dual-boot next to another operating system": the plan comes
         // from what the scan found on the disk, keeping existing partitions.
@@ -455,7 +471,7 @@ impl App {
         ServiceSelection::suggest_zram_bytes(camarelol_core::hardware::detect_ram_bytes())
     }
 
-    fn layout_choice(&self, purpose: PartitionPurpose) -> bool {
+    pub fn layout_choice(&self, purpose: PartitionPurpose) -> bool {
         let want_home = self.layout_index == 1 || self.layout_index == 3;
         let want_boot = self.layout_index == 2 || self.layout_index == 3;
         match purpose {
@@ -590,6 +606,12 @@ impl App {
             Some(self.root_password.as_str()),
             &[(self.username.trim(), self.user_password.as_str())],
         );
+        // After set_passwords: that call clears the map, and the LUKS passphrase
+        // lives in it too (see InstallationConfig::LUKS_KEY).
+        cfg.encrypt_root = self.encrypt_root;
+        if self.encrypt_root {
+            cfg.set_luks_passphrase(&self.luks_passphrase);
+        }
         cfg.validate()?;
         Ok(cfg)
     }
@@ -617,6 +639,14 @@ impl App {
             camarelol_core::hardware::MicrocodeHint::Amd => v.push("amd-ucode".into()),
             camarelol_core::hardware::MicrocodeHint::Unknown => {}
         }
+        // The GPU decides the rest: the NVIDIA variant is not one package, and
+        // an Intel or AMD GPU needs its Vulkan driver to have a working
+        // compositor at all.
+        v.extend(camarelol_core::hardware::gpu_driver_packages(
+            &camarelol_core::hardware::detect_gpus(),
+        ));
+        v.sort();
+        v.dedup();
         v
     }
 
@@ -762,6 +792,20 @@ impl App {
             (false, true) => 2,
             (true, true) => 3,
         };
+        // Encryption is a choice, so it is restored — but its passphrase is not
+        // in the profile (it must not be), so the screen has to be visited
+        // again before an install can start. `notes` says so below.
+        self.encrypt_root = cfg.encrypt_root;
+        self.luks_passphrase.clear();
+        self.luks_confirm.clear();
+        self.luks_row = 0;
+        if cfg.encrypt_root {
+            notes.push(self.tr_owned(
+                "Hồ sơ bật mã hoá ổ đĩa nhưng mật khẩu LUKS không nằm trong tệp — hãy nhập lại ở bước Mã hoá.",
+                "The profile encrypts the disk, but a LUKS passphrase is never stored in a file — enter it again on the Encryption step.",
+                "配置文件启用了磁盘加密，但 LUKS 口令不会保存在文件中 — 请在“加密”步骤重新输入。",
+            ));
+        }
         // `swap_bytes` has no row of its own on the layout screen — the layout
         // list only ever offered root/home/boot. Carrying it into zram keeps the
         // choice instead of dropping it on the floor.

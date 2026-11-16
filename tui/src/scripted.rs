@@ -38,15 +38,24 @@ impl ProgressSink for TextSink {
 /// * `preview` simulates a *complete* install: all twelve phases run and every
 ///   command is printed, but nothing is written and nothing is executed. It
 ///   ignores `allow_execute` completely.
+/// * `luks_passphrase` comes from `--luks-passphrase-file` and is never logged;
+///   a configuration that asks for encryption without it is refused at
+///   preflight.
 /// * The target disk is re-scanned and verified before anything is written.
 pub fn run_scripted(
     config_path: &Path,
     mock: Option<&Path>,
     allow_execute: bool,
     preview: bool,
+    luks_passphrase: Option<&str>,
 ) -> Result<InstallReport, CamarelolError> {
-    let cfg = InstallationConfig::load(config_path.to_str().unwrap_or_default())?;
+    let mut cfg = InstallationConfig::load(config_path.to_str().unwrap_or_default())?;
     cfg.validate()?;
+    // The passphrase is never in the profile; a headless encrypted install gets
+    // it from `--luks-passphrase-file`, and only while this process lives.
+    if let Some(passphrase) = luks_passphrase {
+        cfg.set_luks_passphrase(passphrase);
+    }
 
     let devices = match mock {
         Some(p) => scan_devices_from_survey(&std::fs::read_to_string(p).map_err(|e| {

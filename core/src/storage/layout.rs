@@ -177,6 +177,10 @@ pub struct LayoutRequest {
     pub separate_home: bool,
     pub separate_boot: bool,
     pub swap_bytes: Option<u64>,
+    /// Put a LUKS2 container around the root filesystem. Planning is unchanged
+    /// — encryption happens between `mkfs` and `mount` — but it constrains the
+    /// layout: the bootloader has to reach a kernel without unlocking anything.
+    pub encrypt_root: bool,
 }
 
 impl Default for LayoutRequest {
@@ -188,6 +192,7 @@ impl Default for LayoutRequest {
             separate_home: false,
             separate_boot: false,
             swap_bytes: None,
+            encrypt_root: false,
         }
     }
 }
@@ -465,6 +470,16 @@ pub fn plan_dual_boot(device: &StorageDevice, req: &LayoutRequest) -> Result<Par
         return Err(refuse(
             "dual-boot only plans a UEFI + GPT disk (no BIOS boot code can be installed beside Windows safely this way)".to_string(),
             "boot the medium in UEFI mode, or erase the whole disk instead",
+        ));
+    }
+    // Encryption beside another OS is not refused because it is impossible:
+    // it is refused because this version has never watched the resulting
+    // machine boot next to a real Windows, and a lock-out on somebody else's
+    // computer is not a bug report. The whole-disk path has the same feature.
+    if req.encrypt_root {
+        return Err(refuse(
+            "encrypting / next to an existing operating system is not implemented yet".to_string(),
+            "erase the whole disk to encrypt it, or turn encryption off for this dual-boot install",
         ));
     }
     if req.bootloader != Bootloader::Grub {
@@ -858,6 +873,43 @@ pub fn validate_plan(plan: &PartitionPlan, req: &LayoutRequest) -> Result<()> {
             "GRUB with XFS on / requires a separate /boot partition",
         )
         .with_remediation("enable a separate /boot or use ext4/btrfs"));
+    }
+
+    // ------------------------------------------------------------- encryption
+    // A LUKS2 root is only safe to plan when the bootloader can read a kernel
+    // and an initramfs without unlocking anything: the passphrase is asked by
+    // the initramfs's `encrypt` hook, after the bootloader is done. Without a
+    // plain /boot, GRUB itself would need cryptodisk support and a second
+    // passphrase prompt — not implemented, and not something to approximate.
+    if req.encrypt_root {
+        if plan.keep_existing {
+            return Err(CamarelolError::new(
+                ErrorCode::InvalidPlan,
+                "an encrypted root cannot be planned next to an existing operating system",
+            )
+            .with_remediation("erase the whole disk to encrypt it, or turn encryption off"));
+        }
+        if req.bootloader == Bootloader::SystemdBoot {
+            return Err(CamarelolError::new(
+                ErrorCode::InvalidBootConfig,
+                "systemd-boot cannot boot an encrypted root in this version (its entries carry no cryptdevice=)",
+            )
+            .with_remediation("choose GRUB, or turn encryption off"));
+        }
+        let kernel_on_plain = plan.partitions.iter().any(|p| {
+            p.purpose == PartitionPurpose::Boot
+                || (p.purpose == PartitionPurpose::EfiSystem
+                    && p.mount_point.as_deref() == Some("/boot"))
+        });
+        if !kernel_on_plain {
+            return Err(CamarelolError::new(
+                ErrorCode::InvalidBootConfig,
+                "encrypting / needs a /boot the bootloader can read without a passphrase",
+            )
+            .with_remediation(
+                "enable a separate /boot (BIOS) or boot the medium in UEFI mode so the ESP is mounted at /boot",
+            ));
+        }
     }
 
     // XFS + systemd-boot: kernels live on the ESP, so it is technically fine.
@@ -1292,6 +1344,58 @@ mod tests {
             "the refusal must name the collision: {}",
             err.message
         );
+    }
+
+    /// LUKS on UEFI with the ESP at /boot: the bootloader reads a kernel
+    /// without unlocking anything, and the initramfs asks for the passphrase.
+    #[test]
+    fn encryption_is_plannable_when_a_plain_boot_exists() {
+        let req = LayoutRequest {
+            encrypt_root: true,
+            ..Default::default()
+        };
+        let plan = plan_auto_layout(&empty_disk(), &req).unwrap();
+        assert!(validate_plan(&plan, &req).is_ok());
+
+        // BIOS + GRUB without a separate /boot: the kernel would live inside
+        // the encrypted volume and GRUB cannot read it.
+        let bios = LayoutRequest {
+            encrypt_root: true,
+            firmware: Firmware::Bios,
+            ..Default::default()
+        };
+        let plan = plan_auto_layout(&empty_disk(), &bios).unwrap();
+        let err = validate_plan(&plan, &bios).unwrap_err();
+        assert_eq!(err.code, ErrorCode::InvalidBootConfig);
+        assert!(err.message.contains("/boot"), "{}", err.message);
+
+        // ...and with one, it is fine again.
+        let bios_boot = LayoutRequest {
+            separate_boot: true,
+            ..bios
+        };
+        let plan = plan_auto_layout(&empty_disk(), &bios_boot).unwrap();
+        assert!(validate_plan(&plan, &bios_boot).is_ok());
+    }
+
+    #[test]
+    fn encryption_is_refused_for_systemd_boot_and_for_dual_boot() {
+        let req = LayoutRequest {
+            encrypt_root: true,
+            bootloader: Bootloader::SystemdBoot,
+            ..Default::default()
+        };
+        let err = validate_plan(&plan_auto_layout(&empty_disk(), &req).unwrap(), &req).unwrap_err();
+        assert_eq!(err.code, ErrorCode::InvalidBootConfig);
+        assert!(err.message.contains("systemd-boot"), "{}", err.message);
+
+        // The dual-boot planner refuses before it spends any effort planning.
+        let dual = LayoutRequest {
+            encrypt_root: true,
+            ..Default::default()
+        };
+        let err = plan_dual_boot(&windows_disk(), &dual).unwrap_err();
+        assert!(err.message.contains("encrypting"), "{}", err.message);
     }
 
     #[test]

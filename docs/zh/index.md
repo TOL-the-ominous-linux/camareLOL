@@ -119,7 +119,7 @@ $ curl -fsSL https://raw.githubusercontent.com/TOL-the-ominous-linux/camareLOL/m
 
 ```
 Welcome → Language → Keyboard → Timezone → Storage → Disk mode →
-Layout → Filesystem → Accounts → Bootloader → Desktop → Services →
+Layout → Filesystem → Encryption → Accounts → Bootloader → Desktop → Services →
 Packages → Review (type the confirmation phrase) → Progress → Result
 ```
 

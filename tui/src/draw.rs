@@ -97,6 +97,7 @@ pub fn draw(f: &mut Frame, app: &mut App) {
             Screen::Storage => draw_storage(f, app, body),
             Screen::DiskMode => draw_disk_mode(f, app, body),
             Screen::Layout => draw_layout(f, app, body),
+            Screen::Encryption => draw_encryption(f, app, body),
             Screen::Accounts => draw_accounts(f, app, body),
             Screen::Desktop => draw_desktop(f, app, body),
             Screen::Services => draw_services(f, app, body),
@@ -619,6 +620,92 @@ fn draw_layout(f: &mut Frame, app: &mut App, area: Rect) {
     f.render_widget(p, area);
 }
 
+/// The LUKS step.
+///
+/// The passphrase fields are only shown when the answer is Yes: a row that
+/// silently does nothing would be worse than none at all. Both are masked, for
+/// the same reason the account passwords are — somebody else's screen.
+fn draw_encryption(f: &mut Frame, app: &mut App, area: Rect) {
+    let mask = |s: &str| "*".repeat(s.chars().count());
+    let row = |i: usize, text: String| {
+        let marker = if app.luks_row == i { "▸" } else { " " };
+        Line::from(format!("{marker} {text}"))
+    };
+    let mut lines = vec![
+        Line::from(app.tr(
+            "Mã hoá phân vùng gốc bằng LUKS2?",
+            "Encrypt the root filesystem with LUKS2?",
+            "是否用 LUKS2 加密根分区？",
+        )),
+        Line::from(""),
+        row(
+            0,
+            format!(
+                "{} {}",
+                if app.encrypt_root { "●" } else { "○" },
+                app.tr(
+                    "Có — hỏi mật khẩu mỗi lần khởi động",
+                    "Yes — ask for a passphrase at every boot",
+                    "是 — 每次启动都要输入口令",
+                )
+            ),
+        ),
+        row(
+            0,
+            format!(
+                "{} {}",
+                if app.encrypt_root { "○" } else { "●" },
+                app.tr(
+                    "Không — không mã hoá",
+                    "No — leave the disk unencrypted",
+                    "否 — 不加密磁盘",
+                )
+            ),
+        ),
+        Line::from(""),
+    ];
+    if app.encrypt_root {
+        lines.push(row(
+            1,
+            format!(
+                "{}: {}",
+                app.tr("Mật khẩu LUKS", "LUKS passphrase", "LUKS 口令"),
+                mask(&app.luks_passphrase)
+            ),
+        ));
+        lines.push(row(
+            2,
+            format!(
+                "{}: {}",
+                app.tr("Nhập lại", "Confirm passphrase", "确认口令"),
+                mask(&app.luks_confirm)
+            ),
+        ));
+        lines.push(Line::from(""));
+        lines.push(Line::from(app.tr(
+            "Mật khẩu tối thiểu 8 ký tự. Không có nó thì không mở được máy — không ai lấy lại được hộ.",
+            "At least 8 characters. Without it the machine cannot be opened — nobody can recover it for you.",
+            "至少 8 个字符。没有它就无法打开这台机器 — 没有人能帮你恢复。",
+        )));
+        if app.layout_choice(camarelol_core::storage::PartitionPurpose::Home) {
+            lines.push(Line::from(""));
+            lines.push(Line::from(app.tr(
+                "Bố cục đang tách /home riêng — hãy bỏ tách ở bước Bố cục, nếu không /home sẽ nằm ngoài vùng mã hoá.",
+                "The layout keeps /home separate — turn that off on the Layout step, or /home stays outside the encrypted volume.",
+                "当前布局单独分区 /home — 请在“分区布局”步骤取消，否则 /home 不会被加密。",
+            )));
+        }
+    }
+    let p = Paragraph::new(lines)
+        .block(screen_block(app.tr(
+            "Mã hoá ổ đĩa",
+            "Disk encryption",
+            "磁盘加密",
+        )))
+        .wrap(Wrap { trim: false });
+    f.render_widget(p, area);
+}
+
 fn draw_accounts(f: &mut Frame, app: &mut App, area: Rect) {
     let field_style = |field: Field| {
         if app.field == field {
@@ -873,6 +960,19 @@ fn draw_review(f: &mut Frame, app: &mut App, area: Rect) {
         for op in plan.destructive_operations() {
             lines.push(Line::from(format!("   • {op}")));
         }
+        lines.push(Line::from(""));
+        // Encryption is checked on its own row: it is the one choice here whose
+        // consequence lasts past the install (a passphrase at every boot, and
+        // no way in without it).
+        lines.push(Line::from(if app.encrypt_root {
+            app.tr(
+                " Mã hoá: / dùng LUKS2 — sẽ hỏi mật khẩu mỗi lần khởi động.",
+                " Encryption: / is LUKS2 — a passphrase is asked at every boot.",
+                " 加密：/ 使用 LUKS2 — 每次启动都会要求输入口令。",
+            )
+        } else {
+            app.tr(" Mã hoá: không.", " Encryption: off.", " 加密：未启用。")
+        }));
         lines.push(Line::from(""));
         if app.preview {
             // Asking for the phrase in a preview would be theatre: there is

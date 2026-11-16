@@ -33,6 +33,9 @@ impl RecordedCommand {
     }
 }
 
+/// What a recorded command shows in place of a passphrase it received on stdin.
+const SECRET_STDIN_PLACEHOLDER: &str = "<passphrase on stdin>";
+
 /// A helper that either runs the command or records it, depending on the gate.
 #[derive(Debug, Default)]
 pub struct OpRunner {
@@ -46,6 +49,10 @@ struct Cmd<'a> {
     program: &'a str,
     args: Vec<String>,
     stdin: Option<String>,
+    /// The stdin text is a secret (a passphrase). It still goes to the program,
+    /// but the recorded command keeps a placeholder instead: the report and the
+    /// log are read by people.
+    secret_stdin: bool,
 }
 
 impl OpRunner {
@@ -70,6 +77,7 @@ impl OpRunner {
             program,
             args,
             stdin,
+            secret_stdin,
         } = cmd;
         gate.authorize(op, risk)?;
         // `writes_to_disk()` and not `gate.dry_run`: in preview the field can be
@@ -83,7 +91,13 @@ impl OpRunner {
             self.records.push(RecordedCommand {
                 program: program.to_string(),
                 args,
-                stdin,
+                stdin: stdin.map(|s| {
+                    if secret_stdin {
+                        SECRET_STDIN_PLACEHOLDER.to_string()
+                    } else {
+                        s
+                    }
+                }),
                 applied: false,
                 status: None,
                 stderr: String::new(),
@@ -105,7 +119,13 @@ impl OpRunner {
         self.records.push(RecordedCommand {
             program: program.to_string(),
             args,
-            stdin,
+            stdin: stdin.map(|s| {
+                if secret_stdin {
+                    SECRET_STDIN_PLACEHOLDER.to_string()
+                } else {
+                    s
+                }
+            }),
             applied: true,
             status: Some(status),
             stderr,
@@ -151,6 +171,7 @@ impl OpRunner {
                 program: "sgdisk",
                 args: vec!["--zap-all".into(), device.path.clone()],
                 stdin: None,
+                secret_stdin: false,
             },
         )?;
         // 2. write the new table + partitions. sfdisk asks the kernel to
@@ -164,6 +185,7 @@ impl OpRunner {
                 program: "sfdisk",
                 args: vec!["--force".into(), device.path.clone()],
                 stdin: Some(script),
+                secret_stdin: false,
             },
         )?;
         // 3. Belt and braces: ask the kernel and udev to notice the new table.
@@ -245,6 +267,7 @@ impl OpRunner {
                 program: "sgdisk",
                 args,
                 stdin: None,
+                secret_stdin: false,
             },
         )?;
         self.try_go(
@@ -311,6 +334,7 @@ impl OpRunner {
                 program,
                 args,
                 stdin: None,
+                secret_stdin: false,
             },
         );
         if let Err(e) = result {
@@ -487,6 +511,7 @@ impl OpRunner {
                 program,
                 args,
                 stdin: None,
+                secret_stdin: false,
             },
         )
     }
@@ -508,6 +533,7 @@ impl OpRunner {
                 program: "mkdir",
                 args: vec!["-p".into(), target.into()],
                 stdin: None,
+                secret_stdin: false,
             },
         )?;
         self.go(
@@ -519,6 +545,172 @@ impl OpRunner {
                 program: "mount",
                 args: vec![source.into(), target.into()],
                 stdin: None,
+                secret_stdin: false,
+            },
+        )
+    }
+
+    /// Put a LUKS2 container on `node` with `passphrase` as the only key.
+    ///
+    /// The passphrase travels on stdin, never in argv: an argument is visible
+    /// to every user through `ps` for as long as the command runs, and it ends
+    /// up in the shell history of whoever ran it. `--batch-mode` is what makes
+    /// stdin the only source — without it cryptsetup asks for a confirmation
+    /// on the terminal and, with no terminal, fails.
+    pub fn luks_format(
+        &mut self,
+        node: &str,
+        passphrase: &str,
+        gate: &SafetyGate,
+        log: &Logger,
+    ) -> Result<()> {
+        self.go(
+            gate,
+            log,
+            Cmd {
+                op: Operation::FormatPartition,
+                risk: RiskLevel::Medium,
+                program: "cryptsetup",
+                args: vec![
+                    "luksFormat".into(),
+                    "--type".into(),
+                    "luks2".into(),
+                    "--batch-mode".into(),
+                    "--key-file".into(),
+                    "-".into(),
+                    node.into(),
+                ],
+                stdin: Some(format!("{passphrase}\n")),
+                secret_stdin: true,
+            },
+        )
+    }
+
+    /// Unlock a LUKS container as `/dev/mapper/<name>` for this install.
+    ///
+    /// Without this the freshly formatted root is an opaque blob: the format
+    /// step has to run against the mapper device, not against the partition.
+    pub fn luks_open(
+        &mut self,
+        node: &str,
+        name: &str,
+        passphrase: &str,
+        gate: &SafetyGate,
+        log: &Logger,
+    ) -> Result<()> {
+        self.go(
+            gate,
+            log,
+            Cmd {
+                op: Operation::FormatPartition,
+                risk: RiskLevel::Medium,
+                program: "cryptsetup",
+                args: vec![
+                    "open".into(),
+                    "--type".into(),
+                    "luks2".into(),
+                    "--key-file".into(),
+                    "-".into(),
+                    node.into(),
+                    name.into(),
+                ],
+                stdin: Some(format!("{passphrase}\n")),
+                secret_stdin: true,
+            },
+        )?;
+        if gate.writes_to_disk() {
+            let mapper = format!("/dev/mapper/{name}");
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+            while std::time::Instant::now() < deadline {
+                if crate::sys::path_exists(&mapper) {
+                    return Ok(());
+                }
+                std::thread::sleep(std::time::Duration::from_millis(200));
+            }
+            return Err(CamarelolError::new(
+                ErrorCode::DeviceBusy,
+                format!("cryptsetup reported success but {mapper} never appeared"),
+            )
+            .with_remediation(
+                "check `dmesg` for dm-crypt errors; the container exists and is intact",
+            ));
+        }
+        Ok(())
+    }
+
+    /// Mount with explicit options — btrfs subvolumes need `-o subvol=@`.
+    ///
+    /// A plain [`Self::mount`] call cannot express this, and mounting a btrfs
+    /// filesystem without saying which subvolume gives you the top level, not
+    /// the root the install intended.
+    pub fn mount_with_options(
+        &mut self,
+        source: &str,
+        target: &str,
+        options: &[&str],
+        gate: &SafetyGate,
+        log: &Logger,
+    ) -> Result<()> {
+        self.go(
+            gate,
+            log,
+            Cmd {
+                op: Operation::Mount,
+                risk: RiskLevel::Low,
+                program: "mkdir",
+                args: vec!["-p".into(), target.into()],
+                stdin: None,
+                secret_stdin: false,
+            },
+        )?;
+        self.go(
+            gate,
+            log,
+            Cmd {
+                op: Operation::Mount,
+                risk: RiskLevel::Low,
+                program: "mount",
+                args: vec!["-o".into(), options.join(","), source.into(), target.into()],
+                stdin: None,
+                secret_stdin: false,
+            },
+        )
+    }
+
+    /// Unmount one target. Used between the btrfs top-level mount and the
+    /// `subvol=@` mount that replaces it.
+    pub fn unmount(&mut self, target: &str, gate: &SafetyGate, log: &Logger) -> Result<()> {
+        self.go(
+            gate,
+            log,
+            Cmd {
+                op: Operation::Mount,
+                risk: RiskLevel::Low,
+                program: "umount",
+                args: vec![target.into()],
+                stdin: None,
+                secret_stdin: false,
+            },
+        )
+    }
+
+    /// `btrfs subvolume create <path>`.
+    pub fn btrfs_create_subvolume(
+        &mut self,
+        path: &str,
+        gate: &SafetyGate,
+        log: &Logger,
+    ) -> Result<()> {
+        self.go(
+            gate,
+            log,
+            Cmd {
+                op: Operation::FormatPartition,
+                risk: RiskLevel::Low,
+                program: "btrfs",
+                args: vec!["subvolume".into(), "create".into(), path.into()],
+                stdin: None,
+                secret_stdin: false,
             },
         )
     }

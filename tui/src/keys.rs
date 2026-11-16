@@ -7,7 +7,7 @@
 
 use super::app::{App, Field, Screen};
 use camarelol_core::boot::Bootloader;
-use camarelol_core::error::ErrorCode;
+use camarelol_core::error::{CamarelolError, ErrorCode};
 use camarelol_core::install::execute::RealSystemRunner;
 use camarelol_core::install::{run_install, Outcome, PhaseState, ProgressEvent, ProgressSink};
 use camarelol_core::safety::{required_phrase, Operation};
@@ -230,6 +230,27 @@ impl App {
                 }
                 _ => {}
             },
+            Screen::Encryption => match key.code {
+                KeyCode::Up => self.luks_row = self.luks_row.saturating_sub(1),
+                KeyCode::Down => {
+                    let max = if self.encrypt_root { 2 } else { 0 };
+                    self.luks_row = (self.luks_row + 1).min(max);
+                }
+                KeyCode::Char(' ') | KeyCode::Left | KeyCode::Right if self.luks_row == 0 => {
+                    self.encrypt_root = !self.encrypt_root;
+                    self.luks_row = if self.encrypt_root { 1 } else { 0 };
+                }
+                KeyCode::Char(c) if self.luks_row == 1 => self.luks_passphrase.push(c),
+                KeyCode::Backspace if self.luks_row == 1 => {
+                    self.luks_passphrase.pop();
+                }
+                KeyCode::Char(c) if self.luks_row == 2 => self.luks_confirm.push(c),
+                KeyCode::Backspace if self.luks_row == 2 => {
+                    self.luks_confirm.pop();
+                }
+                KeyCode::Enter => self.submit_encryption(),
+                _ => {}
+            },
             Screen::Services => match key.code {
                 KeyCode::Up => self.service_cursor_up(),
                 KeyCode::Down => self.service_cursor_down(),
@@ -344,6 +365,63 @@ impl App {
             Screen::Done if key.code == KeyCode::Char('d') => self.write_diagnostics(),
             _ => {}
         }
+    }
+
+    /// Leave the encryption step, refusing anything that would format a disk
+    /// with a passphrase the user cannot reproduce.
+    ///
+    /// The checks are the same ones `preconditions("preflight")` performs —
+    /// here so the answer arrives while the user is still on the screen that
+    /// asks the question, not forty minutes into the install.
+    fn submit_encryption(&mut self) {
+        use camarelol_core::storage::PartitionPurpose;
+        if self.encrypt_root {
+            if self.layout_choice(PartitionPurpose::Home) {
+                self.error = Some(CamarelolError::new(
+                    ErrorCode::InvalidConfig,
+                    self.tr(
+                        "Không thể mã hoá / khi /home nằm ở phân vùng riêng — /home sẽ không được mã hoá.",
+                        "Cannot encrypt / while /home is a separate partition — /home would stay unencrypted.",
+                        "当 /home 单独分区时无法只加密 / — /home 将不会被加密。",
+                    ),
+                ));
+                return;
+            }
+            let len = self.luks_passphrase.chars().count();
+            if len < camarelol_core::install::phases::MIN_LUKS_PASSPHRASE {
+                self.error = Some(CamarelolError::new(
+                    ErrorCode::InvalidConfig,
+                    self.tr(
+                        format!(
+                            "Mật khẩu LUKS phải có ít nhất {} ký tự (đang có {len}).",
+                            camarelol_core::install::phases::MIN_LUKS_PASSPHRASE
+                        ),
+                        format!(
+                            "The LUKS passphrase needs at least {} characters (this one has {len}).",
+                            camarelol_core::install::phases::MIN_LUKS_PASSPHRASE
+                        ),
+                        format!(
+                            "LUKS 口令至少需要 {} 个字符（当前为 {len} 个）。",
+                            camarelol_core::install::phases::MIN_LUKS_PASSPHRASE
+                        ),
+                    ),
+                ));
+                return;
+            }
+            if self.luks_passphrase != self.luks_confirm {
+                self.error = Some(CamarelolError::new(
+                    ErrorCode::InvalidConfig,
+                    self.tr(
+                        "Hai lần nhập mật khẩu LUKS không khớp.",
+                        "The two LUKS passphrase entries do not match.",
+                        "两次输入的 LUKS 口令不一致。",
+                    ),
+                ));
+                return;
+            }
+        }
+        self.error = None;
+        self.go_next();
     }
 
     fn go_next(&mut self) {
@@ -1107,13 +1185,101 @@ mod tests {
         app
     }
 
-    /// Put the wizard on the accounts screen the way the user reaches it.
+    /// Put the wizard on the accounts screen the way the user reaches it:
+    /// Filesystem -> Encryption -> Accounts, answering "no" to encryption.
     fn accounts_fixture() -> App {
         let mut app = storage_fixture();
         app.screen = Screen::Filesystem;
         app.go_next();
+        assert_eq!(app.screen, Screen::Encryption);
+        app.handle_key(KeyEvent::from(KeyCode::Enter));
         assert_eq!(app.screen, Screen::Accounts);
         app
+    }
+
+    /// The encryption step is the only place a LUKS passphrase can be typed,
+    /// so it has to reach the configuration — and the file must never hold it.
+    #[test]
+    fn encryption_reaches_the_config_without_reaching_the_profile() {
+        let mut app = storage_fixture();
+        app.screen = Screen::Encryption;
+        assert!(!app.encrypt_root, "off by default");
+
+        app.handle_key(KeyEvent::from(KeyCode::Char(' ')));
+        assert!(app.encrypt_root);
+        assert_eq!(app.luks_row, 1, "the cursor moves to the passphrase");
+
+        for c in "correct horse battery".chars() {
+            app.handle_key(KeyEvent::from(KeyCode::Char(c)));
+        }
+        app.luks_row = 2;
+        for c in "correct horse battery".chars() {
+            app.handle_key(KeyEvent::from(KeyCode::Char(c)));
+        }
+        app.handle_key(KeyEvent::from(KeyCode::Enter));
+        assert_eq!(app.screen, Screen::Accounts);
+
+        let cfg = app.build_config().unwrap();
+        assert!(cfg.encrypt_root);
+        assert_eq!(cfg.luks_passphrase(), Some("correct horse battery"));
+        assert!(
+            !cfg.to_toml().unwrap().contains("correct horse battery"),
+            "the passphrase must not be serializable"
+        );
+    }
+
+    #[test]
+    fn a_short_or_mismatched_passphrase_keeps_the_wizard_on_the_screen() {
+        let mut app = storage_fixture();
+        app.screen = Screen::Encryption;
+        app.handle_key(KeyEvent::from(KeyCode::Char(' ')));
+
+        for c in "short".chars() {
+            app.handle_key(KeyEvent::from(KeyCode::Char(c)));
+        }
+        app.luks_row = 2;
+        for c in "short".chars() {
+            app.handle_key(KeyEvent::from(KeyCode::Char(c)));
+        }
+        app.handle_key(KeyEvent::from(KeyCode::Enter));
+        assert_eq!(app.screen, Screen::Encryption, "a short key is refused");
+        assert!(app.error.is_some());
+
+        // Long enough, but the two entries disagree.
+        app.luks_passphrase.clear();
+        app.luks_confirm.clear();
+        app.luks_row = 1;
+        for c in "correct horse".chars() {
+            app.handle_key(KeyEvent::from(KeyCode::Char(c)));
+        }
+        app.luks_row = 2;
+        for c in "correct horsey".chars() {
+            app.handle_key(KeyEvent::from(KeyCode::Char(c)));
+        }
+        app.handle_key(KeyEvent::from(KeyCode::Enter));
+        assert_eq!(app.screen, Screen::Encryption, "a mismatch is refused");
+        assert!(app
+            .error
+            .as_ref()
+            .map(|e| e.message.contains("không khớp") || e.message.contains("do not match"))
+            .unwrap_or(false));
+    }
+
+    #[test]
+    fn turning_encryption_off_hides_the_passphrase_rows() {
+        let mut app = storage_fixture();
+        app.screen = Screen::Encryption;
+        app.handle_key(KeyEvent::from(KeyCode::Char(' ')));
+        // Back up to the yes/no row: on the passphrase row a space is a
+        // character, not a toggle.
+        app.luks_row = 0;
+        app.handle_key(KeyEvent::from(KeyCode::Char(' ')));
+        assert!(!app.encrypt_root);
+        assert_eq!(app.luks_row, 0);
+        // Enter now moves on without asking for anything.
+        app.handle_key(KeyEvent::from(KeyCode::Enter));
+        assert_eq!(app.screen, Screen::Accounts);
+        assert!(!app.build_config().unwrap().encrypt_root);
     }
 
     #[test]

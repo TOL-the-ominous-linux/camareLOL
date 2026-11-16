@@ -203,7 +203,17 @@ $ sudo camarelol --scripted <profile.toml> --allow-destructive --execute
 - Dò ổ đĩa, phân vùng, hệ thống tệp, ESP, Windows, phân vùng recovery và
   Microsoft-reserved, các mount của hệ đang chạy.
 - Lên kế hoạch GPT/MBR: ESP, BIOS boot, `/`, `/home`, swap — chọn ext4, btrfs
-  hoặc xfs, và kiểm tra theo firmware.
+  hoặc xfs, và kiểm tra theo firmware. Gốc btrfs được dựng từ subvolume (`@`,
+  `@home`, `@snapshots`) và mount từ `@`, nên snapshot của `/` không kéo theo
+  `/home`.
+- Tuỳ chọn mã hoá phân vùng gốc bằng LUKS2, mở bằng mật khẩu mà initramfs hỏi
+  ở mỗi lần khởi động. Mật khẩu không bao giờ vào hồ sơ hay vào argv (nó tới
+  `cryptsetup` qua stdin), và những bố cục không thể mã hoá cho trọn vẹn sẽ bị
+  từ chối thay vì làm nửa vời: `/home` tách riêng, systemd-boot, và dual-boot
+  cạnh hệ điều hành khác.
+- Gợi ý gói driver GPU theo model `lspci` đọc được — `nvidia-open` trên Turing
+  trở lên, `nvidia` trên Maxwell/Pascal/Volta, và driver Vulkan cùng giải mã
+  video cho AMD và Intel.
 - Phát hiện Windows và **không chạm vào nó**. Dual-boot kiểu giữ mọi phân vùng
   đã chạy thật: phân vùng cũ vẫn `format=false`, ESP được dùng lại, phân vùng
   mới được thêm vào khe trống; đã xác nhận cài và boot lần đầu trên máy thật
@@ -222,9 +232,11 @@ $ sudo camarelol --scripted <profile.toml> --allow-destructive --execute
 - Boot Windows thật từ entry menu do camareLOL sinh ra, hoặc thu nhỏ Windows từ
   bên trong Windows. Phần giữ nguyên phân vùng và entry menu đã được chứng
   minh trong VM; phần Windows thật vẫn bị hoãn.
-- Gợi ý driver GPU theo model. Model đã được đọc và hiển thị; phần chọn driver
-  theo model vẫn còn một phần.
-- Chia phân vùng thủ công, LUKS, và bố cục Btrfs subvolume — chưa có mã.
+- Báo rằng mã hoá hay subvolume btrfs đã được VM chứng minh. Cả hai đã có mã
+  và unit test, nhưng chưa qua đợt chạy nghiệm thu VirtualBox — xem roadmap.
+- Mã hoá `/home` riêng, mã hoá cạnh hệ điều hành khác, hay boot gốc đã mã hoá
+  bằng systemd-boot. Những tổ hợp đó bị từ chối.
+- Cung cấp trình soạn thảo phân vùng thủ công — chưa có mã.
 
 ## Kiến trúc
 

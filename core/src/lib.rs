@@ -157,6 +157,7 @@ impl Core {
             separate_home: self.config.separate_home,
             separate_boot: self.config.separate_boot,
             swap_bytes: self.config.swap_bytes,
+            encrypt_root: self.config.encrypt_root,
         }
     }
 

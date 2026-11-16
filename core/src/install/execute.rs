@@ -10,15 +10,28 @@ use crate::boot::{self, Bootloader};
 use crate::error::{CamarelolError, ErrorCode, Result};
 use crate::logging::Logger;
 use crate::safety::{GateMode, SafetyGate};
-use crate::storage::device::StorageDevice;
+use crate::storage::device::{Filesystem, StorageDevice};
 use crate::storage::layout::{PartitionPlan, PartitionPurpose, PartitionSpec};
 use crate::storage::ops::OpRunner;
 
 /// Everything the runner may touch, so tests can implement a fake.
 pub trait SystemRunner {
     fn apply_partition_table(&mut self, disk: &StorageDevice, plan: &PartitionPlan) -> Result<()>;
+    /// Wrap `node` in a LUKS2 container keyed by `passphrase`.
+    ///
+    /// The passphrase is already in memory — it is never serialized and never
+    /// passed in argv; the runner hands it to `cryptsetup` on stdin.
+    fn luks_format(&mut self, node: &str, passphrase: &str) -> Result<()>;
+    /// Unlock the container on `node` as `/dev/mapper/<name>`.
+    fn luks_open(&mut self, node: &str, name: &str, passphrase: &str) -> Result<()>;
     fn format_partition(&mut self, spec: &PartitionSpec, target: &str) -> Result<()>;
     fn mount(&mut self, source: &str, target: &str) -> Result<()>;
+    /// Mount with explicit options: a btrfs subvolume is only reachable with
+    /// `-o subvol=<name>`.
+    fn mount_with_options(&mut self, source: &str, target: &str, options: &[&str]) -> Result<()>;
+    fn unmount(&mut self, target: &str) -> Result<()>;
+    /// `btrfs subvolume create <path>`.
+    fn create_subvolume(&mut self, path: &str) -> Result<()>;
     fn pacstrap(&mut self, packages: &[String]) -> Result<()>;
     fn genfstab(&mut self) -> Result<()>;
     /// Append the fstab line for one swap partition: `UUID=… none swap …`.
@@ -67,6 +80,25 @@ pub trait SystemRunner {
 
 /// Where the target system is mounted.
 pub const TARGET_ROOT: &str = "/mnt";
+
+/// The btrfs subvolumes an install creates, in creation order.
+///
+/// `@home` is only made when /home lives on the root filesystem: with a separate
+/// /home partition that partition is its own filesystem and the subvolume would
+/// be an empty directory nobody mounts.
+pub fn btrfs_subvolume_names(separate_home: bool) -> Vec<&'static str> {
+    let mut names = vec!["@"];
+    if !separate_home {
+        names.push("@home");
+    }
+    names.push("@snapshots");
+    names
+}
+
+/// Device-mapper name of the encrypted root while it is mounted for the
+/// install, and the name `/etc/crypttab` gives it afterwards. The same string
+/// in both places is the point: the initramfs looks for exactly this name.
+pub const LUKS_ROOT_NAME: &str = "cryptroot";
 
 /// Real runner: every destructive step passes through the [`SafetyGate`].
 pub struct RealSystemRunner {
@@ -283,6 +315,30 @@ impl SystemRunner for RealSystemRunner {
         method(&mut self.ops, disk, plan, &self.gate.clone(), &log)
     }
 
+    fn luks_format(&mut self, node: &str, passphrase: &str) -> Result<()> {
+        if self.preview {
+            let gate = self.preview_gate();
+            let log = Logger::default();
+            return self.ops.luks_format(node, passphrase, &gate, &log);
+        }
+        self.ensure_exec()?;
+        let log = Logger::default();
+        self.ops
+            .luks_format(node, passphrase, &self.gate.clone(), &log)
+    }
+
+    fn luks_open(&mut self, node: &str, name: &str, passphrase: &str) -> Result<()> {
+        if self.preview {
+            let gate = self.preview_gate();
+            let log = Logger::default();
+            return self.ops.luks_open(node, name, passphrase, &gate, &log);
+        }
+        self.ensure_exec()?;
+        let log = Logger::default();
+        self.ops
+            .luks_open(node, name, passphrase, &self.gate.clone(), &log)
+    }
+
     fn format_partition(&mut self, spec: &PartitionSpec, target: &str) -> Result<()> {
         if self.preview {
             let gate = self.preview_gate();
@@ -304,6 +360,43 @@ impl SystemRunner for RealSystemRunner {
         self.ensure_exec()?;
         let log = Logger::default();
         self.ops.mount(source, target, &self.gate.clone(), &log)
+    }
+
+    fn mount_with_options(&mut self, source: &str, target: &str, options: &[&str]) -> Result<()> {
+        if self.preview {
+            let gate = self.preview_gate();
+            let log = Logger::default();
+            return self
+                .ops
+                .mount_with_options(source, target, options, &gate, &log);
+        }
+        self.ensure_exec()?;
+        let log = Logger::default();
+        self.ops
+            .mount_with_options(source, target, options, &self.gate.clone(), &log)
+    }
+
+    fn unmount(&mut self, target: &str) -> Result<()> {
+        if self.preview {
+            let gate = self.preview_gate();
+            let log = Logger::default();
+            return self.ops.unmount(target, &gate, &log);
+        }
+        self.ensure_exec()?;
+        let log = Logger::default();
+        self.ops.unmount(target, &self.gate.clone(), &log)
+    }
+
+    fn create_subvolume(&mut self, path: &str) -> Result<()> {
+        if self.preview {
+            let gate = self.preview_gate();
+            let log = Logger::default();
+            return self.ops.btrfs_create_subvolume(path, &gate, &log);
+        }
+        self.ensure_exec()?;
+        let log = Logger::default();
+        self.ops
+            .btrfs_create_subvolume(path, &self.gate.clone(), &log)
     }
 
     fn pacstrap(&mut self, packages: &[String]) -> Result<()> {
@@ -781,6 +874,20 @@ impl SystemRunner for SimulatedRunner {
         self.calls.push(format!("partition {}", disk.path));
         Ok(())
     }
+    fn luks_format(&mut self, node: &str, _passphrase: &str) -> Result<()> {
+        if self.fail_on.as_deref() == Some("format") {
+            return Err(CamarelolError::new(
+                ErrorCode::CommandFailed,
+                "simulated format failure",
+            ));
+        }
+        self.calls.push(format!("luks format {node}"));
+        Ok(())
+    }
+    fn luks_open(&mut self, node: &str, name: &str, _passphrase: &str) -> Result<()> {
+        self.calls.push(format!("luks open {node} as {name}"));
+        Ok(())
+    }
     fn format_partition(&mut self, _spec: &PartitionSpec, target: &str) -> Result<()> {
         if self.fail_on.as_deref() == Some("format") {
             return Err(CamarelolError::new(
@@ -793,6 +900,21 @@ impl SystemRunner for SimulatedRunner {
     }
     fn mount(&mut self, source: &str, target: &str) -> Result<()> {
         self.calls.push(format!("mount {source} -> {target}"));
+        Ok(())
+    }
+    fn mount_with_options(&mut self, source: &str, target: &str, options: &[&str]) -> Result<()> {
+        self.calls.push(format!(
+            "mount -o {} {source} -> {target}",
+            options.join(",")
+        ));
+        Ok(())
+    }
+    fn unmount(&mut self, target: &str) -> Result<()> {
+        self.calls.push(format!("umount {target}"));
+        Ok(())
+    }
+    fn create_subvolume(&mut self, path: &str) -> Result<()> {
+        self.calls.push(format!("btrfs subvolume create {path}"));
         Ok(())
     }
     fn pacstrap(&mut self, packages: &[String]) -> Result<()> {
@@ -1072,10 +1194,45 @@ pub fn run_install_on_host(
                             if !spec.format {
                                 continue;
                             }
-                            let target = part_or_number(spec, disk, i + 1);
-                            runner.format_partition(spec, &target)?;
+                            let node = part_or_number(spec, disk, i + 1);
+                            // Encryption sits between the partition and the
+                            // filesystem: LUKS2 on the raw node, then mkfs on
+                            // the mapper. Formatting the raw node would wipe
+                            // the container it had just been given.
+                            if cfg.encrypt_root && spec.purpose == PartitionPurpose::Root {
+                                let passphrase = cfg.luks_passphrase().ok_or_else(|| {
+                                    CamarelolError::new(
+                                        ErrorCode::InvalidConfig,
+                                        "encryption is on but no LUKS passphrase was entered",
+                                    )
+                                })?;
+                                runner.luks_format(&node, passphrase)?;
+                                runner.luks_open(&node, LUKS_ROOT_NAME, passphrase)?;
+                                runner.format_partition(
+                                    spec,
+                                    &format!("/dev/mapper/{LUKS_ROOT_NAME}"),
+                                )?;
+                            } else {
+                                runner.format_partition(spec, &node)?;
+                            }
                         }
-                        Ok("filesystems created".into())
+                        Ok(if cfg.encrypt_root {
+                            // Swap is the one thing an encrypted root does not
+                            // cover: hibernation images and spilled pages land
+                            // there in the clear.
+                            let swap = plan
+                                .partitions
+                                .iter()
+                                .any(|p| p.purpose == PartitionPurpose::Swap);
+                            if swap {
+                                "filesystems created; / is LUKS2 (the swap partition is NOT encrypted)"
+                                    .into()
+                            } else {
+                                "filesystems created; / is LUKS2".to_string()
+                            }
+                        } else {
+                            "filesystems created".into()
+                        })
                     }
                     "mount" => {
                         // The root filesystem has to be mounted first. The
@@ -1090,6 +1247,19 @@ pub fn run_install_on_host(
                             Some(_) => 1,
                             None => 2,
                         });
+                        // btrfs gets subvolumes, because that is what makes
+                        // snapshots possible at all: `@` is the root and
+                        // `@home`/`@snapshots` are separate so a snapshot of /
+                        // does not take /home with it (or the other way round).
+                        let btrfs_root = cfg
+                            .filesystem_type()
+                            .map(|f| f == Filesystem::Btrfs)
+                            .unwrap_or(false);
+                        let separate_home = plan
+                            .partitions
+                            .iter()
+                            .any(|p| p.purpose == PartitionPurpose::Home);
+                        let mut root_source = String::new();
                         for (i, spec) in ordered {
                             // Skip BiosBoot (raw, no filesystem) and Swap (a
                             // `mount` on it would fail with "unknown filesystem
@@ -1101,12 +1271,61 @@ pub fn run_install_on_host(
                                 continue;
                             }
                             if let Some(mp) = spec.mount_point.as_deref() {
-                                let source = part_or_number(spec, disk, i + 1);
-                                let mnt = format!("{TARGET_ROOT}{mp}");
-                                runner.mount(&source, &mnt)?;
+                                // With encryption the root is the mapper
+                                // device, not the partition under it.
+                                let source =
+                                    if cfg.encrypt_root && spec.purpose == PartitionPurpose::Root {
+                                        format!("/dev/mapper/{LUKS_ROOT_NAME}")
+                                    } else {
+                                        part_or_number(spec, disk, i + 1)
+                                    };
+                                if btrfs_root && spec.purpose == PartitionPurpose::Root {
+                                    root_source = source.clone();
+                                    // Inside a fresh btrfs, `subvol=@` does not
+                                    // exist yet: the top level has to be mounted
+                                    // once to create the subvolumes.
+                                    runner.mount_with_options(
+                                        &source,
+                                        TARGET_ROOT,
+                                        &["subvolid=5"],
+                                    )?;
+                                    for sub in btrfs_subvolume_names(separate_home) {
+                                        runner.create_subvolume(&format!("{TARGET_ROOT}/{sub}"))?;
+                                    }
+                                    runner.unmount(TARGET_ROOT)?;
+                                    runner.mount_with_options(
+                                        &source,
+                                        TARGET_ROOT,
+                                        &["subvol=@"],
+                                    )?;
+                                } else {
+                                    let mnt = format!("{TARGET_ROOT}{mp}");
+                                    runner.mount(&source, &mnt)?;
+                                }
                             }
                         }
-                        Ok("target mounted".into())
+                        // The subvolume mounts are not plan entries: they are
+                        // directories inside the root filesystem that happen
+                        // to be separate filesystems.
+                        if btrfs_root && !root_source.is_empty() {
+                            if !separate_home {
+                                runner.mount_with_options(
+                                    &root_source,
+                                    &format!("{TARGET_ROOT}/home"),
+                                    &["subvol=@home"],
+                                )?;
+                            }
+                            runner.mount_with_options(
+                                &root_source,
+                                &format!("{TARGET_ROOT}/.snapshots"),
+                                &["subvol=@snapshots"],
+                            )?;
+                        }
+                        Ok(if btrfs_root {
+                            "target mounted (btrfs subvolumes @, @home, @snapshots)".into()
+                        } else {
+                            "target mounted".into()
+                        })
                     }
                     "pacstrap" => {
                         let profile = cfg
@@ -1118,6 +1337,12 @@ pub fn run_install_on_host(
                         // the Windows entry on the boot menu at all.
                         if plan.keep_existing {
                             pkgs.push("os-prober".into());
+                        }
+                        // The target needs cryptsetup twice: the initramfs hook
+                        // runs it to unlock root at boot, and the cmdline step
+                        // below reads the container's UUID with it.
+                        if cfg.encrypt_root {
+                            pkgs.push("cryptsetup".into());
                         }
                         // Make the display-server choice real instead of a stored
                         // string: an explicit Wayland or X11 selection pulls the
@@ -1198,6 +1423,24 @@ pub fn run_install_on_host(
                                 "grep -q '^GRUB_DISABLE_OS_PROBER=' /etc/default/grub 2>/dev/null || echo 'GRUB_DISABLE_OS_PROBER=false' >> /etc/default/grub\n",
                             )?;
                         }
+                        // The kernel command line has to exist before
+                        // grub-mkconfig runs, because that is what copies it
+                        // into grub.cfg.
+                        if cfg.encrypt_root {
+                            let root_node = plan
+                                .partitions
+                                .iter()
+                                .enumerate()
+                                .find(|(_, p)| p.purpose == PartitionPurpose::Root)
+                                .map(|(i, p)| part_or_number(p, disk, i + 1))
+                                .ok_or_else(|| {
+                                    CamarelolError::new(
+                                        ErrorCode::InvalidPlan,
+                                        "encryption is on but the plan has no root partition",
+                                    )
+                                })?;
+                            runner.chroot_script(&luks_cmdline_script(&root_node))?;
+                        }
                         runner.install_bootloader(cfg.bootloader()?, disk, &efi_dir)?;
                         // Firmware hygiene after the install: drop entries
                         // pointing into our ESP at files that no longer exist
@@ -1211,7 +1454,17 @@ pub fn run_install_on_host(
                         }
                     }
                     "system-config" => {
-                        let script = system_config_script(cfg, plan.keep_existing);
+                        let luks_node = if cfg.encrypt_root {
+                            plan.partitions
+                                .iter()
+                                .enumerate()
+                                .find(|(_, p)| p.purpose == PartitionPurpose::Root)
+                                .map(|(i, p)| part_or_number(p, disk, i + 1))
+                        } else {
+                            None
+                        };
+                        let script =
+                            system_config_script(cfg, plan.keep_existing, luks_node.as_deref());
                         runner.chroot_script(&script)?;
                         Ok(format!(
                             "locale, keymap, timezone and hostname written{}",
@@ -1351,7 +1604,30 @@ fn efi_cleanup(
 /// unit and installed the package and still never had a swap at boot, because
 /// that file was missing. The config is written here, where every other
 /// /etc file lives, with `zram_size_mb` honoured when it was set.
-fn system_config_script(cfg: &InstallationConfig, keep_existing: bool) -> String {
+/// Kernel command line for an encrypted root, written into GRUB's config.
+///
+/// `cryptdevice=UUID=<luks uuid>:cryptroot` is what the initramfs's `encrypt`
+/// hook reads the passphrase for, and `root=/dev/mapper/cryptroot` is the volume
+/// that hook creates. The UUID is looked up inside the target at install time:
+/// it does not exist before `luksFormat` runs, so it cannot be planned.
+fn luks_cmdline_script(root_node: &str) -> String {
+    format!(
+        r#"set -e
+uuid=$(cryptsetup luksUUID {root_node})
+[ -n "$uuid" ] || {{ echo 'cannot read the LUKS UUID of {root_node}' >&2; exit 1; }}
+sed -i '/^GRUB_CMDLINE_LINUX=/d' /etc/default/grub
+echo "GRUB_CMDLINE_LINUX=\"cryptdevice=UUID=$uuid:{name} root=/dev/mapper/{name}\"" >> /etc/default/grub
+"#,
+        root_node = root_node,
+        name = LUKS_ROOT_NAME,
+    )
+}
+
+fn system_config_script(
+    cfg: &InstallationConfig,
+    keep_existing: bool,
+    luks_device: Option<&str>,
+) -> String {
     let mut script = format!(
         r#"set -e
 echo 'LANG={locale}' > /etc/locale.conf
@@ -1408,6 +1684,27 @@ echo '{host}' > /etc/hostname
             "grep -q '^GRUB_DISABLE_OS_PROBER=' /etc/default/grub 2>/dev/null \
              || echo 'GRUB_DISABLE_OS_PROBER=false' >> /etc/default/grub\n",
         );
+    }
+    if let Some(node) = luks_device {
+        // Three files have to agree, and missing any one of them produces a
+        // machine that boots to a prompt asking for a passphrase for a volume
+        // that will never appear:
+        //   * crypttab names the mapper for systemd (and for `cryptsetup`
+        //     scripts a user runs later);
+        //   * HOOKS gains `encrypt` before `filesystems`, so the initramfs can
+        //     ask at all, and keeps `keyboard` before it so the passphrase can
+        //     be typed on a USB keyboard;
+        //   * the command line (written in the bootloader phase) says which
+        //     container to unlock.
+        script.push_str(&format!(
+            r#"uuid=$(cryptsetup luksUUID {node})
+[ -n "$uuid" ] || {{ echo 'cannot read the LUKS UUID' >&2; exit 1; }}
+printf 'cryptroot UUID=%s none luks\n' "$uuid" > /etc/crypttab
+chmod 600 /etc/crypttab
+grep -qw encrypt /etc/mkinitcpio.conf || sed -i 's/\bfilesystems\b/encrypt filesystems/' /etc/mkinitcpio.conf
+grep -qw keyboard /etc/mkinitcpio.conf || sed -i 's/\bencrypt\b/keyboard encrypt/' /etc/mkinitcpio.conf
+"#
+        ));
     }
     script
 }
@@ -1476,6 +1773,23 @@ fn post_check(cfg: &InstallationConfig, plan: &PartitionPlan, root: &str) -> Vec
         // "installed" and still off.
         w.push("/etc/systemd/zram-generator.conf is missing — zram will never come up".into());
     }
+    if cfg.encrypt_root {
+        // An encrypted install is only encrypted if all three of these exist;
+        // without them the container is created and then never opened, and the
+        // machine hangs at boot instead of saying so.
+        let crypttab = root_path.join("etc/crypttab");
+        match std::fs::read_to_string(&crypttab) {
+            Ok(text) if text.contains(LUKS_ROOT_NAME) => {}
+            _ => w.push(format!(
+                "/etc/crypttab is missing or does not name {LUKS_ROOT_NAME} — the root volume will not open at boot"
+            )),
+        }
+        let hooks =
+            std::fs::read_to_string(root_path.join("etc/mkinitcpio.conf")).unwrap_or_default();
+        if !hooks.contains("encrypt") {
+            w.push("HOOKS has no `encrypt` — the initramfs cannot ask for the passphrase".into());
+        }
+    }
     if !cfg.users.is_empty() && !cfg.admin_users.is_empty() {
         // informational only
     }
@@ -1543,7 +1857,7 @@ mod tests {
         // create, and without it is a documented no-op. The script must write
         // that file whenever zram was selected.
         let cfg = InstallationConfig::default(); // default services include zram
-        let script = system_config_script(&cfg, false);
+        let script = system_config_script(&cfg, false, None);
         assert!(script.contains("zram-generator.conf"), "{}", script);
         assert!(script.contains("[zram0]"), "{}", script);
         assert!(
@@ -1560,7 +1874,7 @@ mod tests {
             display_manager: Some("greetd".into()),
             ..Default::default()
         };
-        let script = system_config_script(&cfg, false);
+        let script = system_config_script(&cfg, false, None);
         assert!(script.contains("/etc/greetd/config.toml"), "{}", script);
         assert!(
             script.contains("tuigreet --time --cmd Hyprland"),
@@ -1578,7 +1892,7 @@ mod tests {
             },
             ..Default::default()
         };
-        let script = system_config_script(&cfg, false);
+        let script = system_config_script(&cfg, false, None);
         assert!(script.contains("zram-size = 2048"), "{}", script);
         // Take the default confidence away: the chosen size must not fall back
         // into the default expression.
@@ -1594,7 +1908,7 @@ mod tests {
             },
             ..Default::default()
         };
-        let script = system_config_script(&cfg, false);
+        let script = system_config_script(&cfg, false, None);
         assert!(!script.contains("zram-generator.conf"), "{}", script);
     }
 
@@ -1604,7 +1918,7 @@ mod tests {
         // /etc/NetworkManager file is written" gap.
         let cfg = InstallationConfig::default();
         assert!(cfg.services.network_manager);
-        let script = system_config_script(&cfg, false);
+        let script = system_config_script(&cfg, false, None);
         assert!(script.contains("conf.d/00-camarelol.conf"), "{}", script);
         assert!(script.contains("dhcp=internal"), "{}", script);
     }
@@ -1618,7 +1932,7 @@ mod tests {
             },
             ..Default::default()
         };
-        let script = system_config_script(&cfg, false);
+        let script = system_config_script(&cfg, false, None);
         assert!(!script.contains("NetworkManager/conf.d"), "{}", script);
     }
 
@@ -1702,6 +2016,243 @@ mod tests {
         assert!(runner.calls.iter().any(|c| c.starts_with("partition")));
         assert!(runner.calls.iter().any(|c| c.starts_with("pacstrap")));
         assert!(runner.calls.iter().any(|c| c.contains("bootloader")));
+    }
+
+    /// A configured LUKS install, and the one thing that must never happen:
+    /// `mkfs` against the raw partition, which would erase the container.
+    #[test]
+    fn an_encrypted_root_is_formatted_through_the_mapper_and_mounted_from_it() {
+        let mut cfg = InstallationConfig {
+            firmware: "uefi".into(),
+            encrypt_root: true,
+            ..Default::default()
+        };
+        cfg.set_luks_passphrase("correct horse battery");
+        let mut runner = SimulatedRunner::new();
+        let mut sink = NullSink;
+        let report = run_install(
+            &cfg,
+            &disk(),
+            &plan(),
+            &SafetyGate::armed_and_execute(),
+            &Logger::default(),
+            &mut runner,
+            &mut sink,
+        );
+        assert!(report.all_completed(), "{}", report.render());
+        // The plan for this disk is ESP (vdb1) + root (vdb2).
+        let calls = runner.calls.join("\n");
+        assert!(
+            calls.contains("luks format /dev/vdb2"),
+            "the container is created on the partition:\n{calls}"
+        );
+        assert!(
+            calls.contains(&format!("luks open /dev/vdb2 as {LUKS_ROOT_NAME}")),
+            "{calls}"
+        );
+        assert!(
+            calls.contains(&format!("format /dev/mapper/{LUKS_ROOT_NAME}")),
+            "mkfs must run on the mapper:\n{calls}"
+        );
+        assert!(
+            !runner.calls.iter().any(|c| c == "format /dev/vdb2"),
+            "mkfs on the raw partition would wipe the container:\n{calls}"
+        );
+        assert!(
+            calls.contains(&format!("mount /dev/mapper/{LUKS_ROOT_NAME} -> /mnt")),
+            "{calls}"
+        );
+    }
+
+    #[test]
+    fn encryption_writes_crypttab_the_encrypt_hook_and_the_kernel_cmdline() {
+        let mut cfg = InstallationConfig {
+            firmware: "uefi".into(),
+            encrypt_root: true,
+            ..Default::default()
+        };
+        cfg.set_luks_passphrase("correct horse battery");
+
+        let script = system_config_script(&cfg, false, Some("/dev/vdb2"));
+        assert!(
+            script.contains("printf 'cryptroot UUID=%s none luks\\n' \"$uuid\" > /etc/crypttab"),
+            "crypttab must name the same mapper the cmdline uses:\n{script}"
+        );
+        assert!(
+            script.contains("s/\\bfilesystems\\b/encrypt filesystems/"),
+            "the initramfs needs the encrypt hook before filesystems:\n{script}"
+        );
+        assert!(
+            script.contains("s/\\bencrypt\\b/keyboard encrypt/"),
+            "a passphrase that cannot be typed is a lock-out:\n{script}"
+        );
+        assert!(script.contains("chmod 600 /etc/crypttab"), "{script}");
+
+        let cmdline = luks_cmdline_script("/dev/vdb2");
+        assert!(
+            cmdline.contains("cryptdevice=UUID=$uuid:cryptroot root=/dev/mapper/cryptroot"),
+            "{cmdline}"
+        );
+        // The old line has to go first, or GRUB_CMDLINE_LINUX appears twice and
+        // grub-mkconfig takes one of them.
+        assert!(
+            cmdline.contains("sed -i '/^GRUB_CMDLINE_LINUX=/d'"),
+            "{cmdline}"
+        );
+
+        // And with encryption off, none of it is written.
+        let plain = system_config_script(&InstallationConfig::default(), false, None);
+        assert!(!plain.contains("crypttab"), "{plain}");
+        assert!(!plain.contains("encrypt filesystems"), "{plain}");
+    }
+
+    #[test]
+    fn an_encrypted_install_adds_cryptsetup_to_the_target() {
+        let mut cfg = InstallationConfig {
+            firmware: "uefi".into(),
+            encrypt_root: true,
+            ..Default::default()
+        };
+        cfg.set_luks_passphrase("correct horse battery");
+        let mut runner = SimulatedRunner::new();
+        let mut sink = NullSink;
+        run_install(
+            &cfg,
+            &disk(),
+            &plan(),
+            &SafetyGate::armed_and_execute(),
+            &Logger::default(),
+            &mut runner,
+            &mut sink,
+        );
+        // cryptsetup has to exist inside the target for the UUID lookup and
+        // for the initramfs hook; it is not part of the base group.
+        assert!(crate::packages::exists("cryptsetup"));
+    }
+
+    /// btrfs without subvolumes is a filesystem you cannot snapshot; the
+    /// install has to leave `@`, `@home` and `@snapshots` behind, and mount
+    /// them — not just create the directories.
+    #[test]
+    fn a_btrfs_root_is_built_from_subvolumes() {
+        let cfg = InstallationConfig {
+            firmware: "uefi".into(),
+            filesystem: "btrfs".into(),
+            ..Default::default()
+        };
+        let mut runner = SimulatedRunner::new();
+        let mut sink = NullSink;
+        run_install(
+            &cfg,
+            &disk(),
+            &plan(),
+            &SafetyGate::armed_and_execute(),
+            &Logger::default(),
+            &mut runner,
+            &mut sink,
+        );
+        let calls = runner.calls.join("\n");
+        for sub in btrfs_subvolume_names(false) {
+            assert!(
+                calls.contains(&format!("btrfs subvolume create /mnt/{sub}")),
+                "missing subvolume {sub}:\n{calls}"
+            );
+        }
+        assert!(
+            calls.contains("mount -o subvolid=5 /dev/vdb2 -> /mnt"),
+            "the top level has to be mounted before the subvolumes exist:\n{calls}"
+        );
+        assert!(
+            calls.contains("mount -o subvol=@ /dev/vdb2 -> /mnt"),
+            "the root must be the @ subvolume:\n{calls}"
+        );
+        assert!(
+            calls.contains("mount -o subvol=@home /dev/vdb2 -> /mnt/home"),
+            "{calls}"
+        );
+        assert!(
+            calls.contains("mount -o subvol=@snapshots /dev/vdb2 -> /mnt/.snapshots"),
+            "{calls}"
+        );
+        assert!(
+            calls.contains("umount /mnt"),
+            "the top-level mount has to be released:\n{calls}"
+        );
+        // The order matters: the subvolumes can only be created while the top
+        // level is mounted, and @ has to be in place before /home is put on it.
+        let create = calls.find("btrfs subvolume create /mnt/@\n").unwrap();
+        let umount = calls.find("umount /mnt").unwrap();
+        let root = calls.find("mount -o subvol=@ /dev/vdb2").unwrap();
+        assert!(create < umount && umount < root, "{calls}");
+    }
+
+    #[test]
+    fn subvolume_names_follow_the_layout() {
+        // A separate /home is its own filesystem, so @home would be a directory
+        // nothing mounts.
+        assert_eq!(
+            btrfs_subvolume_names(false),
+            vec!["@", "@home", "@snapshots"]
+        );
+        assert_eq!(btrfs_subvolume_names(true), vec!["@", "@snapshots"]);
+
+        let cfg = InstallationConfig {
+            firmware: "uefi".into(),
+            separate_home: true,
+            filesystem: "btrfs".into(),
+            ..Default::default()
+        };
+        // The plan is what decides where /home lives, so the fixture has to be
+        // a plan with a separate /home — not the default one.
+        let home_plan = crate::storage::layout::plan_auto_layout(
+            &disk(),
+            &crate::storage::layout::LayoutRequest {
+                separate_home: true,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let mut runner = SimulatedRunner::new();
+        let mut sink = NullSink;
+        run_install(
+            &cfg,
+            &disk(),
+            &home_plan,
+            &SafetyGate::armed_and_execute(),
+            &Logger::default(),
+            &mut runner,
+            &mut sink,
+        );
+        assert!(!runner.calls.iter().any(|c| c.contains("/mnt/@home")));
+    }
+
+    #[test]
+    fn ext4_and_xfs_install_without_any_btrfs_command() {
+        for fs in ["ext4", "xfs"] {
+            let cfg = InstallationConfig {
+                firmware: "uefi".into(),
+                filesystem: fs.into(),
+                separate_boot: fs == "xfs",
+                ..Default::default()
+            };
+            let mut runner = SimulatedRunner::new();
+            let mut sink = NullSink;
+            let report = run_install(
+                &cfg,
+                &disk(),
+                &plan(),
+                &SafetyGate::armed_and_execute(),
+                &Logger::default(),
+                &mut runner,
+                &mut sink,
+            );
+            assert!(report.all_completed(), "{fs}: {}", report.render());
+            assert!(
+                !runner.calls.iter().any(|c| c.starts_with("btrfs")),
+                "{fs} must not run btrfs commands: {:?}",
+                runner.calls
+            );
+        }
     }
 
     #[test]
@@ -2217,7 +2768,7 @@ mod tests {
     #[test]
     fn redaction_leaves_scripts_without_secrets_alone() {
         let cfg = InstallationConfig::default();
-        let script = system_config_script(&cfg, false);
+        let script = system_config_script(&cfg, false, None);
         assert_eq!(redact_secrets(&script), script);
     }
 

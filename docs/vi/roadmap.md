@@ -71,10 +71,15 @@ filesystem, và thứ tự mount root-trước-ESP.
 - [x] Trình quản lý phiên hiển thị: SDDM, GDM, LightDM, greetd — được cài,
       được bật, và greetd tự viết `/etc/greetd/config.toml`
 - [~] Phát hiện driver và gợi ý firmware — **một phần**: có gợi ý microcode theo
-      CPU và một bộ gói nền (`mesa`, `linux-firmware`). Model GPU nay được
-      tách khỏi `lspci -mm -nn` vào `GpuInfo.model` (chỉ strip ngoặc id hex,
-      tên sản phẩm giữ nguyên ngoặc của nó — test với dòng thật); thứ còn
-      thiếu là gợi ý driver theo model, ví dụ biến thể NVIDIA.
+      CPU và một bộ gói nền (`mesa`, `linux-firmware`), và gợi ý driver nay
+      được chọn theo model GPU đã tách từ `lspci -mm -nn` — `nvidia-open` trên
+      Turing trở lên, `nvidia` trên Maxwell/Pascal/Volta (model không đọc
+      được không bao giờ bị đoán là Turing), thêm `vulkan-radeon` +
+      `libva-mesa-driver` cho AMD và `vulkan-intel` + `intel-media-driver`
+      cho Intel; GPU ảo thì không thêm gì. Đã unit-test với dòng `lspci`
+      thật, kèm test catalog rằng mọi tên nó có thể sinh ra đều tìm được.
+      Chưa được quan sát trong VM có GPU thật — đó là lý do mục này vẫn
+      "một phần" chứ chưa tick.
 - [x] PipeWire, PulseAudio, hoặc không dùng cái nào
 - [x] Lựa chọn Bluetooth, zram, swap
 - [~] Cấu hình NetworkManager — **một phần**: gói đã cài, unit đã bật, và
@@ -87,6 +92,34 @@ filesystem, và thứ tự mount root-trước-ESP.
       làm gãy install. Hiểu đúng kiểu treo `Boot0005` — firmware chỉ vào tệp
       `EFI/…` mà lần thử trước để lại. Đã kiểm bằng unit-test với listing
       dáng VBox; chờ quan sát trong VM.
+
+## Stage 3 — Lưu trữ nâng cao (chưa phát hành)
+
+Đã làm trong working tree sau `1.0.3`; chưa nằm trong bản phát hành nào.
+
+- [~] Mã hoá phân vùng gốc bằng LUKS2 — **một phần**: pha format/mount đặt
+      container LUKS2 lên phân vùng gốc, format và mount qua mapper
+      (`/dev/mapper/cryptroot`), viết `/etc/crypttab`, thêm hook `encrypt` và
+      `keyboard` vào `HOOKS` trước `filesystems`, ghi
+      `cryptdevice=UUID=…:cryptroot root=/dev/mapper/cryptroot` vào
+      `GRUB_CMDLINE_LINUX`, cài `cryptsetup` trong hệ đích, và kiểm mật khẩu
+      ở preflight (tối thiểu 8 ký tự, đếm theo ký tự chứ không theo byte).
+      Mật khẩu không bao giờ vào hồ sơ hay vào dòng lệnh: nó nằm trong bộ nhớ,
+      tới `cryptsetup` qua stdin, và bản xem trước chỉ ghi một chỗ giữ chỗ.
+      Những bố cục v1 không thể mã hoá cho trọn vẹn bị từ chối thay vì làm nửa
+      vời — `/home` tách riêng, systemd-boot, và dual-boot cạnh OS khác. Đã
+      unit-test đầu-cuối trên runner mô phỏng; **chưa VM nào boot một bản cài
+      đã mã hoá**, nên lời nhắc của initramfs, sự phối hợp crypttab/hook và
+      cmdline của GRUB vẫn chưa được chứng minh ngoài unit test.
+      `--luks-passphrase-file` cấp mật khẩu cho bản cài không giao diện.
+- [~] Bố cục subvolume btrfs — **một phần**: gốc btrfs được format một lần,
+      mount ở tầng đỉnh (`subvolid=5`), tạo `@`, `@home` (chỉ khi `/home`
+      không phải phân vùng riêng) và `@snapshots`, rồi mount lại gốc từ `@`
+      với `/home` và `/.snapshots` từ subvolume của chúng. Thứ tự và lần
+      `umount` giữa hai lần mount gốc đã có unit-test; đầu ra `genfstab` cho
+      các mount đó chưa được quan sát trong VM, và chưa cài công cụ snapshot
+      nào — đây là bố cục mà công cụ snapshot cần, không phải công cụ đó.
+- [ ] Trình soạn thảo phân vùng thủ công — chưa có mã.
 
 ## Stage 4 — Trải nghiệm
 
@@ -225,10 +258,13 @@ cả), và toàn bộ quy trình thu nhỏ từ bên trong Windows. Không một
 hành nào của camareLOL nên lại gần đĩa đang giữ bản Windows duy nhất của
 người dùng cho tới khi chặng này khép lại.
 
-**Phần còn lại của lưu trữ nâng cao** — trình soạn thảo phân vùng thủ công,
-mã hoá LUKS, bố trí subvolume btrfs — chưa có một dòng code nào. Nó từng nằm
-trong danh sách stage dưới dạng năm ô trống; điều đó nói ra ít hơn vẻ ngoài,
-nên chúng chuyển sang ở đây.
+**Phần còn lại của lưu trữ nâng cao.** Mã hoá gốc bằng LUKS2 và bố cục
+subvolume btrfs nay đã có code, có test, và những chặng chưa chứng minh được
+ghi rõ ở Stage 3 phía trên; phần vẫn hoãn là mã hoá `/home` riêng, mã hoá
+cạnh hệ điều hành khác, và gốc đã mã hoá qua systemd-boot — planner từ chối
+cả ba thay vì làm gần đúng. **Trình soạn thảo phân vùng thủ công** vẫn chưa có
+một dòng code nào, và danh sách stage từng mang nó như một ô tick nói ít hơn
+vẻ ngoài của nó.
 
 Trong mọi trường hợp ở đây, việc thành thật là nói ra thay vì đưa ra một ô
 tick mà làm ít hơn vẻ ngoài.

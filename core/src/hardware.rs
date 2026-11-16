@@ -246,6 +246,62 @@ pub fn detect_gpus() -> Vec<GpuInfo> {
     gpus
 }
 
+/// Driver packages an install needs for the GPUs that were found.
+///
+/// The model decides the NVIDIA variant, because there is no single package:
+/// `nvidia-open` is the open kernel module set and only supports Turing (RTX 20
+/// / GTX 16) and newer, while `nvidia` is the proprietary driver that still
+/// covers Maxwell, Pascal and Volta. Getting this wrong is not cosmetic — a
+/// driver that does not build for the card leaves a machine that boots to a
+/// black screen, so an unreadable model falls back to `nvidia`, which covers
+/// every card older than the open modules do.
+///
+/// Intel and AMD need only userspace drivers (the kernel side is in-tree), and
+/// `mesa` — the OpenGL driver everything shares — stays with the caller: it is
+/// a base package, not a per-GPU addition. Nothing is returned for a virtual
+/// GPU: the VM's own driver is already in `linux`.
+pub fn gpu_driver_packages(gpus: &[GpuInfo]) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for gpu in gpus {
+        match gpu.vendor {
+            GpuVendor::Nvidia => {
+                // Turing and newer: `RTX` in the name, a GTX 16xx, or a
+                // datacenter part (T4, A100, H100). Everything else — GTX
+                // 10/9/7, Quadro P/M/K — keeps the proprietary driver.
+                let m = gpu.model.to_ascii_uppercase();
+                let turing_or_newer = m.contains("RTX")
+                    || m.contains("GTX 16")
+                    || m.starts_with("T4")
+                    || m.starts_with("A100")
+                    || m.starts_with("A40")
+                    || m.starts_with("A10")
+                    || m.starts_with("H100")
+                    || m.starts_with("L4")
+                    || m.starts_with("L40");
+                out.push(if turing_or_newer {
+                    "nvidia-open".to_string()
+                } else {
+                    "nvidia".to_string()
+                });
+            }
+            GpuVendor::Amd => {
+                out.push("vulkan-radeon".into());
+                // Hardware video decode; without it videos are decoded on the
+                // CPU, which is also what happens when it is missing.
+                out.push("libva-mesa-driver".into());
+            }
+            GpuVendor::Intel => {
+                out.push("vulkan-intel".into());
+                out.push("intel-media-driver".into());
+            }
+            GpuVendor::Vmware | GpuVendor::Other => {}
+        }
+    }
+    out.sort();
+    out.dedup();
+    out
+}
+
 /// True when we appear to run inside a virtual machine (used by tests).
 pub fn running_in_vm() -> bool {
     if let Ok(out) = sys::inspect("systemd-detect-virt", &[]) {
@@ -310,6 +366,73 @@ mod tests {
         assert_eq!(f[1], "VGA compatible controller [0300]");
         assert_eq!(f[3], "UHD Graphics 620 [8086:3ea0]");
         assert_eq!(f.len(), 5, "cờ -r02 phải bị bỏ: {f:?}");
+    }
+
+    #[test]
+    fn the_nvidia_variant_follows_the_model() {
+        let from_line = |line: &str| {
+            let fields = split_lspci_fields(line);
+            let model = strip_pci_id(&fields[3]);
+            GpuInfo {
+                description: line.to_string(),
+                vendor: GpuVendor::Nvidia,
+                model,
+            }
+        };
+        // Turing and newer -> the open modules. Real lspci lines.
+        for line in [
+            r#"01:00.0 "3D controller [0302]" "NVIDIA Corporation [10de]" "GA107M [GeForce RTX 3050 Mobile] [10de:25a2]" "MSI [1462]""#,
+            r#"01:00.0 "VGA compatible controller [0300]" "NVIDIA Corporation [10de]" "AD104 [GeForce RTX 4070] [10de:2786]" "ASUS [1043]""#,
+            r#"01:00.0 "VGA compatible controller [0300]" "NVIDIA Corporation [10de]" "TU116 [GeForce GTX 1660 SUPER] [10de:21c4]" ""#,
+        ] {
+            assert_eq!(
+                gpu_driver_packages(&[from_line(line)]),
+                vec!["nvidia-open".to_string()],
+                "{line}"
+            );
+        }
+        // Maxwell / Pascal / Volta keep the proprietary driver.
+        for line in [
+            r#"01:00.0 "VGA compatible controller [0300]" "NVIDIA Corporation [10de]" "GM204 [GeForce GTX 970] [10de:13c2]" ""#,
+            r#"01:00.0 "VGA compatible controller [0300]" "NVIDIA Corporation [10de]" "GP106 [GeForce GTX 1060 6GB] [10de:1c03]" ""#,
+            // An unreadable model must not be guessed as Turing.
+            r#"01:00.0 "VGA compatible controller [0300]" "NVIDIA Corporation [10de]" "[10de:0000]" ""#,
+        ] {
+            assert_eq!(
+                gpu_driver_packages(&[from_line(line)]),
+                vec!["nvidia".to_string()],
+                "{line}"
+            );
+        }
+    }
+
+    #[test]
+    fn intel_and_amd_get_userspace_drivers_and_a_vm_gets_none() {
+        let gpu = |vendor, model: &str| GpuInfo {
+            description: String::new(),
+            vendor,
+            model: model.into(),
+        };
+        let intel = gpu_driver_packages(&[gpu(GpuVendor::Intel, "UHD Graphics 620")]);
+        assert!(intel.contains(&"vulkan-intel".to_string()), "{intel:?}");
+        let amd = gpu_driver_packages(&[gpu(GpuVendor::Amd, "Navi 23 [Radeon RX 6600]")]);
+        assert!(amd.contains(&"vulkan-radeon".to_string()), "{amd:?}");
+        assert!(gpu_driver_packages(&[gpu(GpuVendor::Vmware, "SVGA II Adapter")]).is_empty());
+        assert!(gpu_driver_packages(&[]).is_empty());
+    }
+
+    #[test]
+    fn two_gpus_do_not_produce_the_same_package_twice() {
+        let gpu = |model: &str| GpuInfo {
+            description: String::new(),
+            vendor: GpuVendor::Nvidia,
+            model: model.into(),
+        };
+        let pkgs = gpu_driver_packages(&[
+            gpu("GA107M [GeForce RTX 3050 Mobile]"),
+            gpu("AD104 [GeForce RTX 4070]"),
+        ]);
+        assert_eq!(pkgs, vec!["nvidia-open".to_string()]);
     }
 
     #[test]

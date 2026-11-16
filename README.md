@@ -246,7 +246,17 @@ yourself is in [docs/en/vm-testing.md](docs/en/vm-testing.md).
 - Detects disks, partitions, filesystems, EFI partitions, Windows, recovery and
   Microsoft-reserved partitions, live-system mounts.
 - Plans GPT/MBR layouts: ESP, BIOS boot, `/`, `/home`, swap — with filesystem
-  choices (ext4, btrfs, xfs) and firmware-aware validation.
+  choices (ext4, btrfs, xfs) and firmware-aware validation. A btrfs root is
+  built from subvolumes (`@`, `@home`, `@snapshots`) and mounted from `@`, so a
+  snapshot of `/` does not take `/home` with it.
+- Optional LUKS2 encryption of the root filesystem, unlocked by a passphrase
+  the initramfs asks for at every boot. The passphrase never enters a profile
+  or an argv list (it reaches `cryptsetup` on stdin), and layouts that cannot
+  be encrypted honestly are refused instead of half-delivered: a separate
+  `/home`, systemd-boot, and dual-boot beside another OS.
+- Suggests GPU driver packages from the model `lspci` reports — `nvidia-open`
+  on Turing and newer, `nvidia` on Maxwell/Pascal/Volta, and the Vulkan and
+  video-decode userspace drivers on AMD and Intel.
 - Detects Windows and refuses to touch it. Keep-everything dual-boot is
   implemented: existing partitions stay `format=false`, the ESP is reused, and
   new partitions are appended inside a free gap; a real-machine install and
@@ -272,9 +282,12 @@ yourself is in [docs/en/vm-testing.md](docs/en/vm-testing.md).
 - Boot a real Windows install from the generated menu entry, or shrink Windows
   from inside Windows. The keep-everything side and the menu entry are
   VM-proven; the real-Windows leg is deferred.
-- Suggest a GPU driver from the parsed model. The model is read and shown; a
-  model-keyed driver choice is still partial.
-- Manual partitioning, LUKS and Btrfs subvolume layouts — no code.
+- Claim encryption or btrfs subvolumes are VM-proven. Both are implemented and
+  covered by unit tests, but neither has been through the VirtualBox acceptance
+  run yet — see the roadmap.
+- Encrypt `/home` separately, encrypt beside another operating system, or boot
+  an encrypted root through systemd-boot. Those combinations are refused.
+- Provide a manual partition editor — no code.
 
 ## Architecture
 
@@ -293,7 +306,7 @@ See [docs/en/architecture.md](docs/en/architecture.md) and
 
 ```
 Welcome → Language → Keyboard → Timezone → Storage → Disk mode →
-Layout → Filesystem → Accounts → Bootloader → Desktop → Services →
+Layout → Filesystem → Encryption → Accounts → Bootloader → Desktop → Services →
 Packages → Review (type the confirmation phrase) → Progress → Result
 ```
 

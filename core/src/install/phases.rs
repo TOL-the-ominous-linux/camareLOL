@@ -5,6 +5,13 @@ use crate::boot::validate_boot_config;
 use crate::error::{CamarelolError, ErrorCode, Result};
 use crate::storage::layout::{validate_plan, PartitionPurpose};
 
+/// Shortest LUKS passphrase camareLOL will format a disk with.
+///
+/// Not a policy rule with a committee behind it: a four-character passphrase on
+/// the only copy of a laptop's data is a lock that opens with a guess, and this
+/// number is the point where the installer stops cooperating with that.
+pub const MIN_LUKS_PASSPHRASE: usize = 8;
+
 /// Precondition check for a phase. Runs **before** the phase body.
 pub fn preconditions(phase: &str, pf: &Preflight) -> Result<()> {
     match phase {
@@ -17,6 +24,38 @@ pub fn preconditions(phase: &str, pf: &Preflight) -> Result<()> {
             pf.host.require_supported()?;
             // The configuration itself must be valid before anything is written.
             pf.config.validate()?;
+            // The LUKS passphrase is not in the config file by design, so it is
+            // checked here rather than in `validate()` — a saved profile with
+            // `encrypt_root = true` must load, and then ask for the passphrase
+            // before anything is written. A short one is refused before the
+            // disk is touched, not after the container exists.
+            if pf.config.encrypt_root {
+                match pf.config.luks_passphrase() {
+                    None => {
+                        return Err(CamarelolError::new(
+                            ErrorCode::InvalidConfig,
+                            "encryption is on but no LUKS passphrase was entered",
+                        )
+                        .with_remediation(
+                            "type a passphrase on the encryption screen, or turn encryption off",
+                        ))
+                    }
+                    Some(p) if p.chars().count() < MIN_LUKS_PASSPHRASE => {
+                        return Err(CamarelolError::new(
+                            ErrorCode::InvalidConfig,
+                            format!(
+                                "the LUKS passphrase is {} characters; at least {} are required",
+                                p.chars().count(),
+                                MIN_LUKS_PASSPHRASE
+                            ),
+                        )
+                        .with_remediation(
+                            "use a longer passphrase; it is the only key to this disk",
+                        ))
+                    }
+                    Some(_) => {}
+                }
+            }
             validate_plan(&pf.plan, &pf.plan_request())?;
             validate_boot_config(&pf.plan, pf.firmware, pf.config.bootloader()?)?;
             // sanity: hardware preconditions of the desktop profile
@@ -118,6 +157,7 @@ impl Preflight {
             separate_home: self.config.separate_home,
             separate_boot: self.config.separate_boot,
             swap_bytes: self.config.swap_bytes,
+            encrypt_root: self.config.encrypt_root,
         }
     }
 }
@@ -151,6 +191,7 @@ mod tests {
             separate_home: false,
             separate_boot: false,
             swap_bytes: None,
+            encrypt_root: false,
         };
         let plan = plan_auto_layout(&devices[0], &req).unwrap();
         Preflight {
@@ -180,6 +221,46 @@ mod tests {
             .retain(|p| p.purpose != PartitionPurpose::EfiSystem);
         let err = preconditions("preflight", &pf).unwrap_err();
         assert_eq!(err.code, ErrorCode::InvalidBootConfig);
+    }
+
+    /// Encryption without a passphrase, or with a four-character one, is
+    /// refused before the partition table is touched — not after `luksFormat`
+    /// has already written a container nobody can open.
+    #[test]
+    fn encryption_needs_a_passphrase_long_enough_to_be_a_key() {
+        let mut pf = test_preflight();
+        pf.config.encrypt_root = true;
+
+        let err = preconditions("preflight", &pf).unwrap_err();
+        assert_eq!(err.code, ErrorCode::InvalidConfig);
+        assert!(
+            err.message.contains("no LUKS passphrase"),
+            "{}",
+            err.message
+        );
+
+        pf.config.set_luks_passphrase("short");
+        let err = preconditions("preflight", &pf).unwrap_err();
+        assert_eq!(err.code, ErrorCode::InvalidConfig);
+        assert!(
+            err.message.contains(&MIN_LUKS_PASSPHRASE.to_string()),
+            "the refusal must say how long: {}",
+            err.message
+        );
+
+        pf.config.set_luks_passphrase("correct horse battery");
+        assert!(preconditions("preflight", &pf).is_ok());
+    }
+
+    /// The passphrase must be counted in characters, not bytes: a Vietnamese
+    /// passphrase of eight characters is longer than eight bytes and must not
+    /// be refused on a technicality.
+    #[test]
+    fn a_multibyte_passphrase_counts_characters() {
+        let mut pf = test_preflight();
+        pf.config.encrypt_root = true;
+        pf.config.set_luks_passphrase("mậtkhẩu1"); // 8 characters, 11 bytes
+        assert!(preconditions("preflight", &pf).is_ok());
     }
 
     #[test]

@@ -69,10 +69,14 @@ filesystem kind, and root-before-ESP mount order.
       greetd writes its own `/etc/greetd/config.toml`
 - [~] Driver detection and firmware suggestions — **partial**: CPU microcode
       hints and a base set (`mesa`, `linux-firmware`) are chosen from the
-      host. GPU models are now parsed out of `lspci -mm -nn` into
-      `GpuInfo.model` (the bracketed PCI id is stripped, product names keep
-      theirs — tested on real-shaped lines); what is still missing is a
-      driver suggestion keyed off the model, e.g. NVIDIA variant choice.
+      host, and a driver suggestion is now keyed off the parsed GPU model —
+      `nvidia-open` on Turing and newer, `nvidia` on Maxwell/Pascal/Volta (an
+      unreadable model never counts as Turing), plus `vulkan-radeon` +
+      `libva-mesa-driver` on AMD and `vulkan-intel` +
+      `intel-media-driver` on Intel; nothing for a virtual GPU. Unit-tested
+      against real `lspci` lines, with a catalog test that every name it can
+      produce is searchable. Not yet observed on a VM with a real GPU, which
+      is what keeps this partial rather than done.
 - [x] PipeWire, PulseAudio, or neither
 - [x] Bluetooth, zram, swap choices
 - [~] NetworkManager configuration — **partial**: the package is installed,
@@ -87,6 +91,36 @@ filesystem kind, and root-before-ESP mount order.
       firmware pointing at an `EFI/…` file that a previous attempt left
       behind. Unit-tested with a VBox-shaped listing; VM observation
       pending.
+
+## Stage 3 — Advanced storage (unreleased)
+
+Built in the working tree after `1.0.3`; not in any release yet.
+
+- [~] LUKS2 root encryption — **partial**: the format/mount phases put a LUKS2
+      container on the root partition, format and mount the mapper
+      (`/dev/mapper/cryptroot`), write `/etc/crypttab`, add the `encrypt` and
+      `keyboard` hooks to `HOOKS` before `filesystems`, write
+      `cryptdevice=UUID=…:cryptroot root=/dev/mapper/cryptroot` into
+      `GRUB_CMDLINE_LINUX`, install `cryptsetup` in the target, and add the
+      passphrase to the preflight check (8 characters minimum, counted in
+      characters not bytes). The passphrase never reaches the profile or a
+      command line: it is kept in memory, travels to `cryptsetup` on stdin, and
+      previews record only a placeholder. Layouts that v1 cannot encrypt
+      honestly are refused rather than half-delivered — a separate `/home`,
+      systemd-boot, and dual-boot beside another OS. Unit-tested end to end on
+      the simulated runner; **no VM has booted an encrypted install yet**, so
+      the initramfs prompt, the crypttab/hook interaction and GRUB's cmdline
+      are unproven outside unit tests. `--luks-passphrase-file` supplies the
+      passphrase for headless installs.
+- [~] Btrfs subvolume layout — **partial**: a btrfs root is formatted once,
+      mounted at the top level (`subvolid=5`), `@`, `@home` (only when `/home`
+      is not a separate partition) and `@snapshots` are created, and the root is
+      remounted from `@` with `/home` and `/.snapshots` mounted from their own
+      subvolumes. Order and the `umount` between the two root mounts are
+      unit-tested; `genfstab`'s output for those mounts is not yet observed in
+      a VM, and no snapshot tooling is installed — this is the layout a
+      snapshot tool needs, not the tool.
+- [ ] Manual partition editor — no code.
 
 ## Stage 4 — Experience
 
@@ -227,10 +261,13 @@ chained but does nothing), and the whole shrink-from-inside-Windows
 procedure. No release of camareLOL should go near a disk that holds the
 user's only Windows until that leg closes.
 
-**Everything else from advanced storage** — a manual partition editor, LUKS
-encryption, Btrfs subvolume layouts — has no code at all. The stage list once
-carried them as five unticked checkboxes; that said less than it appeared to,
-so they live here instead.
+**The rest of advanced storage.** LUKS2 root encryption and the btrfs
+subvolume layout now have code, tests and their unproven legs written out in
+Stage 3 above; what stays deferred is encrypting `/home` separately, encrypting
+beside another operating system, and an encrypted root through systemd-boot —
+each refused by the planner instead of approximated. A **manual partition
+editor** still has no code at all, and the stage list once carried it as a
+checkbox that said less than it appeared to.
 
 In every case here the honest thing is to say so rather than to offer a
 checkbox that does less than it appears to.

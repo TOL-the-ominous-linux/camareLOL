@@ -192,6 +192,23 @@ pub const CATALOG: &[PackageEntry] = &[
     official("ibus", "input method framework"),
     // --- firmware and drivers ---
     official("mesa", "OpenGL/Vulkan drivers for Intel, AMD and VMware"),
+    // Chosen by hardware::gpu_driver_packages from the models lspci reports.
+    official(
+        "nvidia",
+        "proprietary NVIDIA driver (Maxwell, Pascal, Volta)",
+    ),
+    official(
+        "nvidia-open",
+        "open NVIDIA kernel modules (Turing and newer)",
+    ),
+    official("vulkan-radeon", "Vulkan driver for AMD GPUs"),
+    official("libva-mesa-driver", "hardware video decode for AMD GPUs"),
+    official("vulkan-intel", "Vulkan driver for Intel GPUs"),
+    official("intel-media-driver", "hardware video decode for Intel GPUs"),
+    official(
+        "cryptsetup",
+        "LUKS disk encryption (used when / is encrypted)",
+    ),
     official("intel-ucode", "Intel CPU microcode"),
     official("amd-ucode", "AMD CPU microcode"),
     official("bluez", "Bluetooth stack"),
@@ -447,6 +464,28 @@ zram = true
             everything.extend(profile.packages());
         }
         everything.extend(crate::aur::AUR_HELPERS.iter().map(|s| s.to_string()));
+        // The GPU driver suggestions are handed to pacstrap by the wizard, so a
+        // name they can produce has to be findable here too.
+        for vendor in [
+            crate::hardware::GpuVendor::Nvidia,
+            crate::hardware::GpuVendor::Amd,
+            crate::hardware::GpuVendor::Intel,
+        ] {
+            for model in [
+                "GA107M [GeForce RTX 3050 Mobile]",
+                "GM204 [GeForce GTX 970]",
+                "Navi 23 [Radeon RX 6600]",
+                "UHD Graphics 620",
+            ] {
+                everything.extend(crate::hardware::gpu_driver_packages(&[
+                    crate::hardware::GpuInfo {
+                        description: String::new(),
+                        vendor: vendor.clone(),
+                        model: model.into(),
+                    },
+                ]));
+            }
+        }
         for name in everything {
             assert!(
                 exists(&name),

@@ -77,6 +77,14 @@ pub struct InstallationConfig {
     /// appends, and never runs the whole-disk zapping writer.
     #[serde(default)]
     pub reuse_esp: bool,
+    /// Encrypt the root filesystem with LUKS2.
+    ///
+    /// The passphrase is never part of this file — it lives in memory beside
+    /// the account passwords, keyed `luks` in [`InstallationConfig::passwords`].
+    /// `#[serde(default)]` because a profile saved before encryption existed
+    /// simply did not ask for it.
+    #[serde(default)]
+    pub encrypt_root: bool,
     pub swap_bytes: Option<u64>,
     pub bootloader: String,
     pub desktop: String,
@@ -109,6 +117,7 @@ impl Default for InstallationConfig {
             separate_boot: false,
             separate_home: false,
             reuse_esp: false,
+            encrypt_root: false,
             swap_bytes: None,
             bootloader: "grub".into(),
             desktop: "console".into(),
@@ -224,6 +233,19 @@ impl InstallationConfig {
         self.desktop_profile()?;
         self.display_server()?;
         crate::accounts::validate_hostname(&self.hostname)?;
+        // Encrypting / while /home is a separate, unencrypted partition would
+        // put every user file in the clear on the same disk — a lock on the
+        // front door with the window open. v1 encrypts the root filesystem
+        // only, so this combination is refused instead of half-delivered.
+        if self.encrypt_root && self.separate_home {
+            return Err(CamarelolError::new(
+                ErrorCode::InvalidConfig,
+                "encrypting / while /home is a separate partition would leave /home unencrypted",
+            )
+            .with_remediation(
+                "turn off the separate /home for this install (it then lives inside the encrypted root); encrypting /home separately is not implemented",
+            ));
+        }
         for u in &self.users {
             crate::accounts::validate_username(u)?;
         }
@@ -271,6 +293,9 @@ impl InstallationConfig {
     // ------------------------------------------------------------------
 
     /// Store the root password and per-user passwords in memory for this run.
+    ///
+    /// This clears the map first, so a caller that also holds a LUKS passphrase
+    /// must set it afterwards with [`Self::set_luks_passphrase`].
     pub fn set_passwords(&mut self, root: Option<&str>, users: &[(&str, &str)]) {
         self.passwords.clear();
         if let Some(r) = root {
@@ -291,6 +316,26 @@ impl InstallationConfig {
 
     pub fn user_password(&self, user: &str) -> Option<&str> {
         self.passwords.get(user).map(|s| s.as_str())
+    }
+
+    /// Key the LUKS passphrase is held under in the in-memory map.
+    ///
+    /// The leading dash keeps it out of every username's namespace:
+    /// `validate_username` never accepts an account starting with `-`, so an
+    /// account called `luks` cannot overwrite the disk passphrase.
+    pub const LUKS_KEY: &'static str = "-luks";
+
+    pub fn luks_passphrase(&self) -> Option<&str> {
+        self.passwords.get(Self::LUKS_KEY).map(|s| s.as_str())
+    }
+
+    pub fn set_luks_passphrase(&mut self, passphrase: &str) {
+        if passphrase.is_empty() {
+            self.passwords.remove(Self::LUKS_KEY);
+        } else {
+            self.passwords
+                .insert(Self::LUKS_KEY.to_string(), passphrase.to_string());
+        }
     }
 
     /// Serialize to TOML text.
@@ -738,6 +783,72 @@ mod tests {
         );
         assert!(loaded.root_password().is_none());
         assert!(!loaded.to_toml().unwrap().contains("written-by-hand"));
+    }
+
+    // ------------------------------------------------------- encryption
+
+    /// The boolean is a choice and belongs in the file; the passphrase is the
+    /// key to the disk and belongs nowhere but memory.
+    #[test]
+    fn encryption_is_saved_but_its_passphrase_never_is() {
+        let mut cfg = full_profile();
+        cfg.separate_home = false;
+        cfg.encrypt_root = true;
+        cfg.set_luks_passphrase("correct horse battery staple");
+        assert!(cfg.luks_passphrase().is_some());
+
+        let path = scratch("luks");
+        cfg.save(&path).unwrap();
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(text.contains("encrypt_root = true"), "{text}");
+        assert!(
+            !text.contains("correct horse battery staple"),
+            "a disk passphrase reached the profile"
+        );
+
+        let loaded = InstallationConfig::load(&path).unwrap();
+        assert!(loaded.encrypt_root, "the choice must come back");
+        assert!(
+            loaded.luks_passphrase().is_none(),
+            "the passphrase must not come back from a file"
+        );
+    }
+
+    /// Encrypting / and leaving /home on its own partition would encrypt
+    /// nothing that matters.
+    #[test]
+    fn encrypting_root_with_a_separate_home_is_refused() {
+        let mut cfg = sample();
+        cfg.encrypt_root = true;
+        cfg.separate_home = true;
+        let err = cfg.validate().unwrap_err();
+        assert_eq!(err.code, ErrorCode::InvalidConfig);
+        assert!(err.message.contains("/home"), "{}", err.message);
+        assert!(err.remediation.is_some());
+
+        // The same config without the separate /home is fine.
+        cfg.separate_home = false;
+        assert!(cfg.validate().is_ok());
+    }
+
+    /// A username cannot ever be the key the LUKS passphrase lives under.
+    #[test]
+    fn an_account_called_luks_cannot_overwrite_the_disk_passphrase() {
+        assert!(
+            crate::accounts::validate_username(
+                InstallationConfig::LUKS_KEY.trim_start_matches('-')
+            )
+            .is_ok(),
+            "the test needs `luks` to be a legal username for it to prove anything"
+        );
+        let mut cfg = sample();
+        cfg.users = vec!["luks".into()];
+        cfg.admin_users = vec!["luks".into()];
+        cfg.set_luks_passphrase("disk-key");
+        cfg.set_passwords(Some("rootpw"), &[("luks", "userpw")]);
+        cfg.set_luks_passphrase("disk-key");
+        assert_eq!(cfg.luks_passphrase(), Some("disk-key"));
+        assert_eq!(cfg.user_password("luks"), Some("userpw"));
     }
 
     #[test]
