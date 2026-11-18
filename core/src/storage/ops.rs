@@ -557,6 +557,12 @@ impl OpRunner {
     /// up in the shell history of whoever ran it. `--batch-mode` is what makes
     /// stdin the only source — without it cryptsetup asks for a confirmation
     /// on the terminal and, with no terminal, fails.
+    ///
+    /// No trailing newline on the stdin that carries it. `--key-file -` is the
+    /// *key file* mode: cryptsetup hashes every byte it reads, so
+    /// `passphrase\n` is a different key from `passphrase`. A person typing the
+    /// same passphrase at the initramfs prompt has the newline stripped, and
+    /// thus could never unlock the volume this call created.
     pub fn luks_format(
         &mut self,
         node: &str,
@@ -580,7 +586,7 @@ impl OpRunner {
                     "-".into(),
                     node.into(),
                 ],
-                stdin: Some(format!("{passphrase}\n")),
+                stdin: Some(passphrase.to_string()),
                 secret_stdin: true,
             },
         )
@@ -614,7 +620,7 @@ impl OpRunner {
                     node.into(),
                     name.into(),
                 ],
-                stdin: Some(format!("{passphrase}\n")),
+                stdin: Some(passphrase.to_string()),
                 secret_stdin: true,
             },
         )?;

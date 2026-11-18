@@ -33,6 +33,16 @@ DISPLAY_SERVER="${DISPLAY_SERVER:-}"
 DISPLAY_MANAGER="${DISPLAY_MANAGER:-}"
 PRINTING="${PRINTING:-false}"
 
+# LUKS=1: cài / mã hoá LUKS2 với btrfs bên trong, rồi kiểm cả hai trên đĩa đích
+# và bằng một lần khởi động lại thật. Không đặt thì bài console-only giữ nguyên
+# từng bước như cũ.
+#
+# Mật khẩu này chỉ sống trong VM dùng một lần: nó không được ghi vào profile
+# (profile không bao giờ chứa mật khẩu) mà đi qua --luks-passphrase-file, đúng
+# đường mà bản cài headless thật dùng.
+LUKS="${LUKS:-0}"
+LUKS_PASS="${LUKS_PASS:-camarelol-vm-test}"
+
 # greetd cần biết compositor để viết config; suy ra từ profile desktop.
 SESSION_CMD=""; DM_PKG="greetd-tuigreet"
 case "$DESKTOP" in
@@ -117,6 +127,12 @@ note "binary kiểm tra: $BINARY (phiên bản $EXP_VERSION)"
 # kiểm tra *thứ đã phát hành*, và chỉ máy chủ mới biết thứ đó là gì.
 cp "$ROOT/out/release/camarelol" "$SERVE/camarelol"
 cp "$ROOT/scripts/vm-helper.py" "$SERVE/vm-helper.py"
+cp "$ROOT/scripts/vm-luks-check.sh" "$SERVE/vm-luks-check.sh"
+# Unit báo về host: cổng và địa chỉ được thay tại đây vì cả hai đều cấu hình
+# được ở trên — một số cứng trong tệp sẽ khiến lần chạy đổi PORT im lặng không
+# báo gì.
+sed -e "s/__HOST__/$HOST_ADDR/" -e "s/__PORT__/$PORT/" \
+    "$ROOT/scripts/vm-boot-report.service" > "$SERVE/camarelol-boot-report.service"
 
 say "khởi động máy chủ kết quả (cổng $PORT)"
 # Server sinh từ shell nền (opencode background) bị KHÁCH không nhìn thấy:
@@ -229,20 +245,48 @@ HELPER_ENV=""
 [ -n "$DISPLAY_SERVER" ]  && HELPER_ENV="$HELPER_ENV CAMARELOL_TEST_DISPLAY_SERVER=$DISPLAY_SERVER"
 [ -n "$DISPLAY_MANAGER" ] && HELPER_ENV="$HELPER_ENV CAMARELOL_TEST_DISPLAY_MANAGER=$DISPLAY_MANAGER"
 [ -n "$PRINTING" ]        && HELPER_ENV="$HELPER_ENV CAMARELOL_TEST_PRINTING=$PRINTING"
-note "profile: ${DESKTOP:-console-only}"
+[ "$LUKS" = 1 ]          && HELPER_ENV="$HELPER_ENV CAMARELOL_TEST_LUKS=1"
+note "profile: ${DESKTOP:-console-only}$([ "$LUKS" = 1 ] && echo ' + LUKS2/btrfs')"
+
+# Mật khẩu đi qua tệp, không qua argv: cùng đường với bản cài headless thật.
+#
+# KHÔNG có newline cuối: bộ cài đọc dòng đầu tiên (`text.lines().next()`), còn
+# `cryptsetup open --key-file` băm nguyên byte của tệp. Thêm `\n` là mật khẩu
+# đúng vẫn mở không được, và bước kiểm sẽ đỏ vì một lý do không liên quan gì
+# tới bản cài.
+LUKS_ARGS=""
+if [ "$LUKS" = 1 ]; then
+    guest "printf '%s' '$LUKS_PASS' > /tmp/luks.pass; chmod 600 /tmp/luks.pass; echo luks_pass_bytes=\$(stat -c%s /tmp/luks.pass)" 3
+    LUKS_ARGS="--luks-passphrase-file /tmp/luks.pass"
+fi
 
 guest "curl -sS -o /root/vm-helper.py http://$HOST_ADDR:$PORT/vm-helper.py >/dev/null 2>&1; echo helper_dlc=\$? bytes=\$(stat -c%s /root/vm-helper.py 2>/dev/null); $HELPER_ENV python3 /root/vm-helper.py /tmp/survey.json /tmp/profile.toml > /tmp/helper-out.txt 2>&1; HRC=\$?; echo helper_rc=\$HRC; cat /tmp/helper-out.txt; grep -E '^(desktop|display_server|display_manager) =' /tmp/profile.toml >> /tmp/helper-out.txt; { cat /tmp/helper-out.txt; echo profile_rc=\$HRC; } > /tmp/r-install_profile.txt" 15
 post install_profile
 note "chạy cài đặt — có thể mất vài phút"
-guest "/root/camarelol --scripted /tmp/profile.toml --allow-destructive --execute > /tmp/inst.txt 2>&1; echo INSTALL_RC=\$? > /tmp/r-install.txt; cat /tmp/inst.txt >> /tmp/r-install.txt" 10
+guest "/root/camarelol --scripted /tmp/profile.toml --allow-destructive --execute $LUKS_ARGS > /tmp/inst.txt 2>&1; echo INSTALL_RC=\$? > /tmp/r-install.txt; cat /tmp/inst.txt >> /tmp/r-install.txt" 10
 post install "${INSTALL_TIMEOUT:-600}"
+
+# LUKS2 + btrfs: kiểm trên đĩa đích trước khi khởi động lại. Bước này mở container
+# bằng chính mật khẩu đã dùng, nên nó không chỉ xác nhận "có một ổ LUKS" mà xác
+# nhận cái được cài thật sự mở được và bên trong đúng là btrfs với @/@home/@
+# snapshots.
+#
+# Phải chạy TRƯỚC bước zram/desktop: nó để /vmroot trỏ vào subvol @ của hệ đã
+# cài, còn chính các bước sau chỉ mount khi /vmroot chưa có gì. Mount thẳng
+# mapper LUKS mà không có `subvol=@` sẽ nhìn vào top-level btrfs — nơi không có
+# /usr, /etc — và mọi phép kiểm zram sẽ đỏ dù hệ thống đúng.
+if [ "$LUKS" = 1 ]; then
+    say "bước LUKS — LUKS2 + btrfs trên đĩa ĐÃ CÀI"
+    guest "curl -sS -o /root/vm-luks-check.sh http://$HOST_ADDR:$PORT/vm-luks-check.sh >/dev/null 2>&1; echo check_dlc=\$? bytes=\$(stat -c%s /root/vm-luks-check.sh 2>/dev/null); bash /root/vm-luks-check.sh http://$HOST_ADDR:$PORT > /tmp/r-luks.txt 2>&1; echo check_rc=\$? >> /tmp/r-luks.txt" 15
+    post luks 240
+fi
 
 say "bước 6/6 — kiểm trên hệ thống ĐÃ CÀI: unit, gói, config của zram và ssh"
 # Hai bản 0.1.11/0.1.12 cài "xong" mà thiếu thật. Những gì quyết định tính năng
 # sống là trên đĩa đích, không phải mã thoát của trình cài: unit file có thật,
 # symlink enable có thật, binary/generator có thật, config có thật. Cá nhân
 # /dev/sdX lấy từ profile để không đoán đĩa.
-guest "D=\$(grep -om1 '/dev/sd[a-z]' /tmp/profile.toml); [[ \$D ]] || D=/dev/sda; ROOTP=\$(findmnt -no SOURCE /mnt 2>/dev/null); [[ -n \"\$ROOTP\" ]] || ROOTP=\${D}2; M=/vmroot; mkdir -p \$M 2>/dev/null; mount \"\$ROOTP\" \$M 2>/dev/null; { test -e \$M/usr/lib/systemd/system/systemd-zram-setup@.service && echo zram_unit=yes || echo zram_unit=no; [[ \$(systemctl --root=\$M is-enabled systemd-zram-setup@zram0 2>/dev/null) == enabled ]] && echo zram_wants=yes || echo zram_wants=no; test -e \$M/usr/lib/systemd/system-generators/zram-generator && echo zram_bin=yes || echo zram_bin=no; test -e \$M/etc/systemd/zram-generator.conf && echo zram_conf=yes || echo zram_conf=no; test -e \$M/usr/lib/systemd/system/sshd.service && echo sshd_unit=yes || echo sshd_unit=no; [[ \$(systemctl --root=\$M is-enabled sshd 2>/dev/null) == enabled ]] && echo sshd_wants=yes || echo sshd_wants=no; pacman -Qr \$M openssh >/dev/null 2>&1 && echo openssh=yes || echo openssh=no; } > /tmp/r-zram.txt 2>&1" 25
+guest "D=\$(grep -om1 '/dev/sd[a-z]' /tmp/profile.toml); [[ \$D ]] || D=/dev/sda; ROOTP=\$(findmnt -no SOURCE /mnt 2>/dev/null); [[ -n \"\$ROOTP\" ]] || ROOTP=\${D}2; M=/vmroot; mountpoint -q \$M || { mkdir -p \$M 2>/dev/null; mount \"\$ROOTP\" \$M 2>/dev/null; }; { test -e \$M/usr/lib/systemd/system/systemd-zram-setup@.service && echo zram_unit=yes || echo zram_unit=no; [[ \$(systemctl --root=\$M is-enabled systemd-zram-setup@zram0 2>/dev/null) == enabled ]] && echo zram_wants=yes || echo zram_wants=no; test -e \$M/usr/lib/systemd/system-generators/zram-generator && echo zram_bin=yes || echo zram_bin=no; test -e \$M/etc/systemd/zram-generator.conf && echo zram_conf=yes || echo zram_conf=no; test -e \$M/usr/lib/systemd/system/sshd.service && echo sshd_unit=yes || echo sshd_unit=no; [[ \$(systemctl --root=\$M is-enabled sshd 2>/dev/null) == enabled ]] && echo sshd_wants=yes || echo sshd_wants=no; pacman -Qr \$M openssh >/dev/null 2>&1 && echo openssh=yes || echo openssh=no; } > /tmp/r-zram.txt 2>&1" 25
 post zram 300
 
 # Phần display chỉ có nghĩa khi profile không phải console. Bỏ trống thì bài
@@ -255,13 +299,65 @@ if [ -n "$DESKTOP" ]; then
     # greetd "no" — sai: greetd dùng `Alias=display-manager.service`, không có
     # symlink nào trong .wants, và nó vẫn chạy. Unit không cài trả "not-found"
     # nên đây phân biệt được thật với giả.
-    guest "D=\$(grep -om1 '/dev/sd[a-z]' /tmp/profile.toml); [[ \$D ]] || D=/dev/sda; ROOTP=\$(findmnt -no SOURCE /mnt 2>/dev/null); [[ -n \"\$ROOTP\" ]] || ROOTP=\${D}2; M=/vmroot; mkdir -p \$M 2>/dev/null; mount \"\$ROOTP\" \$M 2>/dev/null; { for u in $DISPLAY_MANAGER cups; do printf 'en_%s=' \"\$u\"; systemctl --root=\$M is-enabled \$u 2>/dev/null | tr -d '\n'; echo; done; test -e \$M/usr/lib/systemd/system/$DISPLAY_MANAGER.service && echo dm_unit=yes || echo dm_unit=no; test -L \$M/etc/systemd/system/display-manager.service && echo dm_alias=yes || echo dm_alias=no; test -e \$M/etc/greetd/config.toml && echo greetd_conf=yes || echo greetd_conf=no; grep -q '$SESSION_CMD' \$M/etc/greetd/config.toml 2>/dev/null && echo greetd_session=yes || echo greetd_session=no; pacman -Qr \$M $DESKTOP >/dev/null 2>&1 && echo desktop_pkg=yes || echo desktop_pkg=no; pacman -Qr \$M $DM_PKG >/dev/null 2>&1 && echo dm_pkg=yes || echo dm_pkg=no; pacman -Qr \$M wayland >/dev/null 2>&1 && echo wayland=yes || echo wayland=no; pacman -Qr \$M xorg-xwayland >/dev/null 2>&1 && echo xwayland=yes || echo xwayland=no; pacman -Qr \$M cups >/dev/null 2>&1 && echo cups=yes || echo cups=no; } > /tmp/r-desktop.txt 2>&1" 25
+    guest "D=\$(grep -om1 '/dev/sd[a-z]' /tmp/profile.toml); [[ \$D ]] || D=/dev/sda; ROOTP=\$(findmnt -no SOURCE /mnt 2>/dev/null); [[ -n \"\$ROOTP\" ]] || ROOTP=\${D}2; M=/vmroot; mountpoint -q \$M || { mkdir -p \$M 2>/dev/null; mount \"\$ROOTP\" \$M 2>/dev/null; }; { for u in $DISPLAY_MANAGER cups; do printf 'en_%s=' \"\$u\"; systemctl --root=\$M is-enabled \$u 2>/dev/null | tr -d '\n'; echo; done; test -e \$M/usr/lib/systemd/system/$DISPLAY_MANAGER.service && echo dm_unit=yes || echo dm_unit=no; test -L \$M/etc/systemd/system/display-manager.service && echo dm_alias=yes || echo dm_alias=no; test -e \$M/etc/greetd/config.toml && echo greetd_conf=yes || echo greetd_conf=no; grep -q '$SESSION_CMD' \$M/etc/greetd/config.toml 2>/dev/null && echo greetd_session=yes || echo greetd_session=no; pacman -Qr \$M $DESKTOP >/dev/null 2>&1 && echo desktop_pkg=yes || echo desktop_pkg=no; pacman -Qr \$M $DM_PKG >/dev/null 2>&1 && echo dm_pkg=yes || echo dm_pkg=no; pacman -Qr \$M wayland >/dev/null 2>&1 && echo wayland=yes || echo wayland=no; pacman -Qr \$M xorg-xwayland >/dev/null 2>&1 && echo xwayland=yes || echo xwayland=no; pacman -Qr \$M cups >/dev/null 2>&1 && echo cups=yes || echo cups=no; } > /tmp/r-desktop.txt 2>&1" 25
     post desktop 300
+fi
+
+# Khởi động lại thật, và gõ mật khẩu ở prompt initramfs.
+#
+# Đây là chân duy nhất mà unit test không với tới: `crypttab`, hook `encrypt`
+# và `cryptdevice=` có thể cùng tồn tại mà vẫn hỏi mật khẩu cho một ổ không bao
+# giờ xuất hiện. Bằng chứng duy nhất đáng tin là hệ ĐÃ CÀI tự gửi một yêu cầu
+# về host sau khi lên — unit camarelol-boot-report.service làm việc đó, và nếu
+# nó không chạy thì không có kết quả, chứ không phải "đạt".
+#
+# Đặt sau nhánh desktop vì reboot tắt máy: mọi bước kiểm trên live ISO phải
+# xong trước.
+if [ "$LUKS" = 1 ]; then
+    say "unlock thật — tháo ISO, khởi động lại, gõ mật khẩu ở prompt initramfs"
+    # Tháo đĩa DVD để lần boot này vào hệ ĐÃ CÀI, không phải live system.
+    #
+    # Không dùng `storageattach --medium none`: thay đổi storage của một VM
+    # ĐANG CHẠY bị VirtualBox từ chối, mà `vm()` nuốt stderr, nên ISO vẫn nằm
+    # đó và "reboot" quay lại archiso — 20 lần gõ mật khẩu rơi vào shell live
+    # (run 2026-11-18, 99-final.png). `controlvm dvdattach none` là dạng chạy
+    # được khi máy đang bật. Thứ tự boot đã là `--boot1 dvd --boot2 disk`;
+    # không còn DVD thì firmware tự chuyển sang đĩa, nên `modifyvm` (cũng
+    # không đổi được lúc đang chạy) là không cần thiết.
+    vm controlvm "$VM_NAME" dvdattach none >/dev/null 2>&1
+    sleep 2
+    if VBoxManage showvminfo "$VM_NAME" --machinereadable 2>/dev/null \
+            | grep -q '^"IDE-0-0"=".*\.iso"$'; then
+        say "  không tháo được ISO — lần boot này sẽ vào lại live system, kết quả boot sẽ không có"
+    fi
+    guest "reboot" 3
+
+    # Prompt initramfs xuất hiện sau khi firmware + GRUB + kernel chạy, thời gian
+    # thay đổi theo máy. Gõ lặp lại thay vì ngủ một lần: gõ quá sớm thì mất
+    # phím, gõ muộn thì vào getty (vô hại, unit sẽ tự tắt máy ngay sau đó).
+    #
+    # Chờ trước lần gõ đầu là bắt buộc, không phải cho đẹp: grub-mkconfig mặc
+    # định GRUB_TIMEOUT=5, và phím `c` trong lúc menu còn hiện sẽ mở GRUB command
+    # line thay vì vào kernel — mật khẩu này bắt đầu bằng `c`, nên gõ sớm một
+    # nhịp là biến lần boot thành một prompt GRUB không bao giờ hỏi mật khẩu.
+    sleep 20
+    attempts=0
+    while [ ! -e "$RESULTS/step_boot.txt" ] && [ $attempts -lt 20 ]; do
+        guest "$LUKS_PASS" 1
+        sleep 5
+        attempts=$((attempts + 1))
+    done
+    if [ -e "$RESULTS/step_boot.txt" ]; then
+        note "  hệ đã cài báo về sau $attempts lần gõ mật khẩu"
+    else
+        say "  không có step_boot.txt sau $attempts lần gõ — hệ mã hoá không lên được"
+    fi
 fi
 
 say "đọc kết quả và kết luận"
 python3 "$ROOT/scripts/vm-check-results.py" --results "$RESULTS" --expect-version "$EXP_VERSION" \
-    $([ -n "$DESKTOP" ] && echo --expect-desktop "$DESKTOP")
+    $([ -n "$DESKTOP" ] && echo --expect-desktop "$DESKTOP") \
+    $([ "$LUKS" = 1 ] && echo --expect-luks)
 CHECK_RC=$?
 
 VBoxManage controlvm "$VM_NAME" screenshotpng "$RESULTS/99-final.png" >/dev/null 2>&1 || true

@@ -1344,6 +1344,20 @@ pub fn run_install_on_host(
                         if cfg.encrypt_root {
                             pkgs.push("cryptsetup".into());
                         }
+                        // btrfs-progs is not a convenience here. mkinitcpio's
+                        // `fsck` hook looks for a helper for the root
+                        // filesystem, and on btrfs that helper is `fsck.btrfs`
+                        // from btrfs-progs; without it the hook errors, the
+                        // image build fails, and the install ends "incomplete"
+                        // after every other phase already succeeded. The live
+                        // ISO has the tools — the target does not.
+                        if cfg
+                            .filesystem_type()
+                            .map(|f| f == Filesystem::Btrfs)
+                            .unwrap_or(false)
+                        {
+                            pkgs.push("btrfs-progs".into());
+                        }
                         // Make the display-server choice real instead of a stored
                         // string: an explicit Wayland or X11 selection pulls the
                         // stack that choice needs. `Auto` adds nothing — the
@@ -1604,19 +1618,30 @@ fn efi_cleanup(
 /// unit and installed the package and still never had a swap at boot, because
 /// that file was missing. The config is written here, where every other
 /// /etc file lives, with `zram_size_mb` honoured when it was set.
-/// Kernel command line for an encrypted root, written into GRUB's config.
 ///
-/// `cryptdevice=UUID=<luks uuid>:cryptroot` is what the initramfs's `encrypt`
-/// hook reads the passphrase for, and `root=/dev/mapper/cryptroot` is the volume
-/// that hook creates. The UUID is looked up inside the target at install time:
-/// it does not exist before `luksFormat` runs, so it cannot be planned.
+/// The kernel command line for an encrypted root, written into GRUB's config.
+///
+/// Both spellings are written because which initramfs reads it is decided by
+/// the `HOOKS=` line, and that line is only touched in system-config, after
+/// this script has run. Each initramfs ignores the other's parameter:
+///
+///   * `cryptdevice=UUID=<uuid>:cryptroot` is read by the busybox `encrypt`
+///     hook;
+///   * `rd.luks.name=<uuid>=cryptroot` is read by the systemd `sd-encrypt`
+///     hook. With systemd as init, `cryptdevice=` alone is silently ignored —
+///     the passphrase is never asked for and boot waits forever for a root
+///     that will not appear.
+///
+/// `root=/dev/mapper/cryptroot` is the volume both hooks create. The UUID is
+/// looked up inside the target at install time: it does not exist before
+/// `luksFormat` runs, so it cannot be planned.
 fn luks_cmdline_script(root_node: &str) -> String {
     format!(
         r#"set -e
 uuid=$(cryptsetup luksUUID {root_node})
 [ -n "$uuid" ] || {{ echo 'cannot read the LUKS UUID of {root_node}' >&2; exit 1; }}
 sed -i '/^GRUB_CMDLINE_LINUX=/d' /etc/default/grub
-echo "GRUB_CMDLINE_LINUX=\"cryptdevice=UUID=$uuid:{name} root=/dev/mapper/{name}\"" >> /etc/default/grub
+echo "GRUB_CMDLINE_LINUX=\"cryptdevice=UUID=$uuid:{name} rd.luks.name=$uuid={name} root=/dev/mapper/{name}\"" >> /etc/default/grub
 "#,
         root_node = root_node,
         name = LUKS_ROOT_NAME,
@@ -1701,8 +1726,27 @@ echo '{host}' > /etc/hostname
 [ -n "$uuid" ] || {{ echo 'cannot read the LUKS UUID' >&2; exit 1; }}
 printf 'cryptroot UUID=%s none luks\n' "$uuid" > /etc/crypttab
 chmod 600 /etc/crypttab
-grep -qw encrypt /etc/mkinitcpio.conf || sed -i 's/\bfilesystems\b/encrypt filesystems/' /etc/mkinitcpio.conf
-grep -qw keyboard /etc/mkinitcpio.conf || sed -i 's/\bencrypt\b/keyboard encrypt/' /etc/mkinitcpio.conf
+# Only the active HOOKS= line counts. The stock mkinitcpio.conf whose examples
+# mention `encrypt`/`sd-encrypt` in comments made a file-wide `grep -w encrypt`
+# succeed, so the hook was never added — and the acceptance run of 2026-11-16
+# installed an encrypted system that could not ask for its own passphrase.
+#
+# Which hook is also not a style choice: with the `systemd` hook the init is
+# systemd, and the busybox `encrypt` hook never runs. `sd-encrypt` is its
+# counterpart, reads /etc/crypttab (written above) and prompts there.
+hooks=/etc/mkinitcpio.conf
+active=$(grep -m1 '^HOOKS=' "$hooks")
+case "$active" in
+  *encrypt*) ;;
+  *systemd*) sed -i '/^HOOKS=/s/\bfilesystems\b/sd-encrypt filesystems/' "$hooks" ;;
+  *) sed -i '/^HOOKS=/s/\bfilesystems\b/encrypt filesystems/' "$hooks" ;;
+esac
+active=$(grep -m1 '^HOOKS=' "$hooks")
+case "$active" in
+  *keyboard*) ;;
+  *sd-encrypt*) sed -i '/^HOOKS=/s/\bsd-encrypt\b/keyboard sd-encrypt/' "$hooks" ;;
+  *) sed -i '/^HOOKS=/s/\bencrypt\b/keyboard encrypt/' "$hooks" ;;
+esac
 "#
         ));
     }
@@ -1736,6 +1780,26 @@ fn account_script(cfg: &InstallationConfig) -> String {
         }
     }
     script
+}
+
+/// The active `HOOKS=` line of an mkinitcpio config, without its comments.
+///
+/// Comments in the stock file name every hook, so a check that looks at the
+/// whole file cannot tell "the hook is configured" from "the hook is
+/// documented".
+fn active_hooks(mkinitcpio: &str) -> String {
+    mkinitcpio
+        .lines()
+        .find(|line| line.trim_start().starts_with("HOOKS="))
+        .unwrap_or_default()
+        .to_string()
+}
+
+/// Whether one hook appears in an `HOOKS=(...)` line.
+fn has_hook(hooks_line: &str, hook: &str) -> bool {
+    hooks_line
+        .split_whitespace()
+        .any(|token| token.trim_matches(|c| c == '(' || c == ')') == hook)
 }
 
 /// Verify the target system looks sane. Returns warnings (never a hard failure,
@@ -1784,10 +1848,30 @@ fn post_check(cfg: &InstallationConfig, plan: &PartitionPlan, root: &str) -> Vec
                 "/etc/crypttab is missing or does not name {LUKS_ROOT_NAME} — the root volume will not open at boot"
             )),
         }
+        // Read the *active* line, not the whole file: the stock config explains
+        // every hook in comments, so `text.contains("encrypt")` is true for an
+        // install whose HOOKS line has no encryption hook at all. That is how a
+        // run reported `post-check completed` over a system that could not boot.
         let hooks =
             std::fs::read_to_string(root_path.join("etc/mkinitcpio.conf")).unwrap_or_default();
-        if !hooks.contains("encrypt") {
-            w.push("HOOKS has no `encrypt` — the initramfs cannot ask for the passphrase".into());
+        let hooks_line = active_hooks(&hooks);
+        if !has_hook(&hooks_line, "encrypt") && !has_hook(&hooks_line, "sd-encrypt") {
+            w.push(
+                "HOOKS has no `encrypt`/`sd-encrypt` — the initramfs cannot ask for the passphrase"
+                    .into(),
+            );
+        }
+        // The third leg: the initramfs has to be told which container to
+        // open. `cryptdevice=` is the busybox spelling and `rd.luks.name=` the
+        // systemd one; a config that has neither boots to a prompt for a volume
+        // that never appears, even with crypttab and HOOKS correct.
+        let grub = std::fs::read_to_string(root_path.join("etc/default/grub")).unwrap_or_default();
+        let has_cmdline = grub.lines().any(|line| {
+            line.starts_with("GRUB_CMDLINE_LINUX=")
+                && (line.contains("cryptdevice=UUID=") || line.contains("rd.luks.name="))
+        });
+        if !has_cmdline {
+            w.push("GRUB_CMDLINE_LINUX names no encrypted root (`cryptdevice=`/`rd.luks.name=`) — the initramfs cannot find the container".into());
         }
     }
     if !cfg.users.is_empty() && !cfg.admin_users.is_empty() {
@@ -2089,8 +2173,11 @@ mod tests {
         assert!(script.contains("chmod 600 /etc/crypttab"), "{script}");
 
         let cmdline = luks_cmdline_script("/dev/vdb2");
+        // Both spellings: the busybox `encrypt` hook reads `cryptdevice=`, the
+        // systemd `sd-encrypt` hook reads `rd.luks.name=`. Writing only the
+        // former leaves a systemd initramfs with no instruction at all.
         assert!(
-            cmdline.contains("cryptdevice=UUID=$uuid:cryptroot root=/dev/mapper/cryptroot"),
+            cmdline.contains("cryptdevice=UUID=$uuid:cryptroot rd.luks.name=$uuid=cryptroot root=/dev/mapper/cryptroot"),
             "{cmdline}"
         );
         // The old line has to go first, or GRUB_CMDLINE_LINUX appears twice and
@@ -2104,6 +2191,133 @@ mod tests {
         let plain = system_config_script(&InstallationConfig::default(), false, None);
         assert!(!plain.contains("crypttab"), "{plain}");
         assert!(!plain.contains("encrypt filesystems"), "{plain}");
+    }
+
+    /// The stock mkinitcpio.conf documents every hook it knows about, so a
+    /// file-wide search finds `encrypt` and `sd-encrypt` in an install that
+    /// configures neither.
+    #[test]
+    fn the_hook_check_reads_the_active_line_not_the_comments() {
+        let stock = "\
+#    HOOKS=(base udev microcode modconf keyboard keymap block mdadm_udev encrypt filesystems fsck)
+#    HOOKS=(base systemd autodetect microcode modconf kms keyboard sd-vconsole block sd-encrypt filesystems fsck)
+HOOKS=(base systemd autodetect microcode modconf kms keyboard sd-vconsole block filesystems fsck)
+";
+        let line = active_hooks(stock);
+        assert!(line.starts_with("HOOKS=(base systemd"), "{line}");
+        assert!(!has_hook(&line, "encrypt"), "a comment is not a hook");
+        assert!(!has_hook(&line, "sd-encrypt"), "a comment is not a hook");
+
+        assert!(has_hook(
+            "HOOKS=(base systemd ... block sd-encrypt filesystems fsck)",
+            "sd-encrypt"
+        ));
+        assert!(has_hook(
+            "HOOKS=(base udev ... block encrypt fsck)",
+            "encrypt"
+        ));
+        // Substrings must not count: `sd-encrypt` is not `encrypt` and neither
+        // is `sd-vconsole`.
+        assert!(!has_hook("HOOKS=(block sd-encrypt)", "crypt"));
+    }
+
+    /// The post-check has to fail this case. The acceptance run of 2026-11-16
+    /// printed `post-check completed  all post-install checks passed` for a
+    /// system whose initramfs had no encryption hook, because the check grepped
+    /// the whole file and hit the documented example.
+    #[test]
+    fn post_check_warns_when_the_encryption_hook_is_only_in_a_comment() {
+        let dir = std::env::temp_dir().join(format!("camarelol-hooks-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("etc")).unwrap();
+        std::fs::create_dir_all(dir.join("boot")).unwrap();
+        std::fs::write(dir.join("etc/fstab"), "UUID=x / btrfs defaults 0 0\n").unwrap();
+        std::fs::write(
+            dir.join("etc/crypttab"),
+            format!("{LUKS_ROOT_NAME} UUID=x none luks\n"),
+        )
+        .unwrap();
+        let cfg = InstallationConfig {
+            firmware: "uefi".into(),
+            encrypt_root: true,
+            ..Default::default()
+        };
+        let root = dir.to_str().unwrap();
+
+        std::fs::write(
+            dir.join("etc/mkinitcpio.conf"),
+            "# HOOKS=(base udev block encrypt filesystems)\n\
+HOOKS=(base systemd autodetect modconf kms keyboard sd-vconsole block filesystems fsck)\n",
+        )
+        .unwrap();
+        let warnings = post_check(&cfg, &plan(), root);
+        assert!(
+            warnings.iter().any(|w| w.contains("sd-encrypt")),
+            "an initramfs without an encryption hook must be a warning: {warnings:?}"
+        );
+
+        std::fs::write(
+            dir.join("etc/mkinitcpio.conf"),
+            "HOOKS=(base systemd autodetect modconf kms keyboard sd-vconsole block sd-encrypt filesystems fsck)\n",
+        )
+        .unwrap();
+        let warnings = post_check(&cfg, &plan(), root);
+        assert!(
+            !warnings.iter().any(|w| w.contains("sd-encrypt")),
+            "the same warning must clear once the hook is real: {warnings:?}"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The kernel command line is the third file that has to agree. A systemd
+    /// initramfs ignores `cryptdevice=`, so a config carrying only that is a
+    /// machine that never asks for its passphrase.
+    #[test]
+    fn post_check_warns_when_the_kernel_cmdline_names_no_encrypted_root() {
+        let dir = std::env::temp_dir().join(format!("camarelol-cmdline-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("etc/default")).unwrap();
+        std::fs::create_dir_all(dir.join("boot")).unwrap();
+        std::fs::write(dir.join("etc/fstab"), "UUID=x / btrfs defaults 0 0\n").unwrap();
+        std::fs::write(
+            dir.join("etc/crypttab"),
+            format!("{LUKS_ROOT_NAME} UUID=x none luks\n"),
+        )
+        .unwrap();
+        std::fs::write(
+            dir.join("etc/mkinitcpio.conf"),
+            "HOOKS=(base systemd autodetect modconf kms keyboard sd-vconsole block sd-encrypt filesystems fsck)\n",
+        )
+        .unwrap();
+        let cfg = InstallationConfig {
+            firmware: "uefi".into(),
+            encrypt_root: true,
+            ..Default::default()
+        };
+        let root = dir.to_str().unwrap();
+
+        std::fs::write(
+            dir.join("etc/default/grub"),
+            "GRUB_CMDLINE_LINUX=\"quiet splash\"\n",
+        )
+        .unwrap();
+        let warnings = post_check(&cfg, &plan(), root);
+        assert!(
+            warnings.iter().any(|w| w.contains("GRUB_CMDLINE_LINUX")),
+            "a cmdline with no container must be a warning: {warnings:?}"
+        );
+
+        std::fs::write(
+            dir.join("etc/default/grub"),
+            "GRUB_CMDLINE_LINUX=\"rd.luks.name=abc=cryptroot root=/dev/mapper/cryptroot\"\n",
+        )
+        .unwrap();
+        let warnings = post_check(&cfg, &plan(), root);
+        assert!(
+            !warnings.iter().any(|w| w.contains("GRUB_CMDLINE_LINUX")),
+            "the warning must clear once the cmdline names the container: {warnings:?}"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -2128,6 +2342,69 @@ mod tests {
         // cryptsetup has to exist inside the target for the UUID lookup and
         // for the initramfs hook; it is not part of the base group.
         assert!(crate::packages::exists("cryptsetup"));
+    }
+
+    /// btrfs root, and the one package whose absence fails the install at the
+    /// very last phase. Regression guard for the acceptance run of 2026-11-16:
+    /// every phase completed except `initramfs`, with "mkinitcpio failed
+    /// (==> WARNING: No fsck helpers found)" — because `fsck` has no helper to
+    /// run inside a target that has no btrfs-progs.
+    #[test]
+    fn a_btrfs_install_puts_btrfs_progs_in_the_target() {
+        let _scope = crate::sys::PreviewScope::on();
+        let cfg = InstallationConfig {
+            firmware: "uefi".into(),
+            filesystem: "btrfs".into(),
+            ..Default::default()
+        };
+        let gate = SafetyGate::preview();
+        let mut runner = RealSystemRunner::new(gate.clone());
+        run_install(
+            &cfg,
+            &disk(),
+            &plan(),
+            &gate,
+            &Logger::default(),
+            &mut runner,
+            &mut NullSink,
+        );
+        let pacstrap = runner
+            .records()
+            .iter()
+            .find(|r| r.program == "pacstrap")
+            .expect("the install must pacstrap something");
+        assert!(
+            pacstrap.args.iter().any(|a| a == "btrfs-progs"),
+            "a btrfs root needs btrfs-progs: {:?}",
+            pacstrap.args
+        );
+
+        // ...and ext4 does not carry it: the list is a consequence of the
+        // filesystem choice, not a constant that grew for everyone.
+        let gate = SafetyGate::preview();
+        let mut runner = RealSystemRunner::new(gate.clone());
+        run_install(
+            &InstallationConfig {
+                firmware: "uefi".into(),
+                ..Default::default()
+            },
+            &disk(),
+            &plan(),
+            &gate,
+            &Logger::default(),
+            &mut runner,
+            &mut NullSink,
+        );
+        let pacstrap = runner
+            .records()
+            .iter()
+            .find(|r| r.program == "pacstrap")
+            .expect("the install must pacstrap something");
+        assert!(
+            !pacstrap.args.iter().any(|a| a == "btrfs-progs"),
+            "an ext4 install must not pull btrfs tools: {:?}",
+            pacstrap.args
+        );
     }
 
     /// btrfs without subvolumes is a filesystem you cannot snapshot; the

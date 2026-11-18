@@ -219,12 +219,91 @@ def _(body: str, expect: str) -> tuple[bool, str]:
     return True, f"{len(need)} mốc display có thật + is-enabled xác nhận"
 
 
+#: Kiểm tra chỉ chạy khi bài kiểm tra cài LUKS=1. Không có cờ --expect-luks
+#: thì bài console-only giữ nguyên phạm vi như trước — thêm một bước luôn "đạt"
+#: vì không làm gì chính là cách biến bài kiểm tra thành nghĩa trang.
+LUKS_CHECKS: list[tuple[str, str, object]] = []
+
+
+def luks_check(step: str):
+    def wrap(fn):
+        LUKS_CHECKS.append((step, fn.__doc__ or "", fn))
+        return fn
+    return wrap
+
+
+@luks_check("luks")
+def _(body: str, expect: str) -> tuple[bool, str]:
+    """Trên đĩa đích: LUKS2 mở được, bên trong là btrfs với @/@home/@snapshots.
+
+    `luksDump` một mình chỉ chứng minh container tồn tại. Bước này mở nó bằng
+    chính mật khẩu bộ cài đã dùng, nên nó trả lời được câu hỏi thật: cái được
+    cài có mở được bằng thứ người dùng sẽ gõ không, và bên trong có đúng
+    subvolume mà /etc/fstab hứa không.
+
+    Ba tệp phải cùng nói một chuyện — crypttab, hook `encrypt` trong
+    mkinitcpio, và `cryptdevice=` trong GRUB. Thiếu một cái, máy vẫn cài xong
+    và chết ở lần boot đầu tiên với một prompt cho ổ không bao giờ xuất hiện.
+    """
+    if not body:
+        return False, "không có kết quả — bước LUKS chưa gửi, có thể đã treo"
+    # `[a-z0-9_]` chứ không phải `[a-z_]`: `luks_v2` có chữ số, và một regex
+    # bỏ sót nó thì bước này luôn báo "thiếu cột mốc" dù khách gửi đủ.
+    found = dict(re.findall(r"^([a-z0-9_]+)=(\S*)", body, re.M))
+    need = [
+        "disk", "luks_part", "luks_container", "luks_v2", "luks_unlock",
+        "btrfs_top", "btrfs_fs", "subvol_root", "subvol_home",
+        "subvol_snapshots", "fstab_subvol", "crypttab", "crypttab_uuid_match",
+        "hook_encrypt", "grub_cmdline", "boot_part", "boot_kernel",
+        "boot_initramfs", "boot_unit_file", "boot_unit_enabled", "curl_pkg",
+    ]
+    missing = [k for k in need if k not in found]
+    if missing:
+        return False, (f"thiếu cột mốc {', '.join(missing)} — khách có thể chết "
+                       f"giữa chừng: {body.strip()[:200]}")
+    for key in need:
+        if found[key] == "none":
+            return False, f"{key}=none — không tìm được thứ cần kiểm: {body.strip()[:200]}"
+    bad = [k for k in need if found[k] == "no"]
+    if bad:
+        return False, f"trên đĩa đích còn thiếu: {', '.join(bad)}"
+    return True, (f"LUKS2 mở bằng đúng mật khẩu; btrfs "
+                  f"{found['subvol_root']}/{found['subvol_home']}/{found['subvol_snapshots']} "
+                  f"+ crypttab/hook/cmdline khớp")
+
+
+@luks_check("boot")
+def _(body: str, expect: str) -> tuple[bool, str]:
+    """Bằng chứng duy nhất đáng tin: hệ đã cài tự báo về sau khi mở khoá.
+
+    Yêu cầu này chỉ tới được host khi initramfs nhận mật khẩu, tạo mapper
+    `cryptroot`, mount `subvol=@` và systemd lên tới multi-user. Ảnh chụp màn
+    hình prompt không chứng minh được điều đó; một request từ hệ đang chạy thì
+    có.
+    """
+    if not body:
+        return False, ("không có kết quả — mật khẩu không được nhận, hoặc hệ "
+                       "mã hoá không lên được")
+    found = dict(re.findall(r"^([a-z0-9_]+)=(\S*)", body, re.M))
+    if found.get("boot") != "ok":
+        return False, f"không thấy boot=ok: {body.strip()[:200]}"
+    if "cryptroot" not in found.get("root_source", ""):
+        return False, f"root không mount từ mapper cryptroot: {found.get('root_source')!r}"
+    if found.get("root_fstype") != "btrfs":
+        return False, f"root không phải btrfs mà là {found.get('root_fstype')!r}"
+    if "@" not in found.get("root_subvol", ""):
+        return False, f"root không mount từ subvol @: {found.get('root_subvol')!r}"
+    return True, f"boot lại được từ {found['root_source']}"
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--results", required=True)
     ap.add_argument("--expect-version", default="0.1.13")
     ap.add_argument("--expect-desktop", default="",
                     help="profile desktop của bài kiểm tra (bỏ trống = console-only)")
+    ap.add_argument("--expect-luks", action="store_true",
+                    help="bài kiểm tra có cài LUKS2 + btrfs (LUKS=1)")
     args = ap.parse_args()
 
     results = pathlib.Path(args.results)
@@ -248,6 +327,8 @@ def main() -> int:
     checks = list(CHECKS)
     if args.expect_desktop:
         checks += DESKTOP_CHECKS
+    if args.expect_luks:
+        checks += LUKS_CHECKS
 
     failures = 0
     print()

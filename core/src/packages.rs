@@ -209,6 +209,10 @@ pub const CATALOG: &[PackageEntry] = &[
         "cryptsetup",
         "LUKS disk encryption (used when / is encrypted)",
     ),
+    official(
+        "btrfs-progs",
+        "btrfs tools and the fsck helper a btrfs root needs at boot",
+    ),
     official("intel-ucode", "Intel CPU microcode"),
     official("amd-ucode", "AMD CPU microcode"),
     official("bluez", "Bluetooth stack"),

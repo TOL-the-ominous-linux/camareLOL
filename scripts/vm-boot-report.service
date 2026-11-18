@@ -1,0 +1,32 @@
+[Unit]
+# camareLOL acceptance — proof that the encrypted root actually booted.
+#
+# This unit is installed into the target system by scripts/vm-acceptance.sh when
+# LUKS=1, and it does exactly one thing: tell the host it is running.
+#
+# That single HTTP request is the whole point. Reaching this unit means the
+# initramfs prompt accepted the passphrase, the `cryptroot` mapper was created,
+# and `/` (subvol=@ on btrfs) was mounted — none of which any unit test on the
+# simulated runner can see. A screenshot of a passphrase prompt proves nothing;
+# a request sent from the running system proves everything up to here.
+#
+# The placeholders are substituted by the harness, because the port is
+# configurable there and a hard-coded 8899 would silently post nowhere.
+Description=camareLOL acceptance: report a successful encrypted boot
+After=network-online.target
+Wants=network-online.target
+# Run once per boot; a report is not a service to keep alive.
+ConditionPathExists=!/run/camarelol-boot-reported
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStartPre=/bin/sh -c 'printf "boot=ok\nroot_source=%s\nroot_fstype=%s\nroot_subvol=%s\n" "$(findmnt -no SOURCE /)" "$(findmnt -no FSTYPE /)" "$(findmnt -no FSROOT /)" > /run/camarelol-boot.txt'
+# Retry: network-online.target can be reached before DHCP hands out an
+# address, and a report lost to that race would read as "the encrypted system
+# never booted". One report, a few attempts.
+ExecStart=/bin/sh -c 'for i in $(seq 1 10); do /usr/bin/curl -sS -m 5 -X POST --data-binary @/run/camarelol-boot.txt http://__HOST__:__PORT__/step/boot && exit 0; sleep 4; done; exit 1'
+ExecStartPost=/bin/sh -c 'touch /run/camarelol-boot-reported; systemctl poweroff --no-block'
+
+[Install]
+WantedBy=multi-user.target
