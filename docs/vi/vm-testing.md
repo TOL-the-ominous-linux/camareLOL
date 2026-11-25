@@ -45,7 +45,7 @@ bạn gõ cụm từ xác nhận.
 $ cd /path/to/camareLOL
 $ bash scripts/vm-test.sh create    # VM + đĩa rỗng 20 GiB + đĩa FAT chứa binary
 $ bash scripts/vm-test.sh boot      # boot, tự gõ các lệnh cài đặt
-$ bash scripts/vm-test.sh check     # chụp lại kết quả
+$ bash scripts/vm-test.sh check     # khởi động đĩa đã cài và chụp màn hình
 $ bash scripts/vm-test.sh destroy   # xoá VM
 ```
 

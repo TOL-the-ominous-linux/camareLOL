@@ -94,21 +94,24 @@ cmd_boot() {
     shot "01-boot"
 
     say "mounting the data disk"
-    type_line "mount /dev/sdb /mnt"
+    # Never mount the data disk on /mnt: that is the install target, and the
+    # installer's preflight correctly refuses to run while /mnt is occupied.
+    type_line "mkdir -p /run/camarelol-data"
+    type_line "mount /dev/sdb /run/camarelol-data"
     sleep 2
     shot "02-mounted"
 
     say "scanning the empty disk"
-    type_line "/mnt/camarelol --scan > /tmp/survey.json"
+    type_line "/run/camarelol-data/camarelol --scan > /tmp/survey.json"
     sleep 5
 
     say "building the test profile from the survey"
-    type_line "python3 /mnt/scripts/vm-helper.py /tmp/survey.json /tmp/test-profile.toml"
+    type_line "python3 /run/camarelol-data/scripts/vm-helper.py /tmp/survey.json /tmp/test-profile.toml"
     sleep 3
     shot "03-profile"
 
     say "running the installer (scripted, execute)"
-    type_line "/mnt/camarelol --scripted /tmp/test-profile.toml --allow-destructive --execute"
+    type_line "/run/camarelol-data/camarelol --scripted /tmp/test-profile.toml --allow-destructive --execute"
     say "install running — waiting 10 minutes"
     for i in $(seq 1 20); do
         sleep 30
@@ -122,12 +125,32 @@ cmd_boot() {
 cmd_check() {
     say "checking the result"
     shot "05-final"
-    # The installer writes its report to the console; the last screenshot is
-    # the source of truth. We also check the VM is still alive.
     if VBoxManage list runningvms | grep -q "\"${VM_NAME}\""; then
-        say "VM still running (install may still be in progress)"
+        say "powering off the live environment"
+        VBoxManage controlvm "$VM_NAME" keyboardputstring "poweroff
+" >/dev/null 2>&1 || true
+        for _ in $(seq 1 30); do
+            VBoxManage list runningvms | grep -q "\"${VM_NAME}\"" || break
+            sleep 2
+        done
+        VBoxManage controlvm "$VM_NAME" poweroff >/dev/null 2>&1 || true
+    fi
+
+    # The only proof that survives the install is the installed disk booting
+    # on its own. Detach the ISO first, or the firmware would boot it again.
+    say "detaching the ISO and booting the installed disk"
+    VBoxManage storageattach "$VM_NAME" --storagectl IDE --port 0 --device 0 \
+        --type dvddrive --medium none >/dev/null 2>&1 || true
+    VBoxManage modifyvm "$VM_NAME" \
+        --boot1 disk --boot2 none --boot3 none --boot4 none
+    VBoxManage startvm "$VM_NAME" --type headless
+    say "waiting for the installed system (60s)"
+    sleep 60
+    shot "06-installed-boot"
+    if VBoxManage list runningvms | grep -q "\"${VM_NAME}\""; then
+        say "installed system is running — check 06-installed-boot.png for the login prompt"
     else
-        say "VM stopped"
+        say "VM stopped after boot — the installed system did not reach a login"
     fi
     say "screenshots in $SCREENSHOT_DIR"
 }

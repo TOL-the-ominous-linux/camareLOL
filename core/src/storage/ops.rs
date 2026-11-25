@@ -154,7 +154,12 @@ impl OpRunner {
         let risk = plan.disk_risk;
         gate.authorize(Operation::WritePartitionTable, risk)?;
 
-        let script = sfdisk_script(plan, device.size_bytes);
+        // sfdisk counts in the device's logical sectors, while the plan counts
+        // in the 512-byte units `lsblk` reports. Converting here is what makes
+        // a 4K-native disk work: without it every planned size was eight times
+        // too large for the tool.
+        let sector_size = super::layout::write_sector_size(device)?;
+        let script = sfdisk_script(plan, device.size_bytes, sector_size);
         log.log(
             "storage",
             &format!("writing partition plan to {}", device.path),
@@ -245,7 +250,8 @@ impl OpRunner {
         let risk = plan.disk_risk;
         gate.authorize(Operation::WritePartitionTable, risk)?;
 
-        let batches = sgdisk_append_args(plan)?;
+        let sector_size = super::layout::write_sector_size(device)?;
+        let batches = sgdisk_append_args(plan, sector_size)?;
         let new_count = batches.len();
         log.log(
             "storage",
@@ -254,7 +260,13 @@ impl OpRunner {
                 device.path
             ),
         );
-        let mut args: Vec<String> = vec![device.path.clone()];
+        // sgdisk also counts in logical sectors. Pin the alignment to 1 MiB in
+        // that unit: its default is 2048 sectors, which is 8 MiB on a 4K disk
+        // and would move the starts away from the planner's gap arithmetic.
+        let mut args: Vec<String> = vec![
+            format!("--set-alignment={}", align_sectors(sector_size)),
+            device.path.clone(),
+        ];
         for batch in batches {
             args.extend(batch);
         }
@@ -740,6 +752,14 @@ impl OpRunner {
     }
 }
 
+/// Bytes in 1 MiB, the alignment unit of every plan.
+const MIB: u64 = 1024 * 1024;
+
+/// 1 MiB expressed in `sector_size`-byte sectors.
+fn align_sectors(sector_size: u64) -> u64 {
+    MIB / sector_size.max(1)
+}
+
 /// Build an sfdisk script from a plan.
 ///
 /// Uses sectors, which is unambiguous across disks, and never interpolates
@@ -747,11 +767,12 @@ impl OpRunner {
 ///
 /// `disk_size_bytes` is required: the last partition has to be shrunk so that
 /// the layout — including alignment gaps and the GPT backup header — really
-/// fits on the disk.
-pub fn sfdisk_script(plan: &PartitionPlan, disk_size_bytes: u64) -> String {
-    const ALIGN_SECTORS: u64 = 2048; // 1 MiB
-    let total_sectors = disk_size_bytes / 512;
-    // GPT keeps a backup header at the end of the disk.
+/// fits on the disk. `sector_size` is the device's logical sector size, which
+/// is the unit sfdisk counts in.
+pub fn sfdisk_script(plan: &PartitionPlan, disk_size_bytes: u64, sector_size: u64) -> String {
+    let align = align_sectors(sector_size);
+    let total_sectors = disk_size_bytes / sector_size.max(1);
+    // GPT keeps a backup header at the end of the disk (33 logical sectors).
     let tail_reserve: u64 = match plan.table_type {
         super::device::PartitionTableType::Gpt => 33,
         _ => 1,
@@ -766,7 +787,7 @@ pub fn sfdisk_script(plan: &PartitionPlan, disk_size_bytes: u64) -> String {
     });
     s.push('\n');
 
-    let mut start_sector: u64 = ALIGN_SECTORS;
+    let mut start_sector: u64 = align;
     let count = plan.partitions.len();
     for (index, spec) in plan.partitions.iter().enumerate() {
         let usable = total_sectors.saturating_sub(tail_reserve);
@@ -774,10 +795,10 @@ pub fn sfdisk_script(plan: &PartitionPlan, disk_size_bytes: u64) -> String {
             // The last partition takes whatever is left.
             usable.saturating_sub(start_sector)
         } else {
-            size_in_sectors(spec).min(usable.saturating_sub(start_sector))
+            size_in_sectors(spec, sector_size).min(usable.saturating_sub(start_sector))
         };
         // Only stop when the disk is genuinely full. A 1 MiB BIOS boot
-        // partition is exactly ALIGN_SECTORS long and must still be written.
+        // partition is exactly `align` sectors long and must still be written.
         if sectors == 0 {
             break;
         }
@@ -793,7 +814,7 @@ pub fn sfdisk_script(plan: &PartitionPlan, disk_size_bytes: u64) -> String {
             }
         }
         s.push('\n');
-        start_sector += sectors + ALIGN_SECTORS;
+        start_sector += sectors + align;
     }
     s
 }
@@ -805,13 +826,14 @@ pub fn sfdisk_script(plan: &PartitionPlan, disk_size_bytes: u64) -> String {
 /// numbers, and the node the planner named is the node that shows up. No
 /// `--zap-all`, no table rewrite — just appends. `--change-name` only exists
 /// for GPT (dual-boot v1 is GPT-only, guarded in the planner).
-pub fn sgdisk_append_args(plan: &PartitionPlan) -> Result<Vec<Vec<String>>> {
+pub fn sgdisk_append_args(plan: &PartitionPlan, sector_size: u64) -> Result<Vec<Vec<String>>> {
+    let sector_size = sector_size.max(1);
     let mut out = Vec::new();
     for spec in &plan.partitions {
         if !spec.format {
             continue;
         }
-        let start = spec.start_sector.ok_or_else(|| {
+        let start_sector = spec.start_sector.ok_or_else(|| {
             CamarelolError::new(
                 ErrorCode::InvalidPlan,
                 format!(
@@ -831,7 +853,10 @@ pub fn sgdisk_append_args(plan: &PartitionPlan) -> Result<Vec<Vec<String>>> {
             )
             .with_remediation("re-plan the disk; this is a planner bug, not a user error")
         })?;
-        let sectors = size_in_sectors(spec);
+        // The planner stores starts in the 512-byte unit `lsblk` reports;
+        // sgdisk addresses the disk in its own logical sectors.
+        let start = start_sector * super::layout::SECTOR_BYTES / sector_size;
+        let sectors = size_in_sectors(spec, sector_size);
         // sgdisk end is inclusive.
         let end = start + sectors.saturating_sub(1);
         let mut args = vec![
@@ -867,14 +892,17 @@ fn gpt_type(spec: &PartitionSpec) -> &'static str {
     }
 }
 
-fn size_in_sectors(spec: &PartitionSpec) -> u64 {
+fn size_in_sectors(spec: &PartitionSpec, sector_size: u64) -> u64 {
     let bytes = match &spec.size {
         SizeSpec::Bytes(b) => *b,
         SizeSpec::PercentOfDisk(_p) => 0, // only used with an explicit size in v1
         SizeSpec::RemainingSpace => 0,
     };
-    let sectors = bytes / 512;
-    sectors.max(2048)
+    // Floor, not ceil: a partition may be a few hundred bytes smaller than
+    // the plan when its size is not a whole number of logical sectors, but it
+    // must never grow past the space the planner reserved for it.
+    let sectors = bytes / sector_size.max(1);
+    sectors.max(align_sectors(sector_size))
 }
 
 fn part_type_flag(spec: &PartitionSpec) -> Option<&'static str> {
@@ -921,6 +949,28 @@ mod tests {
     }
 
     #[test]
+    fn apply_partition_table_uses_the_device_logical_sector_size() {
+        // End-to-end: the survey says 4096-byte logical sectors, and the
+        // recorded sfdisk input must be in those units (1 MiB = 256 sectors).
+        let survey = r#"[{"kernel_name":"vdb","path":"/dev/vdb","size_bytes":21474836480,"logical_sector_size":4096,"physical_sector_size":4096,"rotational":false,"removable":false,"kind":"Virtual","partition_table":"None","partitions":[],"mount_state":"NotMounted","os_hints":[],"encrypted":null,"risk":"Low"}]"#;
+        let devices = scan_devices_from_survey(survey).unwrap();
+        let plan = plan_auto_layout(
+            &devices[0],
+            &crate::storage::layout::LayoutRequest::default(),
+        )
+        .unwrap();
+        let mut runner = OpRunner::new();
+        runner
+            .apply_partition_table(&devices[0], &plan, &SafetyGate::armed(), &Logger::default())
+            .unwrap();
+        let rendered = runner.report();
+        assert!(
+            rendered.contains("start=256,"),
+            "sfdisk input is not in 4096-byte sectors:\n{rendered}"
+        );
+    }
+
+    #[test]
     fn locked_gate_records_nothing() {
         let mut runner = OpRunner::new();
         let gate = SafetyGate::default();
@@ -939,7 +989,7 @@ mod tests {
     #[test]
     fn sfdisk_script_is_valid_and_aligned() {
         let plan = test_plan();
-        let script = sfdisk_script(&plan, 20 * 1024 * 1024 * 1024);
+        let script = sfdisk_script(&plan, 20 * 1024 * 1024 * 1024, 512);
         assert!(script.starts_with("label: gpt"));
         assert!(script.contains("type=U"));
         assert!(script.contains("start=2048"));
@@ -952,7 +1002,7 @@ mod tests {
         let plan = test_plan();
         let disk_bytes = 20 * 1024 * 1024 * 1024u64;
         let total_sectors = disk_bytes / 512;
-        let script = sfdisk_script(&plan, disk_bytes);
+        let script = sfdisk_script(&plan, disk_bytes, 512);
         for line in script.lines().filter(|l| l.contains("start=")) {
             let field = |key: &str| -> u64 {
                 line.split(',')
@@ -974,11 +1024,41 @@ mod tests {
     }
 
     #[test]
+    fn sfdisk_script_on_a_4k_native_disk_counts_in_4096_byte_sectors() {
+        // The plan is in 512-byte units, sfdisk counts the device's logical
+        // sectors. On a 4K-native disk 1 MiB is 256 sectors, not 2048, and the
+        // total is an eighth of the 512-byte count.
+        let plan = test_plan();
+        let disk_bytes = 20 * 1024 * 1024 * 1024u64;
+        let total_sectors = disk_bytes / 4096;
+        let script = sfdisk_script(&plan, disk_bytes, 4096);
+        assert!(script.contains("start=256"), "{script}");
+        for line in script.lines().filter(|l| l.contains("start=")) {
+            let field = |key: &str| -> u64 {
+                line.split(',')
+                    .map(|p| p.trim())
+                    .find_map(|p| p.strip_prefix(key).map(|v| v.parse().unwrap()))
+                    .unwrap_or(0)
+            };
+            let start = field("start=");
+            let size = field("size=");
+            assert!(
+                start + size <= total_sectors - 33,
+                "partition `{line}` exceeds the 4K disk ({total_sectors} sectors)"
+            );
+            assert!(
+                start >= 256 && start % 256 == 0,
+                "partition `{line}` is not 1 MiB aligned in 4K sectors"
+            );
+        }
+    }
+
+    #[test]
     fn sfdisk_script_handles_a_small_disk_without_overflow() {
         // 3 GiB with a 1 GiB ESP + root: root must shrink, not overflow.
         let plan = test_plan();
         let disk_bytes = 3 * 1024 * 1024 * 1024u64;
-        let script = sfdisk_script(&plan, disk_bytes);
+        let script = sfdisk_script(&plan, disk_bytes, 512);
         let partitions: Vec<&str> = script.lines().filter(|l| l.contains("start=")).collect();
         let last = partitions
             .last()
@@ -1075,6 +1155,26 @@ mod tests {
     }
 
     #[test]
+    fn sgdisk_on_a_4k_disk_converts_starts_to_logical_sectors() {
+        let (plan, _device) = dual_boot_plan();
+        let batches = sgdisk_append_args(&plan, 4096).unwrap();
+        let root = plan
+            .partitions
+            .iter()
+            .find(|p| p.format)
+            .expect("the plan creates one partition");
+        let start_512 = root.start_sector.expect("dual-boot start is explicit");
+        let expected = start_512 * 512 / 4096;
+        assert!(
+            batches[0]
+                .iter()
+                .any(|a| a.starts_with(&format!("--new=5:{expected}:"))),
+            "start must be converted to 4096-byte sectors: {:?}",
+            batches[0]
+        );
+    }
+
+    #[test]
     fn format_without_fs_spec_is_rejected() {
         let mut runner = OpRunner::new();
         let gate = SafetyGate::armed_and_execute();
@@ -1108,7 +1208,7 @@ mod tests {
             ..Default::default()
         };
         let plan = plan_auto_layout(&devices[0], &req).unwrap();
-        let script = sfdisk_script(&plan, 20 * 1024 * 1024 * 1024);
+        let script = sfdisk_script(&plan, 20 * 1024 * 1024 * 1024, 512);
         let written = script.lines().filter(|l| l.contains("start=")).count();
         assert_eq!(
             written,

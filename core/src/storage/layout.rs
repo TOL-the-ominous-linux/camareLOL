@@ -206,11 +206,50 @@ pub const MIN_ROOT_BYTES: u64 = 8 * GIB;
 pub const MIN_BIOS_BOOT_BYTES: u64 = MIB;
 pub const MIN_BOOT_BYTES: u64 = GIB;
 
+/// The sector count the planner will use for `bytes`.
+///
+/// The planner works in the unit `lsblk` reports (`START` is always in
+/// 512-byte sectors), and gives every non-zero partition at least
+/// `ALIGN_SECTORS` (1 MiB). A plan that says 1 byte while the write path
+/// creates 1 MiB is not a plan of the disk: on the dual-boot path it also
+/// breaks the gap arithmetic, because the planner would believe the partition
+/// is zero sectors long.
+fn write_sectors(bytes: u64) -> u64 {
+    if bytes == 0 {
+        0
+    } else {
+        (bytes / SECTOR_BYTES).max(ALIGN_SECTORS)
+    }
+}
+
+/// Sector size the partition tools will use for this device.
+///
+/// `lsblk` reports `START` in 512-byte sectors, which is the unit the planner
+/// uses. `sfdisk` and `sgdisk` address the disk in its logical sectors
+/// instead (LBA), so the write path converts at that boundary. Only the sizes
+/// `sfdisk` accepts are allowed; an unknown value is refused rather than
+/// guessed.
+pub fn write_sector_size(device: &StorageDevice) -> Result<u64> {
+    match device.logical_sector_size {
+        None => Ok(SECTOR_BYTES),
+        Some(size @ (512 | 1024 | 2048 | 4096)) => Ok(size as u64),
+        Some(other) => Err(CamarelolError::new(
+            ErrorCode::InvalidPlan,
+            format!(
+                "{} reports an unusable {other}-byte logical sector size",
+                device.path
+            ),
+        )
+        .with_remediation("re-scan the disk; the partition tools accept 512, 1024, 2048 or 4096")),
+    }
+}
+
 /// Build the automatic plan for a disk.
 ///
 /// `fs` must be a root-capable filesystem; the bootloader decides whether a
 /// BIOS boot partition or an ESP is required for the detected firmware.
 pub fn plan_auto_layout(device: &StorageDevice, req: &LayoutRequest) -> Result<PartitionPlan> {
+    write_sector_size(device)?;
     if !req.root_filesystem.is_root_capable() {
         return Err(CamarelolError::new(
             ErrorCode::InvalidPlan,
@@ -229,11 +268,14 @@ pub fn plan_auto_layout(device: &StorageDevice, req: &LayoutRequest) -> Result<P
     let bios_boot_size = if bios_boot { MIN_BIOS_BOOT_BYTES } else { 0 };
     let boot_size = if req.separate_boot { MIN_BOOT_BYTES } else { 0 };
     let home_size = if req.separate_home {
-        (total / 10).max(GIB)
+        write_sectors((total / 10).max(GIB)) * SECTOR_BYTES
     } else {
         0
     };
-    let swap_size = req.swap_bytes.unwrap_or(0);
+    let swap_size = req
+        .swap_bytes
+        .map(|bytes| write_sectors(bytes) * SECTOR_BYTES)
+        .unwrap_or(0);
 
     let fixed = esp_size + bios_boot_size + boot_size + home_size + swap_size;
     if fixed >= total {
@@ -340,20 +382,18 @@ pub fn plan_auto_layout(device: &StorageDevice, req: &LayoutRequest) -> Result<P
         });
         n += 1;
     }
-    if let Some(sz) = req.swap_bytes {
-        if sz > 0 {
-            partitions.push(PartitionSpec {
-                purpose: PartitionPurpose::Swap,
-                size: SizeSpec::Bytes(sz),
-                filesystem: Some(Filesystem::Swap),
-                mount_point: Some("swap".into()),
-                label: Some("camarelol-swap".into()),
-                format: true,
-                number: None,
-                start_sector: None,
-            });
-            n += 1;
-        }
+    if swap_size > 0 {
+        partitions.push(PartitionSpec {
+            purpose: PartitionPurpose::Swap,
+            size: SizeSpec::Bytes(swap_size),
+            filesystem: Some(Filesystem::Swap),
+            mount_point: Some("swap".into()),
+            label: Some("camarelol-swap".into()),
+            format: true,
+            number: None,
+            start_sector: None,
+        });
+        n += 1;
     }
     debug_assert!(n > 1);
 
@@ -388,6 +428,15 @@ pub fn plan_auto_layout(device: &StorageDevice, req: &LayoutRequest) -> Result<P
 // Sector alignment for every new partition start: 1 MiB, in 512-byte sectors.
 const ALIGN_SECTORS: u64 = 2048;
 
+// `lsblk` reports `START` in 512-byte sectors even on a 4K-native disk
+// (`lsblk --list-columns`: "partition start offset (in 512-byte sectors)").
+// The planner works in that unit throughout; `write_sector_size` and the
+// sfdisk/sgdisk builders convert to the device's logical sectors at the write
+// boundary. Using the device's logical sector size here mixed two unit
+// systems: a 4K disk's extents looked eight times smaller than they are, and
+// the gap scan could report occupied space as free.
+pub const SECTOR_BYTES: u64 = 512;
+
 /// What free space on a device looks like to the dual-boot planner.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GapScan {
@@ -407,17 +456,13 @@ pub enum GapScan {
 /// gap they cannot reason about. The storage screen shows it next to the
 /// partition list.
 pub fn largest_aligned_gap(device: &StorageDevice) -> GapScan {
-    let sector_size = device
-        .logical_sector_size
-        .filter(|s| *s >= 512 && *s % 512 == 0)
-        .unwrap_or(512) as u64;
-    let total_sectors = device.size_bytes / sector_size;
+    let total_sectors = device.size_bytes / SECTOR_BYTES;
 
     let mut extents: Vec<(u64, u64)> = device // (start, end_exclusive) sectors
         .partitions
         .iter()
         .filter(|p| p.start_sector > 0 && p.size_bytes > 0)
-        .map(|p| (p.start_sector, p.start_sector + p.size_bytes / sector_size))
+        .map(|p| (p.start_sector, p.start_sector + p.size_bytes / SECTOR_BYTES))
         .collect();
     extents.sort_unstable();
     extents.dedup();
@@ -456,6 +501,7 @@ pub fn largest_aligned_gap(device: &StorageDevice) -> GapScan {
 }
 
 pub fn plan_dual_boot(device: &StorageDevice, req: &LayoutRequest) -> Result<PartitionPlan> {
+    write_sector_size(device)?;
     let refuse = |msg: String, remediation: &str| -> CamarelolError {
         CamarelolError::new(ErrorCode::InvalidPlan, msg).with_remediation(remediation)
     };
@@ -555,11 +601,6 @@ pub fn plan_dual_boot(device: &StorageDevice, req: &LayoutRequest) -> Result<Par
     };
 
     // --- free space accounting -------------------------------------------------
-    let sector_size = device
-        .logical_sector_size
-        .filter(|s| *s >= 512 && *s % 512 == 0)
-        .unwrap_or(512) as u64;
-
     let (gap_start, gap_end) = match largest_aligned_gap(device) {
         GapScan::Found(start, end) => (start, end),
         GapScan::NoStarts => {
@@ -583,18 +624,21 @@ pub fn plan_dual_boot(device: &StorageDevice, req: &LayoutRequest) -> Result<Par
     // Needed size: everything except / goes before it in the same gap.
     let boot_size = if req.separate_boot { MIN_BOOT_BYTES } else { 0 };
     let home_size = if req.separate_home {
-        (device.size_bytes / 10).max(GIB)
+        write_sectors((device.size_bytes / 10).max(GIB)) * SECTOR_BYTES
     } else {
         0
     };
-    let swap_size = req.swap_bytes.unwrap_or(0);
+    let swap_size = req
+        .swap_bytes
+        .map(|bytes| write_sectors(bytes) * SECTOR_BYTES)
+        .unwrap_or(0);
 
     // ---- geometry: every new partition gets an explicit start sector ------
     //  Layout inside the gap (sectors):  [boot?][root][home?][swap?]
     //  Starts are 1 MiB aligned; / fills what the fixed pieces leave.
     let align_up = |x: u64| x.div_ceil(ALIGN_SECTORS) * ALIGN_SECTORS;
     let align_down = |x: u64| x / ALIGN_SECTORS * ALIGN_SECTORS;
-    let to_sectors = |bytes: u64| bytes / sector_size;
+    let to_sectors = write_sectors;
 
     let boot_sectors = to_sectors(boot_size);
     let home_sectors = to_sectors(home_size);
@@ -616,12 +660,12 @@ pub fn plan_dual_boot(device: &StorageDevice, req: &LayoutRequest) -> Result<Par
             format!(
                 "the free space around sector {gap_start} on {} holds about {}, the plan needs more",
                 device.path,
-                human_size(gap_sectors * sector_size)
+                human_size(gap_sectors * SECTOR_BYTES)
             ),
             "free more space (at least 8 GiB for /, plus /home and swap as configured) and try again",
         ));
     }
-    let root_size_bytes = root_sectors * sector_size;
+    let root_size_bytes = root_sectors * SECTOR_BYTES;
 
     // ---- assemble the plan -----------------------------------------------------
     let mut partitions: Vec<PartitionSpec> = Vec::new();
@@ -869,7 +913,7 @@ pub fn validate_plan(plan: &PartitionPlan, req: &LayoutRequest) -> Result<()> {
             .any(|p| p.purpose == PartitionPurpose::Boot)
     {
         return Err(CamarelolError::new(
-            ErrorCode::InvalidPlan,
+            ErrorCode::InvalidBootConfig,
             "GRUB with XFS on / requires a separate /boot partition",
         )
         .with_remediation("enable a separate /boot or use ext4/btrfs"));
@@ -1163,6 +1207,83 @@ mod tests {
     }
 
     #[test]
+    fn gap_scan_uses_512_byte_start_sectors_on_a_4k_disk() {
+        // `lsblk` reports START in 512-byte sectors even when LOG-SEC is 4096.
+        // Mixing the two unit systems made a 4K disk's partitions look eight
+        // times smaller than they are, so the gap scan could hand the planner
+        // space that is actually occupied.
+        let mut d = windows_disk();
+        d.logical_sector_size = Some(4096);
+        d.physical_sector_size = Some(4096);
+        assert_eq!(
+            largest_aligned_gap(&d),
+            GapScan::Found(84_193_280, 165_675_008)
+        );
+    }
+
+    #[test]
+    fn a_4k_native_disk_is_planned_in_512_byte_units() {
+        // `lsblk` reports START in 512-byte units even on 4K-native media, and
+        // the write path converts to the device's logical sectors at the
+        // sfdisk/sgdisk boundary. Planning therefore needs no special case.
+        let mut d = empty_disk();
+        d.logical_sector_size = Some(4096);
+        d.physical_sector_size = Some(4096);
+        let plan = plan_auto_layout(&d, &req_uefi()).expect("4K-native disks are supported");
+        assert_eq!(plan.table_type, PartitionTableType::Gpt);
+
+        let mut d = windows_disk();
+        d.logical_sector_size = Some(4096);
+        d.physical_sector_size = Some(4096);
+        let plan = plan_dual_boot(&d, &req_uefi()).expect("dual-boot geometry is unit-independent");
+        for spec in plan.partitions.iter().filter(|p| p.start_sector.is_some()) {
+            let start = spec.start_sector.unwrap();
+            assert_eq!(
+                start % ALIGN_SECTORS,
+                0,
+                "{} is not 1 MiB aligned in 512-byte units",
+                spec.purpose.as_str()
+            );
+        }
+    }
+
+    #[test]
+    fn an_unusable_logical_sector_size_is_refused() {
+        let mut d = empty_disk();
+        d.logical_sector_size = Some(768);
+        let err = plan_auto_layout(&d, &req_uefi()).unwrap_err();
+        assert_eq!(err.code, ErrorCode::InvalidPlan);
+        assert!(err.message.contains("unusable"), "{}", err.message);
+    }
+
+    #[test]
+    fn a_sub_sector_swap_is_rounded_to_what_the_writer_creates() {
+        // `size_in_sectors` gives every non-zero partition at least 2048
+        // sectors (1 MiB). A plan that said 1 byte made the dual-boot gap
+        // arithmetic believe the swap partition was zero sectors long, while
+        // sgdisk would still create a 1 MiB partition there.
+        let req = LayoutRequest {
+            swap_bytes: Some(1),
+            ..req_uefi()
+        };
+        let plan = plan_auto_layout(&empty_disk(), &req).unwrap();
+        let swap = plan
+            .partitions
+            .iter()
+            .find(|p| p.purpose == PartitionPurpose::Swap)
+            .expect("swap present");
+        assert_eq!(swap.size, SizeSpec::Bytes(ALIGN_SECTORS * SECTOR_BYTES));
+
+        let plan = plan_dual_boot(&windows_disk(), &req).unwrap();
+        let swap = plan
+            .partitions
+            .iter()
+            .find(|p| p.purpose == PartitionPurpose::Swap)
+            .expect("swap present");
+        assert_eq!(swap.size.sectors(SECTOR_BYTES), ALIGN_SECTORS);
+    }
+
+    #[test]
     fn gap_scan_honests_an_old_survey_without_start_sectors() {
         // An old lsblk (no START column) reported zero for every start; the
         // scan must say so instead of inventing a gap out of nothing.
@@ -1187,7 +1308,7 @@ mod tests {
     #[test]
     fn sgdisk_append_only_touches_new_partitions() {
         let plan = plan_dual_boot(&windows_disk(), &req_uefi()).unwrap();
-        let batches = super::super::ops::sgdisk_append_args(&plan).unwrap();
+        let batches = super::super::ops::sgdisk_append_args(&plan, 512).unwrap();
         assert_eq!(batches.len(), 1, "one root partition to create");
         let block: &Vec<String> = &batches[0];
         assert!(
@@ -1284,7 +1405,9 @@ mod tests {
             ..Default::default()
         };
         let plan = plan_auto_layout(&empty_disk(), &req).unwrap();
-        assert!(validate_plan(&plan, &req).is_err());
+        let err = validate_plan(&plan, &req).unwrap_err();
+        // It is the boot configuration that cannot work, not the layout.
+        assert_eq!(err.code, ErrorCode::InvalidBootConfig);
 
         let req2 = LayoutRequest {
             separate_boot: true,

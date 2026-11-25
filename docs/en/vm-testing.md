@@ -44,7 +44,7 @@ Screenshots land in `/tmp/opencode/vm-shots/`.
 $ cd /path/to/camareLOL
 $ bash scripts/vm-test.sh create    # VM + empty 20 GiB disk + FAT disk holding the binary
 $ bash scripts/vm-test.sh boot      # boot, type the install commands automatically
-$ bash scripts/vm-test.sh check     # screenshot the result
+$ bash scripts/vm-test.sh check     # boot the installed disk and screenshot it
 $ bash scripts/vm-test.sh destroy   # delete the VM
 ```
 

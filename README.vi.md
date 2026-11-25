@@ -212,8 +212,10 @@ $ sudo camarelol --scripted <profile.toml> --allow-destructive --execute
   từ chối thay vì làm nửa vời: `/home` tách riêng, systemd-boot, và dual-boot
   cạnh hệ điều hành khác.
 - Gợi ý gói driver GPU theo model `lspci` đọc được — `nvidia-open` trên Turing
-  trở lên, `nvidia` trên Maxwell/Pascal/Volta, và driver Vulkan cùng giải mã
-  video cho AMD và Intel.
+  trở lên, và driver Vulkan cùng giải mã video cho AMD và Intel. NVIDIA 590 đã
+  bỏ Pascal, Maxwell và Volta khỏi kho chính thức: những card này khởi động
+  bằng `nouveau` có sẵn trong nhân, và camareLOL không cài driver proprietary
+  thay thế.
 - Phát hiện Windows và **không chạm vào nó**. Dual-boot kiểu giữ mọi phân vùng
   đã chạy thật: phân vùng cũ vẫn `format=false`, ESP được dùng lại, phân vùng
   mới được thêm vào khe trống; đã xác nhận cài và boot lần đầu trên máy thật
@@ -272,6 +274,8 @@ cd python && python3 -m unittest discover -s tests -v
 cd java && ./build.sh
 python scripts/check_lang_table.py              # bảng tài liệu trỏ đúng ngôn ngữ
 python scripts/check_pkgbuild.py                # PKGBUILD khớp thẻ mới nhất
+python scripts/check_version.py                 # Cargo, npm và docs/releases khớp nhau
+python scripts/check_packages.py --offline      # catalog Rust, Python và Java khớp nhau
 cargo clippy --workspace --all-targets -- -D warnings
 ```
 

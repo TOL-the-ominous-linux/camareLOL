@@ -480,30 +480,38 @@ fn cmd_self_test(mock: Option<PathBuf>) -> Result<SelfTestOutcome, CamarelolErro
 
     // E. full simulated install
     if let Some(d) = empty {
-        let plan = core.plan_for(&d.path)?;
-        // run_install() resolves the firmware from the profile; pin it to the
-        // mode the plan was actually built for, otherwise the preflight would
-        // reject a UEFI plan on a BIOS host (and vice versa).
-        let cfg = InstallationConfig {
-            firmware: match core.firmware() {
-                Firmware::Uefi => "uefi",
-                Firmware::Bios => "bios",
-                Firmware::Unknown => "auto",
-            }
-            .to_string(),
-            ..Default::default()
-        };
-        let mut runner = SimulatedRunner::new();
-        let mut sink = NullSink;
-        let log = Logger::default();
-        let gate = SafetyGate::armed_and_execute();
-        let report = run_install(&cfg, d, &plan, &gate, &log, &mut runner, &mut sink);
-        println!(
-            "6. simulated install: {} ({} phases)",
-            report.outcome.as_str(),
-            report.phases.len()
-        );
-        ok = ok && matches!(report.outcome, Outcome::Completed);
+        if !host.supported {
+            // The simulated install still runs the preflight, which refuses an
+            // unsupported host. That is the host gate again, not broken
+            // machinery, so it must not turn the SKIP into a FAIL.
+            println!("6. simulated install: skipped (host unsupported)");
+        } else {
+            let plan = core.plan_for(&d.path)?;
+            // run_install() resolves the firmware from the profile; pin it to
+            // the mode the plan was actually built for, otherwise the
+            // preflight would reject a UEFI plan on a BIOS host (and vice
+            // versa).
+            let cfg = InstallationConfig {
+                firmware: match core.firmware() {
+                    Firmware::Uefi => "uefi",
+                    Firmware::Bios => "bios",
+                    Firmware::Unknown => "auto",
+                }
+                .to_string(),
+                ..Default::default()
+            };
+            let mut runner = SimulatedRunner::new();
+            let mut sink = NullSink;
+            let log = Logger::default();
+            let gate = SafetyGate::armed_and_execute();
+            let report = run_install(&cfg, d, &plan, &gate, &log, &mut runner, &mut sink);
+            println!(
+                "6. simulated install: {} ({} phases)",
+                report.outcome.as_str(),
+                report.phases.len()
+            );
+            ok = ok && matches!(report.outcome, Outcome::Completed);
+        }
     } else {
         // Most installed machines have no empty disk, and that is not a
         // failure: the simulated install needs a target it may format. Using

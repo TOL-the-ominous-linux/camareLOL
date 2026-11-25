@@ -14,9 +14,27 @@ $ cd java && ./build.sh                         # compiles, runs CatalogTest, bu
 $ python site/test_markdown.py                  # site renderer
 $ python site/test_render_site.py               # site build, offline
 $ python scripts/check_pkgbuild.py              # PKGBUILD matches the newest tag
+$ python scripts/check_version.py               # Cargo, npm and docs/releases agree
+$ python scripts/check_packages.py --offline    # Rust, Python and Java catalogs agree
 ```
 
 Fast, no disks, no network.
+
+A unit test cannot see a package being deleted upstream. `check_packages.py`
+asks the Arch and AUR APIs whether every name the catalogs can offer still
+exists (package groups and `provides` count, because both are installable):
+
+```console
+$ python scripts/check_packages.py              # every name exists in Arch/AUR
+```
+
+`p7zip`, `greetd-tuigreeter` and `fcitx5-bamboo` each passed the whole suite
+and failed inside the VM at `pacstrap`; `nvidia` did the same when driver 590
+replaced it with `nvidia-open`. CI runs the offline check on every change and
+the online one on every run, treating an unreachable API as "not verified"
+rather than a missing package. Group names are checked on their own
+`/groups/x86_64/<name>/` page instead of by scraping the group index, so a
+change to that index cannot turn a valid group into a false "missing".
 
 ## 2. Acceptance scenarios
 
@@ -49,18 +67,21 @@ the installer in scripted mode.
 ```console
 $ ./scripts/vm-test.sh create      # VM + 20 GiB empty disk + Arch ISO + data disk
 $ ./scripts/vm-test.sh boot        # headless boot, drives the VM with keystrokes
-$ ./scripts/vm-test.sh check       # screenshot and verify
+$ ./scripts/vm-test.sh check       # boot the installed disk and screenshot it
 $ ./scripts/vm-test.sh destroy
 ```
 
 Inside the VM:
 
 ```console
-# mount /dev/sdb /mnt
-# /mnt/camarelol --scan > /tmp/survey.json
-# python3 /mnt/scripts/vm-helper.py /tmp/survey.json /tmp/test-profile.toml
-# /mnt/camarelol --scripted /tmp/test-profile.toml --allow-destructive --execute
+# mkdir -p /run/camarelol-data && mount /dev/sdb /run/camarelol-data
+# /run/camarelol-data/camarelol --scan > /tmp/survey.json
+# python3 /run/camarelol-data/scripts/vm-helper.py /tmp/survey.json /tmp/test-profile.toml
+# /run/camarelol-data/camarelol --scripted /tmp/test-profile.toml --allow-destructive --execute
 ```
+
+The data disk is mounted under `/run`, never on `/mnt`: `/mnt` is the install
+target, and the preflight correctly refuses to run while it is occupied.
 
 ### What success looks like
 
@@ -116,6 +137,9 @@ All of these passed every unit test.
    inside the target.
 6. `zram-config` is not a real unit; one missing unit aborted the whole
    services phase.
+7. The VM harness mounted its data disk on `/mnt`, so the installer's
+   preflight refused to run — correctly, because `/mnt` is the install target.
+   The harness now mounts it under `/run`.
 
 ## 4. Packaging
 

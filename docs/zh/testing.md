@@ -16,9 +16,26 @@ $ cd java && ./build.sh                         # 编译、运行 CatalogTest �
 $ python site/test_markdown.py                  # 站点渲染器
 $ python site/test_render_site.py               # 站点构建，离线运行
 $ python scripts/check_pkgbuild.py              # PKGBUILD 与最新标签一致
+$ python scripts/check_version.py               # Cargo、npm 与 docs/releases 一致
+$ python scripts/check_packages.py --offline    # Rust、Python 与 Java 的包目录一致
 ```
 
 快速，不碰磁盘，不联网。
+
+单元测试看不到上游删除某个软件包。`check_packages.py` 会询问 Arch 与 AUR 的
+API，确认目录可能给出的每个名称仍然存在（包组和 `provides` 都算，因为两者都
+能安装）：
+
+```console
+$ python scripts/check_packages.py              # 每个名称都存在于 Arch/AUR
+```
+
+`p7zip`、`greetd-tuigreeter` 和 `fcitx5-bamboo` 都通过了整套测试，却在 VM 的
+`pacstrap` 阶段失败；驱动 590 用 `nvidia-open` 取代 `nvidia` 时也一样。CI 在
+每次改动时运行离线检查，在每次运行时运行在线检查，并把无法访问 API 视为
+“未验证”而不是“缺少软件包”。包组名称会直接查它自己的
+`/groups/x86_64/<名称>/` 页面，而不是抓取包组索引，因此索引改版不会把有效的
+包组误报为缺失。
 
 ## 2. 验收场景
 
@@ -50,18 +67,21 @@ PASS  partition-no-fs: self-test: OK
 ```console
 $ ./scripts/vm-test.sh create      # VM + 20 GiB empty disk + Arch ISO + data disk
 $ ./scripts/vm-test.sh boot        # headless boot, drives the VM with keystrokes
-$ ./scripts/vm-test.sh check       # screenshot and verify
+$ ./scripts/vm-test.sh check       # boot the installed disk and screenshot it
 $ ./scripts/vm-test.sh destroy
 ```
 
 在虚拟机内部：
 
 ```console
-# mount /dev/sdb /mnt
-# /mnt/camarelol --scan > /tmp/survey.json
-# python3 /mnt/scripts/vm-helper.py /tmp/survey.json /tmp/test-profile.toml
-# /mnt/camarelol --scripted /tmp/test-profile.toml --allow-destructive --execute
+# mkdir -p /run/camarelol-data && mount /dev/sdb /run/camarelol-data
+# /run/camarelol-data/camarelol --scan > /tmp/survey.json
+# python3 /run/camarelol-data/scripts/vm-helper.py /tmp/survey.json /tmp/test-profile.toml
+# /run/camarelol-data/camarelol --scripted /tmp/test-profile.toml --allow-destructive --execute
 ```
+
+数据盘挂在 `/run` 下，绝不挂在 `/mnt`：`/mnt` 是安装目标，被占用时预检会
+（正确地）拒绝运行。
 
 ### 成功是什么样
 
@@ -117,6 +137,8 @@ vmlinuz-linux  grub/  grub.cfg  i386-pc/
    系统内运行。
 6. `zram-config` 不是一个真实的单元；一个缺失的单元会让整个
    服务阶段中止。
+7. VM 测试脚本把数据盘挂在 `/mnt`，安装器的预检因此拒绝运行——这是正确的，
+   因为 `/mnt` 是安装目标。脚本现在改为挂在 `/run` 下。
 
 ## 4. 打包
 

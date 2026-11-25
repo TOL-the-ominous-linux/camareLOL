@@ -60,7 +60,7 @@ public final class PackageCatalog {
                     PackageEntry.of("reflector", "mirror ranking", Source.OFFICIAL)),
             PackageGroup.of("aur", "AUR packages (user-submitted, not vetted)",
                     PackageEntry.of("ibus-bamboo", "Vietnamese input method for IBus", Source.AUR),
-                    PackageEntry.of("fcitx5-bamboo", "Vietnamese input method for Fcitx5", Source.AUR),
+                    PackageEntry.of("fcitx5-bamboo-git", "Vietnamese input method for Fcitx5 (git build)", Source.AUR),
                     PackageEntry.of("yay", "AUR helper", Source.AUR))
     };
 

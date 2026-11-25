@@ -180,28 +180,40 @@ def run_binary(binary: Path, args: list[str], survey_json: str | None = None, ti
         return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
 
 
-def scenario_checks(binary: Path | None = None) -> list[tuple[str, bool, str]]:
-    """Run the acceptance scenarios and report (scenario, passed, detail)."""
+def scenario_checks(binary: Path | None = None) -> list[tuple[str, str, str]]:
+    """Run the acceptance scenarios and report (scenario, status, detail).
+
+    Status is ``PASS``, ``SKIP`` or ``FAIL``. The binary documents three exit
+    codes: 0 = pass, 2 = the host is not one camareLOL supports (the machinery
+    checks still ran), 1 = a real failure. Treating exit 2 as FAIL would make
+    the suite red on every non-Arch development machine for a condition the
+    tool deliberately refuses.
+    """
     binary = binary or find_binary()
-    results: list[tuple[str, bool, str]] = []
+    results: list[tuple[str, str, str]] = []
 
     for scenario in ALL_SCENARIOS:
         if binary is None:
-            results.append((scenario.name, False, "camarelol binary not found"))
+            results.append((scenario.name, "FAIL", "camarelol binary not found"))
             continue
         proc = run_binary(binary, ["--self-test"], survey_json=scenario.to_json())
-        passed = proc.returncode == 0
+        if proc.returncode == 0:
+            status = "PASS"
+        elif proc.returncode == 2:
+            status = "SKIP"
+        else:
+            status = "FAIL"
         detail = (proc.stdout or proc.stderr).strip().splitlines()[-1] if (proc.stdout or proc.stderr) else ""
-        results.append((scenario.name, passed, detail))
+        results.append((scenario.name, status, detail))
     return results
 
 
 def main(argv: list[str] | None = None) -> int:
-    all_ok = True
-    for name, passed, detail in scenario_checks():
-        print(f"{'PASS' if passed else 'FAIL'}  {name}: {detail}")
-        all_ok = all_ok and passed
-    return 0 if all_ok else 1
+    failed = False
+    for name, status, detail in scenario_checks():
+        print(f"{status}  {name}: {detail}")
+        failed = failed or status == "FAIL"
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":

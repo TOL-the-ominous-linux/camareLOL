@@ -113,6 +113,29 @@ jobs:
         run: |
           python scripts/check_pkgbuild.py
 
+      - name: The version numbers agree
+        # Cargo, npm and docs/releases move together; check_pkgbuild covers the
+        # PKGBUILD against the newest tag, this covers the rest.
+        run: python scripts/check_version.py
+
+      - name: The three package catalogs agree
+        # Rust is canonical; Python and Java are copies. A name added to one
+        # and not the others installs on one path and fails on another.
+        run: python scripts/check_packages.py --offline
+
+      - name: Every package name exists in Arch or the AUR
+        # A unit test cannot see a package being deleted upstream. p7zip,
+        # greetd-tuigreeter, fcitx5-bamboo and nvidia all passed the suite and
+        # failed inside the VM at pacstrap. Ask the real APIs.
+        run: |
+          status=0
+          python scripts/check_packages.py || status=$?
+          if [ "$status" -eq 2 ]; then
+            echo "::warning::the Arch/AUR APIs were unreachable; package names were not verified"
+            exit 0
+          fi
+          exit "$status"
+
   java:
     name: Java catalog
     runs-on: ubuntu-latest

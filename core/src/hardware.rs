@@ -250,11 +250,14 @@ pub fn detect_gpus() -> Vec<GpuInfo> {
 ///
 /// The model decides the NVIDIA variant, because there is no single package:
 /// `nvidia-open` is the open kernel module set and only supports Turing (RTX 20
-/// / GTX 16) and newer, while `nvidia` is the proprietary driver that still
-/// covers Maxwell, Pascal and Volta. Getting this wrong is not cosmetic — a
-/// driver that does not build for the card leaves a machine that boots to a
-/// black screen, so an unreadable model falls back to `nvidia`, which covers
-/// every card older than the open modules do.
+/// / GTX 16) and newer. The proprietary `nvidia` package no longer exists —
+/// driver 590 replaced it with the open modules — and Pascal, Maxwell and Volta
+/// have no official driver any more. They keep the in-tree `nouveau` driver,
+/// which boots, and camareLOL does not pull the AUR's legacy branch for them.
+///
+/// An unreadable model is treated as legacy too: guessing "Turing or newer"
+/// would install a module that does not build for the card, and a machine that
+/// boots to a black screen is worse than one that boots with nouveau.
 ///
 /// Intel and AMD need only userspace drivers (the kernel side is in-tree), and
 /// `mesa` — the OpenGL driver everything shares — stays with the caller: it is
@@ -267,7 +270,8 @@ pub fn gpu_driver_packages(gpus: &[GpuInfo]) -> Vec<String> {
             GpuVendor::Nvidia => {
                 // Turing and newer: `RTX` in the name, a GTX 16xx, or a
                 // datacenter part (T4, A100, H100). Everything else — GTX
-                // 10/9/7, Quadro P/M/K — keeps the proprietary driver.
+                // 10/9/7, Quadro P/M/K — is legacy and gets no official
+                // driver.
                 let m = gpu.model.to_ascii_uppercase();
                 let turing_or_newer = m.contains("RTX")
                     || m.contains("GTX 16")
@@ -278,11 +282,9 @@ pub fn gpu_driver_packages(gpus: &[GpuInfo]) -> Vec<String> {
                     || m.starts_with("H100")
                     || m.starts_with("L4")
                     || m.starts_with("L40");
-                out.push(if turing_or_newer {
-                    "nvidia-open".to_string()
-                } else {
-                    "nvidia".to_string()
-                });
+                if turing_or_newer {
+                    out.push("nvidia-open".to_string());
+                }
             }
             GpuVendor::Amd => {
                 out.push("vulkan-radeon".into());
@@ -391,18 +393,16 @@ mod tests {
                 "{line}"
             );
         }
-        // Maxwell / Pascal / Volta keep the proprietary driver.
+        // Maxwell / Pascal / Volta have no official driver any more: the 590
+        // branch is AUR-only, and this list goes to pacstrap. Returning
+        // nothing leaves them on the in-tree nouveau driver.
         for line in [
             r#"01:00.0 "VGA compatible controller [0300]" "NVIDIA Corporation [10de]" "GM204 [GeForce GTX 970] [10de:13c2]" ""#,
             r#"01:00.0 "VGA compatible controller [0300]" "NVIDIA Corporation [10de]" "GP106 [GeForce GTX 1060 6GB] [10de:1c03]" ""#,
             // An unreadable model must not be guessed as Turing.
             r#"01:00.0 "VGA compatible controller [0300]" "NVIDIA Corporation [10de]" "[10de:0000]" ""#,
         ] {
-            assert_eq!(
-                gpu_driver_packages(&[from_line(line)]),
-                vec!["nvidia".to_string()],
-                "{line}"
-            );
+            assert!(gpu_driver_packages(&[from_line(line)]).is_empty(), "{line}");
         }
     }
 

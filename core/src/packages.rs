@@ -193,10 +193,10 @@ pub const CATALOG: &[PackageEntry] = &[
     // --- firmware and drivers ---
     official("mesa", "OpenGL/Vulkan drivers for Intel, AMD and VMware"),
     // Chosen by hardware::gpu_driver_packages from the models lspci reports.
-    official(
-        "nvidia",
-        "proprietary NVIDIA driver (Maxwell, Pascal, Volta)",
-    ),
+    // `nvidia` is not here because it is not there any more: driver 590 moved
+    // the main packages to the open kernel modules. Pascal and older cards
+    // keep the in-tree `nouveau` driver; camareLOL does not offer a
+    // proprietary fallback for them.
     official(
         "nvidia-open",
         "open NVIDIA kernel modules (Turing and newer)",
@@ -264,7 +264,13 @@ pub const CATALOG: &[PackageEntry] = &[
     aur("pikaur", "AUR helper"),
     aur("trizen", "AUR helper"),
     aur("ibus-bamboo", "Vietnamese input method for IBus"),
-    aur("fcitx5-bamboo", "Vietnamese input method for Fcitx5"),
+    // The AUR carries only the VCS package. `fcitx5-bamboo` itself does not
+    // exist, and a name the AUR cannot resolve fails at the build step, long
+    // after the plan looked fine.
+    aur(
+        "fcitx5-bamboo-git",
+        "Vietnamese input method for Fcitx5 (git build)",
+    ),
 ];
 
 /// Look a package up by name. Returns `None` for a name camareLOL does not know.
@@ -540,6 +546,31 @@ zram = true
         assert!(exists("greetd-tuigreet"));
         assert!(!exists("p7zip"), "p7zip left the Arch repositories");
         assert!(exists("7zip"), "7zip is what took its place");
+    }
+
+    /// NVIDIA 590 replaced `nvidia` with `nvidia-open` and dropped Pascal and
+    /// older. The old name is gone from the official repositories, so offering
+    /// it would fail at pacstrap. camareLOL deliberately does not fall back to
+    /// the AUR's legacy branch either: those cards keep `nouveau`.
+    #[test]
+    fn the_removed_nvidia_package_is_not_offered() {
+        assert!(!exists("nvidia"), "driver 590 removed the nvidia package");
+        assert!(
+            !exists("nvidia-580xx-dkms"),
+            "the legacy branch is AUR-only and not part of the wizard"
+        );
+    }
+
+    /// The AUR is not a stable interface either: the non-VCS `fcitx5-bamboo`
+    /// disappeared and only `fcitx5-bamboo-git` remains. `pacman` cannot
+    /// resolve a name that is not there, so the catalog must not offer it.
+    #[test]
+    fn the_fcitx5_package_is_the_one_the_aur_actually_has() {
+        assert!(
+            !exists("fcitx5-bamboo"),
+            "the AUR only carries fcitx5-bamboo-git"
+        );
+        assert!(exists("fcitx5-bamboo-git"));
     }
 
     #[test]

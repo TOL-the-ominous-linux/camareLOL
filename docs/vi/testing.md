@@ -15,9 +15,27 @@ $ cd java && ./build.sh                         # biên dịch, chạy CatalogTe
 $ python site/test_markdown.py                  # bộ dựng trang
 $ python site/test_render_site.py               # bản dựng trang, không mạng
 $ python scripts/check_pkgbuild.py              # PKGBUILD khớp thẻ mới nhất
+$ python scripts/check_version.py               # Cargo, npm và docs/releases khớp nhau
+$ python scripts/check_packages.py --offline    # catalog Rust, Python và Java khớp nhau
 ```
 
 Nhanh, không ổ đĩa, không mạng.
+
+Kiểm thử đơn vị không thể thấy một gói bị xoá khỏi kho. `check_packages.py`
+hỏi API của Arch và AUR xem mọi tên mà catalog có thể đưa ra còn tồn tại
+không (nhóm gói và `provides` cũng tính, vì cả hai đều cài được):
+
+```console
+$ python scripts/check_packages.py              # mọi tên tồn tại trong Arch/AUR
+```
+
+`p7zip`, `greetd-tuigreeter` và `fcitx5-bamboo` đều qua toàn bộ bộ kiểm thử
+và hỏng trong VM tại `pacstrap`; `nvidia` cũng vậy khi driver 590 thay nó
+bằng `nvidia-open`. CI chạy bản offline ở mọi thay đổi và bản online ở mọi
+lượt chạy, coi API không tới được là "chưa kiểm chứng" chứ không phải thiếu
+gói. Tên nhóm được kiểm trên trang riêng `/groups/x86_64/<tên>/` thay vì đọc
+trang mục lục nhóm, nên đổi mục lục không thể biến một nhóm hợp lệ thành
+"thiếu".
 
 ## 2. Kịch bản nghiệm thu
 
@@ -50,18 +68,21 @@ trình cài đặt ở chế độ có kịch bản.
 ```console
 $ ./scripts/vm-test.sh create      # VM + 20 GiB empty disk + Arch ISO + data disk
 $ ./scripts/vm-test.sh boot        # headless boot, drives the VM with keystrokes
-$ ./scripts/vm-test.sh check       # screenshot and verify
+$ ./scripts/vm-test.sh check       # khởi động đĩa đã cài và chụp màn hình
 $ ./scripts/vm-test.sh destroy
 ```
 
 Bên trong VM:
 
 ```console
-# mount /dev/sdb /mnt
-# /mnt/camarelol --scan > /tmp/survey.json
-# python3 /mnt/scripts/vm-helper.py /tmp/survey.json /tmp/test-profile.toml
-# /mnt/camarelol --scripted /tmp/test-profile.toml --allow-destructive --execute
+# mkdir -p /run/camarelol-data && mount /dev/sdb /run/camarelol-data
+# /run/camarelol-data/camarelol --scan > /tmp/survey.json
+# python3 /run/camarelol-data/scripts/vm-helper.py /tmp/survey.json /tmp/test-profile.toml
+# /run/camarelol-data/camarelol --scripted /tmp/test-profile.toml --allow-destructive --execute
 ```
+
+Đĩa dữ liệu được gắn dưới `/run`, không bao giờ trên `/mnt`: `/mnt` là đích cài
+đặt, và bước preflight từ chối chạy đúng khi nó đang bị chiếm.
 
 ### Thành công trông như thế nào
 
@@ -117,6 +138,8 @@ Tất cả những lỗi dưới đây đều vượt qua mọi kiểm thử đ�
    trong hệ thống đích.
 6. `zram-config` không phải là một unit thật; chỉ một unit thiếu đã huỷ cả giai
    đoạn service.
+7. Harness VM gắn đĩa dữ liệu lên `/mnt`, nên preflight của trình cài đặt từ
+   chối chạy — đúng, vì `/mnt` là đích cài. Harness nay gắn nó dưới `/run`.
 
 ## 4. Đóng gói
 

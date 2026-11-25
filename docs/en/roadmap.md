@@ -70,10 +70,11 @@ filesystem kind, and root-before-ESP mount order.
 - [~] Driver detection and firmware suggestions — **partial**: CPU microcode
       hints and a base set (`mesa`, `linux-firmware`) are chosen from the
       host, and a driver suggestion is now keyed off the parsed GPU model —
-      `nvidia-open` on Turing and newer, `nvidia` on Maxwell/Pascal/Volta (an
-      unreadable model never counts as Turing), plus `vulkan-radeon` +
-      `libva-mesa-driver` on AMD and `vulkan-intel` +
-      `intel-media-driver` on Intel; nothing for a virtual GPU. Unit-tested
+      `nvidia-open` on Turing and newer (an unreadable model never counts as
+      Turing), plus `vulkan-radeon` + `libva-mesa-driver` on AMD and
+      `vulkan-intel` + `intel-media-driver` on Intel; nothing for a virtual
+      GPU. NVIDIA 590 removed the proprietary main packages, so Maxwell,
+      Pascal and Volta get no driver and boot on `nouveau`. Unit-tested
       against real `lspci` lines, with a catalog test that every name it can
       produce is searchable. Not yet observed on a VM with a real GPU, which
       is what keeps this partial rather than done.

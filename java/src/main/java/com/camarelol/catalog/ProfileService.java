@@ -64,8 +64,8 @@ public final class ProfileService {
             warnings.add("a console-only install should not enable a display manager");
         }
         if (contains(aur.toArray(new String[0]), "ibus-bamboo")
-                && contains(aur.toArray(new String[0]), "fcitx5-bamboo")) {
-            warnings.add("ibus-bamboo and fcitx5-bamboo should not both be installed");
+                && contains(aur.toArray(new String[0]), "fcitx5-bamboo-git")) {
+            warnings.add("ibus-bamboo and fcitx5-bamboo-git should not both be installed");
         }
 
         return new ProfilePlan(

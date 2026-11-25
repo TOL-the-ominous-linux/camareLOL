@@ -60,6 +60,10 @@ case "$target" in
         (cd python && python3 -m unittest discover -s tests -v)
         echo "==> java catalog"
         (cd java && ./build.sh)
+        echo "==> cargo build (the acceptance binary)"
+        # `cargo test` builds test harnesses, not necessarily the normal
+        # target/debug/camarelol the acceptance scenarios execute.
+        cargo build -j "$CARGO_JOBS" --workspace
         echo "==> acceptance scenarios (binary vs. synthetic surveys)"
         (cd python && CAMARELOL_BIN="$ROOT/target/debug/camarelol" \
             python3 -m camarelol_tools.testutil)

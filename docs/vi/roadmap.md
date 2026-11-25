@@ -73,13 +73,14 @@ filesystem, và thứ tự mount root-trước-ESP.
 - [~] Phát hiện driver và gợi ý firmware — **một phần**: có gợi ý microcode theo
       CPU và một bộ gói nền (`mesa`, `linux-firmware`), và gợi ý driver nay
       được chọn theo model GPU đã tách từ `lspci -mm -nn` — `nvidia-open` trên
-      Turing trở lên, `nvidia` trên Maxwell/Pascal/Volta (model không đọc
-      được không bao giờ bị đoán là Turing), thêm `vulkan-radeon` +
-      `libva-mesa-driver` cho AMD và `vulkan-intel` + `intel-media-driver`
-      cho Intel; GPU ảo thì không thêm gì. Đã unit-test với dòng `lspci`
-      thật, kèm test catalog rằng mọi tên nó có thể sinh ra đều tìm được.
-      Chưa được quan sát trong VM có GPU thật — đó là lý do mục này vẫn
-      "một phần" chứ chưa tick.
+      Turing trở lên (model không đọc được không bao giờ bị đoán là Turing),
+      thêm `vulkan-radeon` + `libva-mesa-driver` cho AMD và `vulkan-intel` +
+      `intel-media-driver` cho Intel; GPU ảo thì không thêm gì. NVIDIA 590 đã
+      bỏ các gói proprietary khỏi kho chính, nên Maxwell, Pascal và Volta
+      không còn driver (chúng khởi động bằng `nouveau`). Đã
+      unit-test với dòng `lspci` thật, kèm test catalog rằng mọi tên nó có thể
+      sinh ra đều tìm được. Chưa được quan sát trong VM có GPU thật — đó là lý
+      do mục này vẫn "một phần" chứ chưa tick.
 - [x] PipeWire, PulseAudio, hoặc không dùng cái nào
 - [x] Lựa chọn Bluetooth, zram, swap
 - [~] Cấu hình NetworkManager — **một phần**: gói đã cài, unit đã bật, và

@@ -255,8 +255,10 @@ yourself is in [docs/en/vm-testing.md](docs/en/vm-testing.md).
   be encrypted honestly are refused instead of half-delivered: a separate
   `/home`, systemd-boot, and dual-boot beside another OS.
 - Suggests GPU driver packages from the model `lspci` reports — `nvidia-open`
-  on Turing and newer, `nvidia` on Maxwell/Pascal/Volta, and the Vulkan and
-  video-decode userspace drivers on AMD and Intel.
+  on Turing and newer, and the Vulkan and video-decode userspace drivers on
+  AMD and Intel. NVIDIA 590 dropped Pascal, Maxwell and Volta from the
+  official repositories: those cards boot on the in-tree `nouveau` driver,
+  and camareLOL does not install a proprietary fallback.
 - Detects Windows and refuses to touch it. Keep-everything dual-boot is
   implemented: existing partitions stay `format=false`, the ESP is reused, and
   new partitions are appended inside a free gap; a real-machine install and
@@ -321,6 +323,8 @@ cd python && python3 -m unittest discover -s tests -v
 cd java && ./build.sh
 python scripts/check_lang_table.py              # doc tables point at the right language
 python scripts/check_pkgbuild.py                # PKGBUILD matches the newest tag
+python scripts/check_version.py                 # Cargo, npm and docs/releases agree
+python scripts/check_packages.py --offline      # Rust, Python and Java catalogs agree
 python scripts/check_secrets.py                 # no credential in the tree
 python scripts/check_workflows.py               # workflow YAML is valid to GitHub
 cargo clippy --workspace --all-targets -- -D warnings
