@@ -68,7 +68,7 @@ trình cài đặt ở chế độ có kịch bản.
 ```console
 $ ./scripts/vm-test.sh create      # VM + 20 GiB empty disk + Arch ISO + data disk
 $ ./scripts/vm-test.sh boot        # headless boot, drives the VM with keystrokes
-$ ./scripts/vm-test.sh check       # khởi động đĩa đã cài và chụp màn hình
+$ ./scripts/vm-test.sh check       # khởi động đĩa đã cài, đăng nhập root và chụp màn hình
 $ ./scripts/vm-test.sh destroy
 ```
 

@@ -48,6 +48,7 @@ pub fn run_scripted(
     allow_execute: bool,
     preview: bool,
     luks_passphrase: Option<&str>,
+    root_password: Option<&str>,
 ) -> Result<InstallReport, CamarelolError> {
     let mut cfg = InstallationConfig::load(config_path.to_str().unwrap_or_default())?;
     cfg.validate()?;
@@ -55,6 +56,12 @@ pub fn run_scripted(
     // it from `--luks-passphrase-file`, and only while this process lives.
     if let Some(passphrase) = luks_passphrase {
         cfg.set_luks_passphrase(passphrase);
+    }
+    // Profiles never carry root passwords either; `--root-password-file`
+    // supplies one only for this process. The acceptance VM logs in as root
+    // after the install, so the installer has to set it.
+    if let Some(pw) = root_password {
+        cfg.set_passwords(Some(pw), &[]);
     }
 
     let devices = match mock {

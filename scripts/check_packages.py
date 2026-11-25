@@ -51,13 +51,23 @@ class NetworkError(RuntimeError):
     """Không tới được Arch; đây không phải là một gói bị thiếu."""
 
 
-def fetch(url: str, timeout: float) -> bytes:
-    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-    try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            return response.read()
-    except (urllib.error.URLError, TimeoutError, OSError) as exc:
-        raise NetworkError(f"{url}: {exc}") from exc
+def fetch(url: str, timeout: float, attempts: int = 3) -> bytes:
+    """Fetch a URL, retrying transient failures; 404s are answers, not retries."""
+    last: Exception | None = None
+    for attempt in range(attempts):
+        try:
+            request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                return response.read()
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                raise NetworkError(f"{url}: not found") from exc
+            last = exc
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            last = exc
+        if attempt + 1 < attempts:
+            time.sleep(0.5 * 2**attempt)
+    raise NetworkError(f"{url}: {last}") from last
 
 
 def fetch_json(url: str, timeout: float) -> dict:
@@ -74,16 +84,21 @@ def http_status(url: str, timeout: float) -> int:
     index: the index's HTML has changed before, and a parser that silently
     returns an empty set turns every group into a false "missing" package.
     """
-    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-    try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            return response.status
-    except urllib.error.HTTPError as exc:
-        if exc.code == 404:
-            return 404
-        raise NetworkError(f"{url}: HTTP {exc.code}") from exc
-    except (urllib.error.URLError, TimeoutError, OSError) as exc:
-        raise NetworkError(f"{url}: {exc}") from exc
+    last: Exception | None = None
+    for attempt in range(3):
+        try:
+            request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                return response.status
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                return 404
+            last = exc
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            last = exc
+        if attempt + 1 < 3:
+            time.sleep(0.5 * 2**attempt)
+    raise NetworkError(f"{url}: {last}") from last
 
 
 def rust_catalog() -> tuple[set[str], set[str]]:
@@ -197,21 +212,22 @@ def official_status(
         cache[name] = ("package", exact[0].get("repo", "?"))
         return cache[name]
 
-    # Một nhóm gói (`plasma`, `xfce4-goodies`) cài được như một tên, nhưng
-    # không xuất hiện trong kết quả tìm gói. Hỏi thẳng trang của nhóm.
-    time.sleep(0.05)
-    group_url = OFFICIAL_GROUP.format(urllib.parse.quote(name))
-    if http_status(group_url, timeout) == 200:
+    # Một nhóm gói (`plasma`, `xfce4-goodies`) cài được như một tên, nhưng không
+    # xuất hiện trong kết quả tìm gói. Hỏi trực tiếp trang của nhóm; nếu trang
+    # không đáp (404), còn thử xem một gói nào có `groups` chứa tên đó.
+    if http_status(OFFICIAL_GROUP.format(urllib.parse.quote(name)), timeout) == 200:
         cache[name] = ("group", "group")
         return cache[name]
 
-    # Một tên ảo vẫn cài được nếu một gói official cung cấp nó.
-    time.sleep(0.05)
     data = fetch_json(OFFICIAL_QUERY.format(urllib.parse.quote(name)), timeout)
     for result in data.get("results", []):
         for provided in result.get("provides") or []:
             if provided == name or provided.startswith(name + "="):
                 cache[name] = ("provides", result.get("pkgname", "?"))
+                return cache[name]
+        for group in result.get("groups") or []:
+            if group == name:
+                cache[name] = ("group", "group")
                 return cache[name]
 
     cache[name] = None

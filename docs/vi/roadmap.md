@@ -113,6 +113,9 @@ filesystem, và thứ tự mount root-trước-ESP.
       đã mã hoá**, nên lời nhắc của initramfs, sự phối hợp crypttab/hook và
       cmdline của GRUB vẫn chưa được chứng minh ngoài unit test.
       `--luks-passphrase-file` cấp mật khẩu cho bản cài không giao diện.
+      `--root-password-file` cấp mật khẩu cho tài khoản root ở chạy có kịch
+      bản — bước `check` trong VM nghiệm thu dùng nó để đăng nhập root và
+      chạy các lệnh kiểm tra.
 - [~] Bố cục subvolume btrfs — **một phần**: gốc btrfs được format một lần,
       mount ở tầng đỉnh (`subvolid=5`), tạo `@`, `@home` (chỉ khi `/home`
       không phải phân vùng riêng) và `@snapshots`, rồi mount lại gốc từ `@`

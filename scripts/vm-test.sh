@@ -111,7 +111,11 @@ cmd_boot() {
     shot "03-profile"
 
     say "running the installer (scripted, execute)"
-    type_line "/run/camarelol-data/camarelol --scripted /tmp/test-profile.toml --allow-destructive --execute"
+    # The root password is runtime-only: profiles never carry it. Write it to
+    # the data disk and hand the installer the file; the login is then checked
+    # later by `check`.
+    type_line "printf 'camarelol-vm-test-root\\n' > /run/camarelol-data/rootpw"
+    type_line "/run/camarelol-data/camarelol --scripted /tmp/test-profile.toml --allow-destructive --execute --root-password-file /run/camarelol-data/rootpw"
     say "install running — waiting 10 minutes"
     for i in $(seq 1 20); do
         sleep 30
@@ -148,7 +152,20 @@ cmd_check() {
     sleep 60
     shot "06-installed-boot"
     if VBoxManage list runningvms | grep -q "\"${VM_NAME}\""; then
-        say "installed system is running — check 06-installed-boot.png for the login prompt"
+        say "logging in as root and running verification commands"
+        type_line "root"
+        sleep 2
+        type_line "camarelol-vm-test-root"
+        sleep 2
+        shot "07-root-login"
+        type_line "lsblk -o NAME,TYPE,FSTYPE,SIZE,MOUNTPOINTS; ls /boot; ls /; cat /etc/fstab"
+        sleep 3
+        shot "08-installed-verification"
+        if VBoxManage list runningvms | grep -q "\"${VM_NAME}\""; then
+            say "root logged in and ran verification — check 08-installed-verification.png"
+        else
+            say "VM stopped — the installed system did not accept the root login"
+        fi
     else
         say "VM stopped after boot — the installed system did not reach a login"
     fi

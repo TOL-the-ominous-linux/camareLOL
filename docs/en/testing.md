@@ -67,7 +67,7 @@ the installer in scripted mode.
 ```console
 $ ./scripts/vm-test.sh create      # VM + 20 GiB empty disk + Arch ISO + data disk
 $ ./scripts/vm-test.sh boot        # headless boot, drives the VM with keystrokes
-$ ./scripts/vm-test.sh check       # boot the installed disk and screenshot it
+$ ./scripts/vm-test.sh check       # boot the installed disk, log in as root and screenshot
 $ ./scripts/vm-test.sh destroy
 ```
 

@@ -112,7 +112,9 @@ Built in the working tree after `1.0.3`; not in any release yet.
       the simulated runner; **no VM has booted an encrypted install yet**, so
       the initramfs prompt, the crypttab/hook interaction and GRUB's cmdline
       are unproven outside unit tests. `--luks-passphrase-file` supplies the
-      passphrase for headless installs.
+      passphrase for headless installs. `--root-password-file` supplies the
+      root account password for scripted runs — the acceptance VM's `check`
+      step uses it to log in as root and run verification commands.
 - [~] Btrfs subvolume layout — **partial**: a btrfs root is formatted once,
       mounted at the top level (`subvolid=5`), `@`, `@home` (only when `/home`
       is not a separate partition) and `@snapshots` are created, and the root is

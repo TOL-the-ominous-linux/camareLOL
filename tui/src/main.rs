@@ -38,6 +38,10 @@ struct Args {
     /// Headless installs have no screen to type a LUKS passphrase into, and it
     /// must not be in the profile (nor in argv, where `ps` would show it).
     luks_passphrase_file: Option<PathBuf>,
+    /// Same as [`Args::luks_passphrase_file`], for the root account: the
+    /// profiles the wizard writes never carry a password, and a scripted run
+    /// needs one for the acceptance test.
+    root_password_file: Option<PathBuf>,
     language: Option<String>,
     postcheck: bool,
     postcheck_root: Option<PathBuf>,
@@ -88,6 +92,7 @@ fn parse_args_from(argv: Vec<String>) -> Result<Args, String> {
             "--self-test" => a.self_test = true,
             "--scripted" => a.scripted = args.next().map(PathBuf::from),
             "--luks-passphrase-file" => a.luks_passphrase_file = args.next().map(PathBuf::from),
+            "--root-password-file" => a.root_password_file = args.next().map(PathBuf::from),
             "--lang" => a.language = args.next(),
             "--postcheck" => a.postcheck = true,
             "--postcheck-root" => a.postcheck_root = args.next().map(PathBuf::from),
@@ -122,6 +127,10 @@ OPTIONS:
     --luks-passphrase-file <FILE>
                               Read the LUKS passphrase from the first line of
                               FILE (scripted installs of an encrypted root)
+    --root-password-file <FILE>
+                              Read the root password from the first line of
+                              FILE (scripted installs; profiles never carry
+                              a password)
     --preview                 Simulate the whole installation and write nothing
     --allow-destructive       Arm the safety gate (still requires confirmation)
     --execute                 Really write to disk (default is dry-run)
@@ -256,12 +265,23 @@ fn main() {
             },
             None => None,
         };
+        let root_password = match args.root_password_file.as_deref() {
+            Some(path) => match read_passphrase_file(path) {
+                Ok(p) => Some(p),
+                Err(e) => {
+                    eprintln!("{e}");
+                    std::process::exit(1);
+                }
+            },
+            None => None,
+        };
         match scripted::run_scripted(
             &cfg_path,
             args.mock.as_deref(),
             args.allow_destructive && args.execute,
             args.preview,
             passphrase.as_deref(),
+            root_password.as_deref(),
         ) {
             Ok(report) => {
                 println!("{}", report.render());
