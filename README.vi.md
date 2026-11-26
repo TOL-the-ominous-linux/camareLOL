@@ -10,9 +10,9 @@
 
 [Tiếng Anh](README.md) · **Tiếng Việt** · [中文](docs/zh/index.md)
 
-> ## ⚠ BETA — 1.0.3 beta
+> ## ⚠ BETA — 1.0.4 beta
 >
-> camareLOL **1.0.3** là bản beta hiện tại; **1.0.0** là bản beta đầu tiên.
+> camareLOL **1.0.4** là bản beta hiện tại; **1.0.0** là bản beta đầu tiên.
 > Đợt rà soát roadmap đã xong: mỗi mục hoặc đã có bằng chứng chạy thật, hoặc
 > được ghi rõ là **một phần**, hoặc bị hoãn kèm lý do. Điều đó không có nghĩa
 > là "đã hoàn hảo" — ba mục desktop vẫn còn một phần, dual-boot với Windows
@@ -30,12 +30,12 @@
 > 2. Chạy từ **Arch live ISO**, không phải trên máy bạn đang dùng.
 > 3. Sao lưu mọi thứ trước khi cài bất cứ thứ gì.
 >
-> `1.0.3` là beta, không phải lời hứa ổn định. Thẻ npm `latest` vẫn là
+> `1.0.4` là beta, không phải lời hứa ổn định. Thẻ npm `latest` vẫn là
 > **0.1.22**; bản beta nằm ở dist-tag `beta` và là GitHub pre-release. Hãy
-> cài có chủ ý — xem [Cài 1.0.3 beta](#cài-103-beta).
+> cài có chủ ý — xem [Cài 1.0.4 beta](#cài-103-beta).
 >
 > Ghi chú phát hành đầy đủ, gồm bằng chứng và giới hạn đã biết:
-> [docs/releases/1.0.3.md](docs/releases/1.0.3.md).
+> [docs/releases/1.0.4.md](docs/releases/1.0.4.md).
 
 camareLOL cài Arch Linux từ terminal mà không bắt bạn gõ hàng chục lệnh
 shell. Nó dò phần cứng, đề xuất cách phân vùng an toàn, cho bạn xem chính
@@ -58,7 +58,7 @@ Viết bằng ba ngôn ngữ. Mỗi trang có bảng trỏ sang hai ngôn ngữ 
 | Chủ đề | Tiếng Việt | English | 中文 |
 |---|---|---|---|
 | Tổng quan | [index](docs/vi/index.md) | [EN](docs/en/index.md) | [ZH](docs/zh/index.md) |
-| Ghi chú 1.0.3 | [releases/1.0.3](docs/releases/1.0.3.md) | — | — |
+| Ghi chú 1.0.4 | [releases/1.0.4](docs/releases/1.0.4.md) | — | — |
 | Ghi chú 1.0.2 | [releases/1.0.2](docs/releases/1.0.2.md) | — | — |
 | Ghi chú 1.0.1 | [releases/1.0.1](docs/releases/1.0.1.md) | — | — |
 | Ghi chú 1.0.0 | [releases/1.0.0](docs/releases/1.0.0.md) | — | — |
@@ -78,23 +78,23 @@ gì không đổi. README không nhắc lại.
 
 | Bản | Đã sửa gì |
 |---|---|
-| [1.0.3](docs/releases/1.0.3.md) | disk virtio bị gán nhãn `SataHdd`; chỉ hiển thị, kèm test hồi quy |
+| [1.0.4](docs/releases/1.0.4.md) | disk virtio bị gán nhãn `SataHdd`; chỉ hiển thị, kèm test hồi quy |
 | [1.0.2](docs/releases/1.0.2.md) | `--self-test` báo FAIL trên máy không hỗ trợ; nay `SKIP`, exit 2 |
 | [1.0.1](docs/releases/1.0.1.md) | zram/ram/nbd/md/loop bị liệt kê là ổ cài được |
 | [1.0.0](docs/releases/1.0.0.md) | beta đầu tiên: mã 0.1.22, roadmap đã rà soát |
 
 Nếu bạn đang dùng 0.1.10 hoặc cũ hơn, binary vẫn còn trình cập nhật đã bị bỏ:
-nó hỏi một địa chỉ không còn phân giải và không cài được gì. Tải 1.0.3 và thay
+nó hỏi một địa chỉ không còn phân giải và không cài được gì. Tải 1.0.4 và thay
 binary bằng tay — xem [Cập nhật](docs/vi/update.md).
 
-## Cài 1.0.3 beta
+## Cài 1.0.4 beta
 
 Bản beta là tuỳ chọn. Lệnh một dòng mặc định vẫn lấy bản **ổn định** mới nhất
 (0.1.22). Muốn cài beta, ghim tag hoặc chọn kênh beta:
 
 ```console
 $ curl -fsSL https://raw.githubusercontent.com/TOL-the-ominous-linux/camareLOL/main/scripts/camarelol.sh \
-    | CAMARELOL_VERSION=v1.0.3 bash
+    | CAMARELOL_VERSION=v1.0.4 bash
 ```
 
 ```console
@@ -150,7 +150,7 @@ $ sudo ./camarelol             # mở TUI
 ```console
 $ sudo pacman -S --needed nodejs npm curl
 $ npm install -g @wenker-ai/camarelo          # latest ổn định: 0.1.22
-$ npm install -g @wenker-ai/camarelo@beta     # beta 1.0.3
+$ npm install -g @wenker-ai/camarelo@beta     # beta 1.0.4
 ```
 
 Trên **archiso** (live ISO) cơ sở dữ liệu pacman rỗng — dùng

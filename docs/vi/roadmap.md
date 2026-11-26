@@ -5,7 +5,7 @@
 
 Những gì đã làm, những gì chưa, và — ở chỗ chưa — vì sao.
 
-**Bản hiện tại:** `1.0.3`, beta thứ tư (28/10/2026). Bản này sửa việc disk
+**Bản hiện tại:** `1.0.4`, beta thứ tư (28/10/2026). Bản này sửa việc disk
 virtio bị gán nhãn `SATA HDD` trong khảo sát lưu trữ — chỉ là hiển thị, kèm test
 hồi quy; phần lập kế hoạch không đọc trường đó. `1.0.2` khiến `--self-test` báo
 `SKIP`, exit 2, trên máy không hỗ trợ thay vì FAIL; `1.0.1` lọc
@@ -96,7 +96,7 @@ filesystem, và thứ tự mount root-trước-ESP.
 
 ## Stage 3 — Lưu trữ nâng cao (chưa phát hành)
 
-Đã làm trong working tree sau `1.0.3`; chưa nằm trong bản phát hành nào.
+Đã làm trong working tree sau `1.0.4`; chưa nằm trong bản phát hành nào.
 
 - [~] Mã hoá phân vùng gốc bằng LUKS2 — **một phần**: pha format/mount đặt
       container LUKS2 lên phân vùng gốc, format và mount qua mapper
@@ -161,7 +161,7 @@ filesystem, và thứ tự mount root-trước-ESP.
 - [x] Gói npm `@wenker-ai/camarelo` — mỗi lần pack tải binary từ GitHub Release
       đúng phiên bản trong `package.json`, đối chiếu `SHA256SUMS`, bắt
       `--version` phải khớp, chạy test gói rồi mới pack; publish là một bước
-      riêng, tường minh. 1.0.0 là beta đầu tiên và 1.0.3 là bản hiện tại, tất
+      riêng, tường minh. 1.0.0 là beta đầu tiên và 1.0.4 là bản hiện tại, tất
       cả đều dưới dist-tag `beta`; `latest` vẫn là 0.1.22 cho tới khi thăng
       cấp.
 

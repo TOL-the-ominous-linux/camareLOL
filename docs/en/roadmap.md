@@ -4,7 +4,7 @@
 
 What is built, what is not, and — where it is not — why.
 
-**Current release:** `1.0.3`, the fourth beta (28 October 2026). It fixes a
+**Current release:** `1.0.4`, the fourth beta (28 October 2026). It fixes a
 virtio disk being labelled `SATA HDD` in the storage survey — display only,
 with regression tests; planning never read that field. `1.0.2` made
 `--self-test` report `SKIP`, exit 2, on an unsupported host instead of FAIL;
@@ -95,7 +95,7 @@ filesystem kind, and root-before-ESP mount order.
 
 ## Stage 3 — Advanced storage (unreleased)
 
-Built in the working tree after `1.0.3`; not in any release yet.
+Built in the working tree after `1.0.4`; not in any release yet.
 
 - [~] LUKS2 root encryption — **partial**: the format/mount phases put a LUKS2
       container on the root partition, format and mount the mapper
@@ -162,7 +162,7 @@ Built in the working tree after `1.0.3`; not in any release yet.
       the GitHub release of exactly the version in `package.json`, verifies it
       against `SHA256SUMS`, requires `--version` to agree, runs the package
       tests, and only then packs; publish is a separate explicit step. 1.0.0
-      was the first beta and 1.0.3 is the current one, all under the `beta`
+      was the first beta and 1.0.4 is the current one, all under the `beta`
       dist-tag; `latest` remains 0.1.22 until promotion.
 
 ## Stage 6 — Dual-boot beside an existing OS

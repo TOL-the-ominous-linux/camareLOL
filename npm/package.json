@@ -1,7 +1,7 @@
 {
   "name": "@wenker-ai/camarelo",
-  "version": "1.0.3",
-  "description": "camareLOL \u2014 a safety-first TUI installer for Arch Linux, with a Vietnamese soul",
+  "version": "1.0.4",
+  "description": "camareLOL — a safety-first TUI installer for Arch Linux, with a Vietnamese soul",
   "license": "GPL-3.0-or-later",
   "homepage": "https://github.com/TOL-the-ominous-linux/camareLOL",
   "repository": {
