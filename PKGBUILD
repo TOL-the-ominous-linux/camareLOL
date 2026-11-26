@@ -7,7 +7,7 @@ pkgname=camarelol
 # Bản phát hành sinh PKGBUILD này từ khuôn ở trong kho: pkgver, URL nguồn và
 # sha256 đều lấy từ chính bản phát hành đang dựng. Sửa tay ở đây sẽ bị ghi đè,
 # và nếu sửa sai thì `makepkg` tải một tarball khác — hoặc không tải được gì.
-pkgver=1.0.3
+pkgver=1.0.4
 pkgrel=1
 pkgdesc="A modern, safety-first TUI installer for Arch Linux"
 arch=('x86_64')
@@ -35,7 +35,7 @@ source=("https://github.com/TOL-the-ominous-linux/camareLOL/releases/download/v$
 # Không phải SKIP. Đây là dự án kiểm tra sha256 của chính nó trước khi cài bất
 # cứ thứ gì; để ngoại trừ nó ở đây thì việc kiểm tra đó chỉ còn đúng khi người
 # dùng tự làm, và im lặng sai khi không.
-sha256sums=('1d6f354b393fb833efba927130cff5c10d4d467aa21b14a404524d06337dd5be')
+sha256sums=('54a5c3fc94db60159bf6f48c83bcbb156a0108e2840ab1e05f7c00a6c821bbab')
 
 _pkgdir() {
     # The release tarball is created from the repository root, so the directory
