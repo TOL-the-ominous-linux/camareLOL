@@ -45,6 +45,7 @@ struct Args {
     language: Option<String>,
     postcheck: bool,
     postcheck_root: Option<PathBuf>,
+    aur_preflight: bool,
 }
 
 /// Read a LUKS passphrase from the first line of a file.
@@ -96,6 +97,7 @@ fn parse_args_from(argv: Vec<String>) -> Result<Args, String> {
             "--lang" => a.language = args.next(),
             "--postcheck" => a.postcheck = true,
             "--postcheck-root" => a.postcheck_root = args.next().map(PathBuf::from),
+            "--aur-preflight" => a.aur_preflight = true,
             "-h" | "--help" => {
                 println!("{}", usage());
                 std::process::exit(0);
@@ -137,6 +139,7 @@ OPTIONS:
     --lang <vi|en|zh>         Installer language
     --postcheck               Verify an installed system (default: /)
     --postcheck-root <PATH>   Root to check (for mounted systems)
+    --aur-preflight            Check AUR build prerequisites and exit
 
     -h, --help                Show this help
     -V, --version             Show version and commit
@@ -240,6 +243,11 @@ fn main() {
         return;
     }
 
+    if args.aur_preflight {
+        cmd_aur_preflight();
+        return;
+    }
+
     // Diagnostics before the terminal check, because a user who wants to attach
     // a report to a bug report is very often not sitting at a console — they
     // are pasting into an issue tracker from another machine.
@@ -325,7 +333,10 @@ fn main() {
 /// are actually on disk. Each check is a direct file existence test — the same
 /// markers the VM acceptance harness uses in its step 6.
 fn cmd_postcheck(root: &std::path::Path) {
-    let checks = [
+    // Required checks: these are the things camareLOL promises to have put on
+    // disk when the corresponding option was chosen. A failure here means the
+    // install lied, which is the one thing postcheck exists to catch.
+    let required = [
         (
             "zram_unit",
             root.join("usr/lib/systemd/system/systemd-zram-setup@.service"),
@@ -352,7 +363,7 @@ fn cmd_postcheck(root: &std::path::Path) {
         ("openssh", root.join("usr/bin/sshd")),
     ];
     let mut failed = 0;
-    for (name, path) in &checks {
+    for (name, path) in &required {
         if path.exists() {
             println!("  PASS {name}");
         } else {
@@ -360,11 +371,104 @@ fn cmd_postcheck(root: &std::path::Path) {
             failed += 1;
         }
     }
-    if failed > 0 {
-        println!("  {failed} check(s) failed");
+
+    // Optional checks: only relevant when the feature was selected. A missing
+    // file is a SKIP, not a FAIL, so a console-only install is not reported as
+    // broken for lacking a display manager.
+    let mut optional_failed = 0;
+    // Bootloader: GRUB or systemd-boot — either one is a valid camareLOL
+    // install, so pass if at least one of their config files is present.
+    let grub = root.join("boot/grub/grub.cfg");
+    let sdboot = root.join("boot/loader/loader.conf");
+    if grub.exists() || sdboot.exists() {
+        println!("  PASS bootloader");
+    } else {
+        println!("  FAIL bootloader — neither grub.cfg nor loader.conf found");
+        optional_failed += 1;
+    }
+
+    // Initramfs: accept the common names camareLOL and Arch produce.
+    let initramfs_candidates = [
+        "boot/initramfs-linux.img",
+        "boot/initramfs-linux-fallback.img",
+        "boot/initramfs-linux-lts.img",
+    ];
+    if initramfs_candidates.iter().any(|p| root.join(p).exists()) {
+        println!("  PASS initramfs");
+    } else {
+        println!("  FAIL initramfs — no initramfs-linux*.img found");
+        optional_failed += 1;
+    }
+
+    // crypttab is only present on encrypted installs: treat a missing/empty
+    // file as SKIP, not FAIL.
+    let crypttab = root.join("etc/crypttab");
+    if crypttab.exists() {
+        let content = std::fs::read_to_string(&crypttab).unwrap_or_default();
+        if content.trim().is_empty() {
+            println!("  SKIP crypttab");
+        } else if content.contains("cryptroot") {
+            println!("  PASS crypttab");
+        } else {
+            println!("  FAIL crypttab — content check failed: {}", crypttab.display());
+            optional_failed += 1;
+        }
+    } else {
+        println!("  SKIP crypttab");
+    }
+
+    // NetworkManager config is optional (only written when NM is selected).
+    let nm = root.join("etc/NetworkManager/conf.d/00-camarelol.conf");
+    if nm.exists() {
+        println!("  PASS networkmanager_config");
+    } else {
+        println!("  SKIP networkmanager_config");
+    }
+
+    // greetd config is only present on desktop installs.
+    let greetd = root.join("etc/greetd/config.toml");
+    if greetd.exists() {
+        let ok = std::fs::read_to_string(&greetd)
+            .map(|s| s.contains("command"))
+            .unwrap_or(false);
+        if ok {
+            println!("  PASS greetd_config");
+        } else {
+            println!("  FAIL greetd_config — content check failed: {}", greetd.display());
+            optional_failed += 1;
+        }
+    } else {
+        println!("  SKIP greetd_config");
+    }
+
+    if failed > 0 || optional_failed > 0 {
+        println!(
+            "  {} required + {} optional check(s) failed",
+            failed, optional_failed
+        );
         std::process::exit(1);
     }
     println!("  all checks passed");
+}
+
+fn cmd_aur_preflight() {
+    use camarelol_core::aur;
+    println!("AUR preflight:");
+    let items = aur::preflight();
+    let mut failed = 0;
+    for item in &items {
+        if item.ok {
+            println!("  PASS {} — {}", item.name, item.detail);
+        } else {
+            println!("  FAIL {} — {}", item.name, item.detail);
+            failed += 1;
+        }
+    }
+    if failed > 0 {
+        println!("  {failed} prerequisite(s) missing");
+        std::process::exit(1);
+    }
+    println!("  all AUR prerequisites present");
 }
 
 /// Rust ignores SIGPIPE and turns it into a panic on the next write, so

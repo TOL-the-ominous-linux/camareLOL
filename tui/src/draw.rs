@@ -180,12 +180,18 @@ fn draw_header(f: &mut Frame, app: &App, area: Rect) {
     } else {
         format!("+{build}")
     };
+    let net = match app.connectivity {
+        camarelol_core::network::Connectivity::Internet => "net:OK",
+        camarelol_core::network::Connectivity::Link => "net:link",
+        camarelol_core::network::Connectivity::Down => "net:down",
+    };
     let title = format!(
-        " camareLOL v{}{build} — {}  ({}/{}) ",
+        " camareLOL v{}{build} — {}  ({}/{})  [{}] ",
         crate::version::VERSION,
         app.screen.title(),
         step.min(total),
-        total
+        total,
+        net
     );
     // The header turns red in preview so the state is visible even where the
     // banner row is covered by a dialog.

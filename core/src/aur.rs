@@ -470,6 +470,83 @@ pub fn ensure_not_root(uid: Option<u32>) -> Result<()> {
 }
 
 /// The text the user must read before AUR is used.
+/// One line of an AUR prerequisite check.
+#[derive(Debug, Clone)]
+pub struct AurPreflightItem {
+    pub name: &'static str,
+    pub ok: bool,
+    pub detail: String,
+}
+
+/// Check the things an AUR build needs before anyone tries one. Read-only:
+/// nothing here runs a build or touches the safety gate.
+pub fn preflight() -> Vec<AurPreflightItem> {
+    let mut out = Vec::new();
+
+    // makepkg is the one tool nothing else substitutes for.
+    let makepkg = std::process::Command::new("makepkg")
+        .arg("--version")
+        .output();
+    out.push(match makepkg {
+        Ok(o) if o.status.success() => AurPreflightItem {
+            name: "makepkg",
+            ok: true,
+            detail: String::from_utf8_lossy(&o.stdout).lines().next().unwrap_or("present").to_string(),
+        },
+        _ => AurPreflightItem {
+            name: "makepkg",
+            ok: false,
+            detail: "not found on PATH (install base-devel)".to_string(),
+        },
+    });
+
+    // git is needed for manual checkouts.
+    let git = std::process::Command::new("git").arg("--version").output();
+    out.push(match git {
+        Ok(o) if o.status.success() => AurPreflightItem {
+            name: "git",
+            ok: true,
+            detail: String::from_utf8_lossy(&o.stdout).trim().to_string(),
+        },
+        _ => AurPreflightItem {
+            name: "git",
+            ok: false,
+            detail: "not found on PATH".to_string(),
+        },
+    });
+
+    // A way to drop privileges when the installer runs as root.
+    let runuser = std::process::Command::new("runuser").arg("--version").output();
+    let sudo = std::process::Command::new("sudo").arg("--version").output();
+    let (ok, detail) = if runuser.map(|o| o.status.success()).unwrap_or(false) {
+        (true, "runuser available".to_string())
+    } else if sudo.map(|o| o.status.success()).unwrap_or(false) {
+        (true, "sudo available".to_string())
+    } else {
+        (false, "neither runuser nor sudo found (install util-linux)".to_string())
+    };
+    out.push(AurPreflightItem {
+        name: "privilege_drop",
+        ok,
+        detail,
+    });
+
+    // Build as the current user if not root; otherwise a configured build user
+    // is required, which camareLOL does not pick for you.
+    let uid = effective_uid().unwrap_or(0);
+    out.push(AurPreflightItem {
+        name: "build_user",
+        ok: uid != 0,
+        detail: if uid == 0 {
+            "running as root: a configured unprivileged build user is required".to_string()
+        } else {
+            format!("running as uid {uid} (not root)")
+        },
+    });
+
+    out
+}
+
 pub fn warning() -> &'static str {
     AUR_WARNING
 }
@@ -915,5 +992,17 @@ mod tests {
                 assert_eq!(err.code, ErrorCode::AurBuildRefused);
             }
         }
+    }
+}
+
+
+#[cfg(test)]
+mod preflight_tests {
+    use super::preflight;
+    #[test]
+    fn preflight_returns_four_items() {
+        let items = preflight();
+        assert_eq!(items.len(), 4);
+        assert!(items.iter().any(|i| i.name == "makepkg"));
     }
 }
