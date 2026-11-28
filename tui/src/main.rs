@@ -732,6 +732,16 @@ fn cmd_self_test(mock: Option<PathBuf>) -> Result<SelfTestOutcome, CamarelolErro
         println!("6. simulated install: skipped (no empty disk)");
     }
 
+    println!("7. AUR preflight (informational):");
+    for item in camarelol_core::aur::preflight() {
+        println!(
+            "   - {}: {} ({})",
+            item.name,
+            if item.ok { "ok" } else { "missing" },
+            item.detail
+        );
+    }
+
     if !ok {
         println!("selftest result: FAIL");
         println!(
