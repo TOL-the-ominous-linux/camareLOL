@@ -47,6 +47,7 @@ struct Args {
     postcheck_root: Option<PathBuf>,
     aur_preflight: bool,
     plan_only: Option<PathBuf>,
+    json: bool,
 }
 
 /// Read a LUKS passphrase from the first line of a file.
@@ -100,6 +101,7 @@ fn parse_args_from(argv: Vec<String>) -> Result<Args, String> {
             "--postcheck-root" => a.postcheck_root = args.next().map(PathBuf::from),
             "--aur-preflight" => a.aur_preflight = true,
             "--plan-only" => a.plan_only = args.next().map(PathBuf::from),
+            "--json" => a.json = true,
             "-h" | "--help" => {
                 println!("{}", usage());
                 std::process::exit(0);
@@ -144,6 +146,8 @@ OPTIONS:
     --aur-preflight            Check AUR build prerequisites and exit
     --plan-only <FILE>         Load a profile, plan its disk layout, and exit
                                (no writes; prints the plan as text and JSON)
+    --json                    Emit machine-readable JSON for --postcheck and
+                               --aur-preflight
 
     -h, --help                Show this help
     -V, --version             Show version and commit
@@ -243,12 +247,12 @@ fn main() {
             .postcheck_root
             .clone()
             .unwrap_or_else(|| PathBuf::from("/"));
-        cmd_postcheck(&root);
+        cmd_postcheck(&root, args.json);
         return;
     }
 
     if args.aur_preflight {
-        cmd_aur_preflight();
+        cmd_aur_preflight(args.json);
         return;
     }
 
@@ -341,144 +345,141 @@ fn main() {
 /// Verify an installed system: check that the features the installer promised
 /// are actually on disk. Each check is a direct file existence test — the same
 /// markers the VM acceptance harness uses in its step 6.
-fn cmd_postcheck(root: &std::path::Path) {
-    // Required checks: these are the things camareLOL promises to have put on
-    // disk when the corresponding option was chosen. A failure here means the
-    // install lied, which is the one thing postcheck exists to catch.
+fn cmd_postcheck(root: &std::path::Path, json: bool) {
+    // (name, status, detail)
+    let mut results: Vec<(&str, &str, String)> = Vec::new();
+
     let required = [
-        (
-            "zram_unit",
-            root.join("usr/lib/systemd/system/systemd-zram-setup@.service"),
-        ),
-        (
-            "zram_wants",
-            root.join(
-                "etc/systemd/system/multi-user.target.wants/systemd-zram-setup@zram0.service",
-            ),
-        ),
-        (
-            "zram_bin",
-            root.join("usr/lib/systemd/system-generators/zram-generator"),
-        ),
+        ("zram_unit", root.join("usr/lib/systemd/system/systemd-zram-setup@.service")),
+        ("zram_wants", root.join("etc/systemd/system/multi-user.target.wants/systemd-zram-setup@zram0.service")),
+        ("zram_bin", root.join("usr/lib/systemd/system-generators/zram-generator")),
         ("zram_conf", root.join("etc/systemd/zram-generator.conf")),
-        (
-            "sshd_unit",
-            root.join("usr/lib/systemd/system/sshd.service"),
-        ),
-        (
-            "sshd_wants",
-            root.join("etc/systemd/system/multi-user.target.wants/sshd.service"),
-        ),
+        ("sshd_unit", root.join("usr/lib/systemd/system/sshd.service")),
+        ("sshd_wants", root.join("etc/systemd/system/multi-user.target.wants/sshd.service")),
         ("openssh", root.join("usr/bin/sshd")),
     ];
-    let mut failed = 0;
     for (name, path) in &required {
         if path.exists() {
-            println!("  PASS {name}");
+            results.push((name, "PASS", path.display().to_string()));
         } else {
-            println!("  FAIL {name} — {}", path.display());
-            failed += 1;
+            results.push((name, "FAIL", path.display().to_string()));
         }
     }
 
-    // Optional checks: only relevant when the feature was selected. A missing
-    // file is a SKIP, not a FAIL, so a console-only install is not reported as
-    // broken for lacking a display manager.
-    let mut optional_failed = 0;
-    // Bootloader: GRUB or systemd-boot — either one is a valid camareLOL
-    // install, so pass if at least one of their config files is present.
+    // bootloader: GRUB or systemd-boot
     let grub = root.join("boot/grub/grub.cfg");
     let sdboot = root.join("boot/loader/loader.conf");
     if grub.exists() || sdboot.exists() {
-        println!("  PASS bootloader");
+        results.push(("bootloader", "PASS", format!("grub={}, sdboot={}", grub.exists(), sdboot.exists())));
     } else {
-        println!("  FAIL bootloader — neither grub.cfg nor loader.conf found");
-        optional_failed += 1;
+        results.push(("bootloader", "FAIL", "neither grub.cfg nor loader.conf found".to_string()));
     }
 
-    // Initramfs: accept the common names camareLOL and Arch produce.
+    // initramfs
     let initramfs_candidates = [
         "boot/initramfs-linux.img",
         "boot/initramfs-linux-fallback.img",
         "boot/initramfs-linux-lts.img",
     ];
     if initramfs_candidates.iter().any(|p| root.join(p).exists()) {
-        println!("  PASS initramfs");
+        results.push(("initramfs", "PASS", "present".to_string()));
     } else {
-        println!("  FAIL initramfs — no initramfs-linux*.img found");
-        optional_failed += 1;
+        results.push(("initramfs", "FAIL", "no initramfs-linux*.img found".to_string()));
     }
 
-    // crypttab is only present on encrypted installs: treat a missing/empty
-    // file as SKIP, not FAIL.
+    // crypttab: SKIP if missing/empty (unencrypted install)
     let crypttab = root.join("etc/crypttab");
     if crypttab.exists() {
         let content = std::fs::read_to_string(&crypttab).unwrap_or_default();
         if content.trim().is_empty() {
-            println!("  SKIP crypttab");
+            results.push(("crypttab", "SKIP", "empty".to_string()));
         } else if content.contains("cryptroot") {
-            println!("  PASS crypttab");
+            results.push(("crypttab", "PASS", "cryptroot present".to_string()));
         } else {
-            println!("  FAIL crypttab — content check failed: {}", crypttab.display());
-            optional_failed += 1;
+            results.push(("crypttab", "FAIL", "content check failed".to_string()));
         }
     } else {
-        println!("  SKIP crypttab");
+        results.push(("crypttab", "SKIP", "not present".to_string()));
     }
 
-    // NetworkManager config is optional (only written when NM is selected).
+    // NetworkManager config optional
     let nm = root.join("etc/NetworkManager/conf.d/00-camarelol.conf");
     if nm.exists() {
-        println!("  PASS networkmanager_config");
+        results.push(("networkmanager_config", "PASS", nm.display().to_string()));
     } else {
-        println!("  SKIP networkmanager_config");
+        results.push(("networkmanager_config", "SKIP", "not present".to_string()));
     }
 
-    // greetd config is only present on desktop installs.
+    // greetd config optional
     let greetd = root.join("etc/greetd/config.toml");
     if greetd.exists() {
-        let ok = std::fs::read_to_string(&greetd)
-            .map(|s| s.contains("command"))
-            .unwrap_or(false);
+        let ok = std::fs::read_to_string(&greetd).map(|s| s.contains("command")).unwrap_or(false);
         if ok {
-            println!("  PASS greetd_config");
+            results.push(("greetd_config", "PASS", greetd.display().to_string()));
         } else {
-            println!("  FAIL greetd_config — content check failed: {}", greetd.display());
-            optional_failed += 1;
+            results.push(("greetd_config", "FAIL", "content check failed".to_string()));
         }
     } else {
-        println!("  SKIP greetd_config");
+        results.push(("greetd_config", "SKIP", "not present".to_string()));
     }
 
-    if failed > 0 || optional_failed > 0 {
-        println!(
-            "  {} required + {} optional check(s) failed",
-            failed, optional_failed
-        );
-        std::process::exit(1);
-    }
-    println!("  all checks passed");
-}
-
-fn cmd_aur_preflight() {
-    use camarelol_core::aur;
-    println!("AUR preflight:");
-    let items = aur::preflight();
-    let mut failed = 0;
-    for item in &items {
-        if item.ok {
-            println!("  PASS {} — {}", item.name, item.detail);
-        } else {
-            println!("  FAIL {} — {}", item.name, item.detail);
-            failed += 1;
+    if json {
+        // Emit a JSON array for tooling.
+        let arr: Vec<serde_json::Value> = results
+            .iter()
+            .map(|(n, st, d)| {
+                serde_json::json!({"name": n, "status": st, "detail": d})
+            })
+            .collect();
+        println!("{}", serde_json::to_string_pretty(&arr).unwrap_or_else(|e| e.to_string()));
+    } else {
+        for (name, status, detail) in &results {
+            println!("  {} {} — {}", status, name, detail);
         }
     }
-    if failed > 0 {
-        println!("  {failed} prerequisite(s) missing");
+    // Count FAILs (SKIP does not fail).
+    let fail_count = results.iter().filter(|(_, s, _)| *s == "FAIL").count();
+    if fail_count > 0 {
+        println!("  {} check(s) failed", fail_count);
         std::process::exit(1);
     }
-    println!("  all AUR prerequisites present");
+    if !json {
+        println!("  all checks passed");
+    }
 }
+
+fn cmd_aur_preflight(json: bool) {
+    use camarelol_core::aur;
+    let items = aur::preflight();
+    if json {
+        let arr: Vec<serde_json::Value> = items
+            .iter()
+            .map(|i| {
+                serde_json::json!({"name": i.name, "ok": i.ok, "detail": i.detail})
+            })
+            .collect();
+        println!("{}", serde_json::to_string_pretty(&arr).unwrap_or_else(|e| e.to_string()));
+    } else {
+        println!("AUR preflight:");
+        for item in &items {
+            if item.ok {
+                println!("  PASS {} — {}", item.name, item.detail);
+            } else {
+                println!("  FAIL {} — {}", item.name, item.detail);
+            }
+        }
+    }
+    if items.iter().any(|i| !i.ok) {
+        if !json {
+            println!("  {} prerequisite(s) missing", items.iter().filter(|i| !i.ok).count());
+        }
+        std::process::exit(1);
+    }
+    if !json {
+        println!("  all AUR prerequisites present");
+    }
+}
+
 
 /// Rust ignores SIGPIPE and turns it into a panic on the next write, so
 /// instead of stopping quietly like every other command-line tool.
