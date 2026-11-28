@@ -46,6 +46,7 @@ struct Args {
     postcheck: bool,
     postcheck_root: Option<PathBuf>,
     aur_preflight: bool,
+    plan_only: Option<PathBuf>,
 }
 
 /// Read a LUKS passphrase from the first line of a file.
@@ -98,6 +99,7 @@ fn parse_args_from(argv: Vec<String>) -> Result<Args, String> {
             "--postcheck" => a.postcheck = true,
             "--postcheck-root" => a.postcheck_root = args.next().map(PathBuf::from),
             "--aur-preflight" => a.aur_preflight = true,
+            "--plan-only" => a.plan_only = args.next().map(PathBuf::from),
             "-h" | "--help" => {
                 println!("{}", usage());
                 std::process::exit(0);
@@ -140,6 +142,8 @@ OPTIONS:
     --postcheck               Verify an installed system (default: /)
     --postcheck-root <PATH>   Root to check (for mounted systems)
     --aur-preflight            Check AUR build prerequisites and exit
+    --plan-only <FILE>         Load a profile, plan its disk layout, and exit
+                               (no writes; prints the plan as text and JSON)
 
     -h, --help                Show this help
     -V, --version             Show version and commit
@@ -245,6 +249,11 @@ fn main() {
 
     if args.aur_preflight {
         cmd_aur_preflight();
+        return;
+    }
+
+    if let Some(path) = args.plan_only.clone() {
+        cmd_plan_only(&path, args.mock.clone());
         return;
     }
 
@@ -482,6 +491,85 @@ fn restore_default_sigpipe() {
 }
 
 #[cfg(unix)]
+fn cmd_plan_only(config_path: &std::path::Path, mock: Option<PathBuf>) {
+    use camarelol_core::config::InstallationConfig;
+    use camarelol_core::storage::{scan_devices, scan_devices_from_survey, verify_against};
+    let cfg = match InstallationConfig::load(config_path.to_str().unwrap_or_default()) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("error loading profile: {e}");
+            std::process::exit(2);
+        }
+    };
+    if let Err(e) = cfg.validate() {
+        eprintln!("profile validation failed: {e}");
+        std::process::exit(2);
+    }
+    let devices = match mock {
+        Some(p) => match std::fs::read_to_string(&p) {
+            Ok(text) => match scan_devices_from_survey(&text) {
+                Ok(d) => d,
+                Err(e) => {
+                    eprintln!("error reading mock survey: {e}");
+                    std::process::exit(2);
+                }
+            },
+            Err(e) => {
+                eprintln!("cannot read mock survey: {e}");
+                std::process::exit(2);
+            }
+        },
+        None => match scan_devices() {
+            Ok(d) => d,
+            Err(e) => {
+                eprintln!("error scanning devices: {e}");
+                std::process::exit(2);
+            }
+        },
+    };
+    let target = match cfg.target_disk.clone() {
+        Some(t) => t,
+        None => {
+            eprintln!("profile has no target_disk");
+            std::process::exit(2);
+        }
+    };
+    let device = match verify_against(&target.path, &target.identity, target.size_bytes, &devices) {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("target disk verification failed: {e}");
+            std::process::exit(2);
+        }
+    };
+    let mut core = camarelol_core::Core::with_devices(devices);
+    core.config = cfg.clone();
+    if let Ok(fw) = cfg.resolve_firmware(camarelol_core::hardware::detect_firmware()) {
+        core.set_firmware(fw);
+    }
+    if let Ok(bl) = cfg.bootloader() {
+        core.set_bootloader(bl);
+    }
+    let plan = match core.plan_for(&device.path) {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("planning failed: {e}");
+            std::process::exit(2);
+        }
+    };
+    if let Err(e) = core.validate_plan(&plan) {
+        eprintln!("plan validation failed: {e}");
+        std::process::exit(2);
+    }
+    println!("{}", plan.render());
+    match serde_json::to_string_pretty(&plan) {
+        Ok(json) => {
+            println!("--- plan.json ---");
+            println!("{json}");
+        }
+        Err(e) => eprintln!("could not serialise plan: {e}"),
+    }
+}
+
 fn cmd_scan(mock: Option<PathBuf>) -> Result<(), CamarelolError> {
     let devices = match mock {
         Some(p) => camarelol_core::storage::load_survey(p.to_str().unwrap_or_default())?,
