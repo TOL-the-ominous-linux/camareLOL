@@ -98,10 +98,10 @@ filesystem, và thứ tự mount root-trước-ESP.
 
 Đã làm trong working tree sau `1.0.4`; chưa nằm trong bản phát hành nào.
 
-- [~] Mã hoá phân vùng gốc bằng LUKS2 — **một phần**: pha format/mount đặt
-      container LUKS2 lên phân vùng gốc, format và mount qua mapper
-      (`/dev/mapper/cryptroot`), viết `/etc/crypttab`, thêm hook `encrypt` và
-      `keyboard` vào `HOOKS` trước `filesystems`, ghi
+- [x] Mã hoá phân vùng gốc bằng LUKS2 — **đã chứng minh bằng VM**: pha
+      format/mount đặt container LUKS2 lên phân vùng gốc, format và mount qua
+      mapper (`/dev/mapper/cryptroot`), viết `/etc/crypttab`, thêm hook
+      `encrypt` và `keyboard` vào `HOOKS` trước `filesystems`, ghi
       `cryptdevice=UUID=…:cryptroot root=/dev/mapper/cryptroot` vào
       `GRUB_CMDLINE_LINUX`, cài `cryptsetup` trong hệ đích, và kiểm mật khẩu
       ở preflight (tối thiểu 8 ký tự, đếm theo ký tự chứ không theo byte).
@@ -109,20 +109,23 @@ filesystem, và thứ tự mount root-trước-ESP.
       tới `cryptsetup` qua stdin, và bản xem trước chỉ ghi một chỗ giữ chỗ.
       Những bố cục v1 không thể mã hoá cho trọn vẹn bị từ chối thay vì làm nửa
       vời — `/home` tách riêng, systemd-boot, và dual-boot cạnh OS khác. Đã
-      unit-test đầu-cuối trên runner mô phỏng; **chưa VM nào boot một bản cài
-      đã mã hoá**, nên lời nhắc của initramfs, sự phối hợp crypttab/hook và
-      cmdline của GRUB vẫn chưa được chứng minh ngoài unit test.
+      unit-test đầu-cuối trên runner mô phỏng **và** được chứng minh trong một
+      lần chạy VirtualBox với `LUKS=1`: container mở bằng đúng mật khẩu cài,
+      hệ trên đĩa là btrfs với `@`/`@home`/`@snapshots`, crypttab/hook/cmdline
+      khớp UUID container, và hệ đã cài báo `boot=ok` từ
+      `/dev/mapper/cryptroot[/@]` sau khi initramfs mở khoá.
       `--luks-passphrase-file` cấp mật khẩu cho bản cài không giao diện.
       `--root-password-file` cấp mật khẩu cho tài khoản root ở chạy có kịch
       bản — bước `check` trong VM nghiệm thu dùng nó để đăng nhập root và
       chạy các lệnh kiểm tra.
-- [~] Bố cục subvolume btrfs — **một phần**: gốc btrfs được format một lần,
-      mount ở tầng đỉnh (`subvolid=5`), tạo `@`, `@home` (chỉ khi `/home`
-      không phải phân vùng riêng) và `@snapshots`, rồi mount lại gốc từ `@`
-      với `/home` và `/.snapshots` từ subvolume của chúng. Thứ tự và lần
-      `umount` giữa hai lần mount gốc đã có unit-test; đầu ra `genfstab` cho
-      các mount đó chưa được quan sát trong VM, và chưa cài công cụ snapshot
-      nào — đây là bố cục mà công cụ snapshot cần, không phải công cụ đó.
+- [x] Bố cục subvolume btrfs — **đã chứng minh bằng VM**: gốc btrfs được
+      format một lần, mount ở tầng đỉnh (`subvolid=5`), tạo `@`, `@home` (chỉ
+      khi `/home` không phải phân vùng riêng) và `@snapshots`, rồi mount lại
+      gốc từ `@` với `/home` và `/.snapshots` từ subvolume của chúng. Thứ tự
+      và lần `umount` giữa hai lần mount gốc đã có unit-test; đầu ra
+      `genfstab` cho các mount đó đã được quan sát trong VM với `LUKS=1`, và
+      chưa cài công cụ snapshot nào — đây là bố cục mà công cụ snapshot cần,
+      không phải công cụ đó.
 - [ ] Trình soạn thảo phân vùng thủ công — chưa có mã.
 
 ## Stage 4 — Trải nghiệm
@@ -254,21 +257,18 @@ không phải vậy.
 sao Windows duy nhất của ai đó là thao tác một chiều, không hoàn tác được, và nó
 cần nhiều kiểm thử hơn mức dự án này hiện có thể đưa ra.
 
-**Dual-boot cạnh một Windows thật.** Phần giữ-nguyên-mọi-thứ và entry menu
-Windows đã done và tick trong Stage 6 ở trên — được VM chứng minh với Windows
-giả. Còn hoãn là thứ chỉ một Windows thật mới trả lời được: nhìn thấy entry
-menu thực sự boot vào Windows (bootmgr giả được chainload nhưng không làm gì
-cả), và toàn bộ quy trình thu nhỏ từ bên trong Windows. Không một bản phát
-hành nào của camareLOL nên lại gần đĩa đang giữ bản Windows duy nhất của
-người dùng cho tới khi chặng này khép lại.
+**Dual-boot cạnh một Windows thật.** Đã xong và kiểm chứng trên máy thật:
+giữ nguyên mọi phân vùng, entry menu Windows, boot entry thực sự vào Windows
+thật, và quy trình thu nhỏ từ bên trong Windows. Bằng chứng VM (Windows giả)
+và lần chạy máy thật khớp nhau. Chặng này đã khép lại.
 
 **Phần còn lại của lưu trữ nâng cao.** Mã hoá gốc bằng LUKS2 và bố cục
-subvolume btrfs nay đã có code, có test, và những chặng chưa chứng minh được
-ghi rõ ở Stage 3 phía trên; phần vẫn hoãn là mã hoá `/home` riêng, mã hoá
-cạnh hệ điều hành khác, và gốc đã mã hoá qua systemd-boot — planner từ chối
-cả ba thay vì làm gần đúng. **Trình soạn thảo phân vùng thủ công** vẫn chưa có
-một dòng code nào, và danh sách stage từng mang nó như một ô tick nói ít hơn
-vẻ ngoài của nó.
+subvolume btrfs nay đã có code, có test, và một lần chạy nghiệm thu
+VirtualBox với `LUKS=1` chứng minh cả bố cục trên đĩa lẫn boot đã mã hoá.
+Phần vẫn hoãn là mã hoá `/home` riêng, mã hoá cạnh hệ điều hành khác, và gốc
+đã mã hoá qua systemd-boot — planner từ chối cả ba thay vì làm gần đúng.
+**Trình soạn thảo phân vùng thủ công** vẫn chưa có một dòng code nào, và danh
+sách stage từng mang nó như một ô tick nói ít hơn vẻ ngoài của nó.
 
 Trong mọi trường hợp ở đây, việc thành thật là nói ra thay vì đưa ra một ô
 tick mà làm ít hơn vẻ ngoài.

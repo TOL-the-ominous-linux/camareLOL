@@ -21,7 +21,7 @@ ConditionPathExists=!/run/camarelol-boot-reported
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStartPre=/bin/sh -c 'printf "boot=ok\nroot_source=%s\nroot_fstype=%s\nroot_subvol=%s\n" "$(findmnt -no SOURCE /)" "$(findmnt -no FSTYPE /)" "$(findmnt -no FSROOT /)" > /run/camarelol-boot.txt'
+ExecStartPre=/bin/sh -c 'printf "boot=ok\nroot_source=%%s\nroot_fstype=%%s\nroot_subvol=%%s\n" "$(findmnt -no SOURCE /)" "$(findmnt -no FSTYPE /)" "$(findmnt -no FSROOT /)" > /run/camarelol-boot.txt'
 # Retry: network-online.target can be reached before DHCP hands out an
 # address, and a report lost to that race would read as "the encrypted system
 # never booted". One report, a few attempts.

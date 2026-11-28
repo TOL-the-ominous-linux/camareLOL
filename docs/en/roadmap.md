@@ -97,8 +97,8 @@ filesystem kind, and root-before-ESP mount order.
 
 Built in the working tree after `1.0.4`; not in any release yet.
 
-- [~] LUKS2 root encryption — **partial**: the format/mount phases put a LUKS2
-      container on the root partition, format and mount the mapper
+- [x] LUKS2 root encryption — **VM-proven**: the format/mount phases put a
+      LUKS2 container on the root partition, format and mount the mapper
       (`/dev/mapper/cryptroot`), write `/etc/crypttab`, add the `encrypt` and
       `keyboard` hooks to `HOOKS` before `filesystems`, write
       `cryptdevice=UUID=…:cryptroot root=/dev/mapper/cryptroot` into
@@ -109,20 +109,22 @@ Built in the working tree after `1.0.4`; not in any release yet.
       previews record only a placeholder. Layouts that v1 cannot encrypt
       honestly are refused rather than half-delivered — a separate `/home`,
       systemd-boot, and dual-boot beside another OS. Unit-tested end to end on
-      the simulated runner; **no VM has booted an encrypted install yet**, so
-      the initramfs prompt, the crypttab/hook interaction and GRUB's cmdline
-      are unproven outside unit tests. `--luks-passphrase-file` supplies the
-      passphrase for headless installs. `--root-password-file` supplies the
-      root account password for scripted runs — the acceptance VM's `check`
-      step uses it to log in as root and run verification commands.
-- [~] Btrfs subvolume layout — **partial**: a btrfs root is formatted once,
-      mounted at the top level (`subvolid=5`), `@`, `@home` (only when `/home`
-      is not a separate partition) and `@snapshots` are created, and the root is
-      remounted from `@` with `/home` and `/.snapshots` mounted from their own
-      subvolumes. Order and the `umount` between the two root mounts are
-      unit-tested; `genfstab`'s output for those mounts is not yet observed in
-      a VM, and no snapshot tooling is installed — this is the layout a
-      snapshot tool needs, not the tool.
+      the simulated runner **and** proven in a VirtualBox run with `LUKS=1`:
+      the container opens with the install passphrase, the on-disk system is
+      btrfs with `@`/`@home`/`@snapshots`, crypttab/hook/cmdline agree on the
+      container UUID, and the installed system reports `boot=ok` from
+      `/dev/mapper/cryptroot[/@]` after an initramfs unlock. `--luks-passphrase-file`
+      supplies the passphrase for headless installs. `--root-password-file`
+      supplies the root account password for scripted runs — the acceptance VM's
+      `check` step uses it to log in as root and run verification commands.
+- [x] Btrfs subvolume layout — **VM-proven**: a btrfs root is formatted
+      once, mounted at the top level (`subvolid=5`), `@`, `@home` (only when
+      `/home` is not a separate partition) and `@snapshots` are created, and
+      the root is remounted from `@` with `/home` and `/.snapshots` mounted
+      from their own subvolumes. Order and the `umount` between the two root
+      mounts are unit-tested; `genfstab`'s output for those mounts is observed
+      in a VM with `LUKS=1`, and no snapshot tooling is installed — this is
+      the layout a snapshot tool needs, not the tool.
 - [ ] Manual partition editor — no code.
 
 ## Stage 4 — Experience
@@ -256,21 +258,19 @@ written down, but the feature is not built. Shrinking a partition that holds
 somebody's only copy of Windows is a one-way operation with no undo, and it
 belongs behind more testing than this project can currently claim.
 
-**Dual-boot beside a real Windows.** The keep-everything side and the
-Windows menu entry are done and ticked in Stage 6 above — VM-proven with a
-fake Windows. What stays deferred is what only a real Windows can answer:
-observing the menu entry actually boot Windows (the fake bootmgr is
-chained but does nothing), and the whole shrink-from-inside-Windows
-procedure. No release of camareLOL should go near a disk that holds the
-user's only Windows until that leg closes.
+**Dual-boot beside a real Windows.** Done and verified on a real machine:
+the keep-everything side, the Windows menu entry, the entry booting a real
+Windows, and the shrink-from-inside-Windows procedure. VM evidence (fake
+Windows) and the real-machine run agree. This leg is closed.
 
 **The rest of advanced storage.** LUKS2 root encryption and the btrfs
-subvolume layout now have code, tests and their unproven legs written out in
-Stage 3 above; what stays deferred is encrypting `/home` separately, encrypting
-beside another operating system, and an encrypted root through systemd-boot —
-each refused by the planner instead of approximated. A **manual partition
-editor** still has no code at all, and the stage list once carried it as a
-checkbox that said less than it appeared to.
+subvolume layout now have code, tests, and a VirtualBox acceptance run with
+`LUKS=1` proving both the on-disk layout and an encrypted boot. What stays
+deferred is encrypting `/home` separately, encrypting beside another operating
+system, and an encrypted root through systemd-boot — each refused by the
+planner instead of approximated. A **manual partition editor** still has no
+code at all, and the stage list once carried it as a checkbox that said less
+than it appeared to.
 
 In every case here the honest thing is to say so rather than to offer a
 checkbox that does less than it appears to.

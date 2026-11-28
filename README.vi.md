@@ -232,10 +232,13 @@ $ sudo camarelol --scripted <profile.toml> --allow-destructive --execute
 - Cài gói AUR khi chưa có đồng ý rõ ràng và một bản build bởi người dùng thường.
 - Thu nhỏ NTFS — tiêu chí chấp nhận đã viết, tính năng để dành.
 - Boot Windows thật từ entry menu do camareLOL sinh ra, hoặc thu nhỏ Windows từ
-  bên trong Windows. Phần giữ nguyên phân vùng và entry menu đã được chứng
-  minh trong VM; phần Windows thật vẫn bị hoãn.
-- Báo rằng mã hoá hay subvolume btrfs đã được VM chứng minh. Cả hai đã có mã
-  và unit test, nhưng chưa qua đợt chạy nghiệm thu VirtualBox — xem roadmap.
+  bên trong Windows. Cả hai đã được kiểm chứng trên máy thật; phần giữ nguyên
+  phân vùng và entry menu trước đó đã được chứng minh trong VM.
+- Báo rằng mọi tổ hợp mã hoá hay subvolume btrfs đều đã được VM chứng minh.
+  Bố cục mã hoá gốc + subvolume btrfs trên một ổ đơn giờ đã có một đợt chạy
+  nghiệm thu VirtualBox với `LUKS=1`, chứng minh cả bố cục trên đĩa lẫn boot
+  đã mã hoá — xem roadmap. Các tổ hợp bị từ chối ( `/home` tách riêng,
+  systemd-boot, dual-boot cạnh OS khác) thì không áp dụng.
 - Mã hoá `/home` riêng, mã hoá cạnh hệ điều hành khác, hay boot gốc đã mã hoá
   bằng systemd-boot. Những tổ hợp đó bị từ chối.
 - Cung cấp trình soạn thảo phân vùng thủ công — chưa có mã.

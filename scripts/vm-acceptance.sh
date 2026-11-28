@@ -324,13 +324,26 @@ if [ "$LUKS" = 1 ]; then
     # được khi máy đang bật. Thứ tự boot đã là `--boot1 dvd --boot2 disk`;
     # không còn DVD thì firmware tự chuyển sang đĩa, nên `modifyvm` (cũng
     # không đổi được lúc đang chạy) là không cần thiết.
-    vm controlvm "$VM_NAME" dvdattach none >/dev/null 2>&1
-    sleep 2
-    if VBoxManage showvminfo "$VM_NAME" --machinereadable 2>/dev/null \
-            | grep -q '^"IDE-0-0"=".*\.iso"$'; then
+    vm controlvm "$VM_NAME" poweroff >/dev/null 2>&1
+    sleep 10
+    # Tháo ISO khi máy đã tắt: hot-plug trên IDE không được hỗ trợ, nên phải
+    # tắt trước. Chờ tới khi showvminfo xác nhận thật sự gone.
+    for _ in $(seq 1 10); do
+        VBoxManage storageattach "$VM_NAME" --storagectl IDE --port 0 --device 0 --medium none >/dev/null 2>&1 || true
+        if ! VBoxManage showvminfo "$VM_NAME" --machinereadable 2>/dev/null | grep -q '^"IDE-0-0"=".*\.iso"$'; then
+            break
+        fi
+        sleep 2
+    done
+    if VBoxManage showvminfo "$VM_NAME" --machinereadable 2>/dev/null | grep -q '^"IDE-0-0"=".*\.iso"$'; then
         say "  không tháo được ISO — lần boot này sẽ vào lại live system, kết quả boot sẽ không có"
+    else
+        note "  ISO đã tháo"
     fi
-    guest "reboot" 3
+    # Boot từ đĩa, không từ DVD.
+    VBoxManage modifyvm "$VM_NAME" --boot1 disk --boot2 none >/dev/null 2>&1 || true
+    vm startvm "$VM_NAME" --type headless >/dev/null 2>&1
+    sleep 10
 
     # Prompt initramfs xuất hiện sau khi firmware + GRUB + kernel chạy, thời gian
     # thay đổi theo máy. Gõ lặp lại thay vì ngủ một lần: gõ quá sớm thì mất

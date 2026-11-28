@@ -282,11 +282,13 @@ yourself is in [docs/en/vm-testing.md](docs/en/vm-testing.md).
 - Resize NTFS (the acceptance criteria for it are documented but the feature is
   deferred — see [docs/en/roadmap.md](docs/en/roadmap.md)).
 - Boot a real Windows install from the generated menu entry, or shrink Windows
-  from inside Windows. The keep-everything side and the menu entry are
-  VM-proven; the real-Windows leg is deferred.
-- Claim encryption or btrfs subvolumes are VM-proven. Both are implemented and
-  covered by unit tests, but neither has been through the VirtualBox acceptance
-  run yet — see the roadmap.
+  from inside Windows. Both are now verified on a real machine; the
+  keep-everything side and the menu entry were VM-proven first.
+- Claim encryption or btrfs subvolumes are VM-proven for layouts the planner
+  refuses to combine (separate `/home`, systemd-boot, or dual-boot beside
+  another OS). The single-disk root-encryption + btrfs-subvolume layout now
+  has a VirtualBox acceptance run with `LUKS=1` proving both the on-disk layout
+  and an encrypted boot — see the roadmap.
 - Encrypt `/home` separately, encrypt beside another operating system, or boot
   an encrypted root through systemd-boot. Those combinations are refused.
 - Provide a manual partition editor — no code.
