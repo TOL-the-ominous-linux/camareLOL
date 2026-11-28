@@ -959,6 +959,19 @@ fn draw_review(f: &mut Frame, app: &mut App, area: Rect) {
             lines.push(Line::from(format!(" {l}")));
         }
         lines.push(Line::from(""));
+        // Risk is the single most important fact on this screen: it decides
+        // which confirmation phrase the user has to type, and it is the thing
+        // a skim-reader is most likely to miss.
+        let (risk_color, risk_label) = match plan.disk_risk.as_str() {
+            "High" => (BAD, "HIGH — disk will be erased"),
+            "Medium" => (WARN, "MEDIUM"),
+            _ => (GOOD, "LOW"),
+        };
+        lines.push(Line::from(vec![
+            Span::raw(" Risk level: "),
+            Span::styled(risk_label, Style::default().fg(risk_color).add_modifier(Modifier::BOLD)),
+        ]));
+        lines.push(Line::from(""));
         lines.push(Line::from(vec![Span::styled(
             " Destructive operations:",
             Style::default().fg(WARN),
@@ -979,6 +992,39 @@ fn draw_review(f: &mut Frame, app: &mut App, area: Rect) {
         } else {
             app.tr(" Mã hoá: không.", " Encryption: off.", " 加密：未启用。")
         }));
+        lines.push(Line::from(""));
+        // AUR is the one optional feature whose misconfiguration (a root build
+        // user, or a selection with no builder) is catastrophic rather than
+        // merely disappointing. Surface it on the review screen, not only on
+        // the packages screen.
+        let aur_summary = if app.aur_enabled {
+            if app.aur_build_user.trim().is_empty() {
+                app.tr(
+                    " AUR: đang bật, nhưng CHƯA có tài khoản dựng — cài sẽ bị từ chối.",
+                    " AUR: enabled, but no build account set — the install will refuse.",
+                    " AUR：已启用，但未设置构建账户 — 安装将被拒绝。",
+                )
+            } else {
+                format!(
+                    " AUR: {} package(s) selected; build user: {}",
+                    app.aur_selected.len(),
+                    app.aur_build_user
+                )
+            }
+        } else {
+            app.tr(
+                " AUR: tắt.",
+                " AUR: disabled.",
+                " AUR：未启用。",
+            )
+            .to_string()
+        };
+        let aur_color = if app.aur_enabled && app.aur_build_user.trim().is_empty() {
+            BAD
+        } else {
+            Color::DarkGray
+        };
+        lines.push(Line::from(Span::styled(aur_summary, Style::default().fg(aur_color))));
         lines.push(Line::from(""));
         if app.preview {
             // Asking for the phrase in a preview would be theatre: there is
