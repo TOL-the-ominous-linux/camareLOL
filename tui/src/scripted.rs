@@ -10,6 +10,7 @@ use camarelol_core::install::{run_install, Outcome, ProgressEvent, ProgressSink}
 use camarelol_core::logging::Logger;
 use camarelol_core::safety::{required_phrase, SafetyGate};
 use camarelol_core::storage::{scan_devices, scan_devices_from_survey};
+use camarelol_core::storage::layout::PartitionPlan;
 use std::path::Path;
 
 struct TextSink;
@@ -49,6 +50,7 @@ pub fn run_scripted(
     preview: bool,
     luks_passphrase: Option<&str>,
     root_password: Option<&str>,
+    plan_override: Option<PartitionPlan>,
 ) -> Result<InstallReport, CamarelolError> {
     let mut cfg = InstallationConfig::load(config_path.to_str().unwrap_or_default())?;
     cfg.validate()?;
@@ -96,7 +98,19 @@ pub fn run_scripted(
     core.set_firmware(cfg.resolve_firmware(detect_firmware())?);
     core.set_bootloader(cfg.bootloader()?);
 
-    let plan = core.plan_for(&device.path)?;
+    let plan = match plan_override {
+        Some(p) => {
+            // A supplied plan must still match the verified disk identity.
+            if p.disk_path != device.path || p.disk_identity != device.identity() {
+                return Err(CamarelolError::new(
+                    ErrorCode::InvalidPlan,
+                    "the supplied plan does not match the verified target disk",
+                ));
+            }
+            p
+        }
+        None => core.plan_for(&device.path)?,
+    };
     core.validate_plan(&plan)?;
 
     // A preview runs the real orchestrator, so it gets its own branch here: it

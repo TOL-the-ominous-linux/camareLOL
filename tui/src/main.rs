@@ -47,6 +47,8 @@ struct Args {
     postcheck_root: Option<PathBuf>,
     aur_preflight: bool,
     plan_only: Option<PathBuf>,
+    json: bool,
+    plan_file: Option<PathBuf>,
 }
 
 /// Read a LUKS passphrase from the first line of a file.
@@ -100,6 +102,8 @@ fn parse_args_from(argv: Vec<String>) -> Result<Args, String> {
             "--postcheck-root" => a.postcheck_root = args.next().map(PathBuf::from),
             "--aur-preflight" => a.aur_preflight = true,
             "--plan-only" => a.plan_only = args.next().map(PathBuf::from),
+            "--json" => a.json = true,
+            "--plan-file" => a.plan_file = args.next().map(PathBuf::from),
             "-h" | "--help" => {
                 println!("{}", usage());
                 std::process::exit(0);
@@ -144,6 +148,8 @@ OPTIONS:
     --aur-preflight            Check AUR build prerequisites and exit
     --plan-only <FILE>         Load a profile, plan its disk layout, and exit
                                (no writes; prints the plan as text and JSON)
+    --plan-file <FILE>         Use a saved PartitionPlan (JSON) instead of the
+                               auto-layout planner (scripted installs only)
 
     -h, --help                Show this help
     -V, --version             Show version and commit
@@ -243,7 +249,7 @@ fn main() {
             .postcheck_root
             .clone()
             .unwrap_or_else(|| PathBuf::from("/"));
-        cmd_postcheck(&root);
+        cmd_postcheck(&root, args.json);
         return;
     }
 
@@ -292,6 +298,24 @@ fn main() {
             },
             None => None,
         };
+        // An explicit plan file overrides the auto-layout planner. It is
+        // still validated against the disk identity and the safety gate, so a
+        // plan from another machine cannot be replayed silently.
+        let plan_override = match args.plan_file.as_ref() {
+            Some(path) => {
+                let text = std::fs::read_to_string(path).map_err(|e| {
+                    eprintln!("cannot read plan file {}: {e}", path.display());
+                    std::process::exit(2);
+                }).unwrap();
+                let plan: camarelol_core::storage::layout::PartitionPlan =
+                    serde_json::from_str(&text).unwrap_or_else(|e| {
+                        eprintln!("invalid plan file {}: {e}", path.display());
+                        std::process::exit(2);
+                    });
+                Some(plan)
+            }
+            None => None,
+        };
         match scripted::run_scripted(
             &cfg_path,
             args.mock.as_deref(),
@@ -299,6 +323,7 @@ fn main() {
             args.preview,
             passphrase.as_deref(),
             root_password.as_deref(),
+            plan_override,
         ) {
             Ok(report) => {
                 println!("{}", report.render());
@@ -341,7 +366,7 @@ fn main() {
 /// Verify an installed system: check that the features the installer promised
 /// are actually on disk. Each check is a direct file existence test — the same
 /// markers the VM acceptance harness uses in its step 6.
-fn cmd_postcheck(root: &std::path::Path) {
+fn cmd_postcheck(root: &std::path::Path, json: bool) {
     // Required checks: these are the things camareLOL promises to have put on
     // disk when the corresponding option was chosen. A failure here means the
     // install lied, which is the one thing postcheck exists to catch.
